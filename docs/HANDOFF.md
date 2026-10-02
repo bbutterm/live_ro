@@ -301,3 +301,87 @@ scripts/lab status
 
 ### Что прислать
 Вывод шагов 1–5 и время каждой попытки (stop → online=0 → start → Map Change), в `docs/qa/HERMES-<sha7>.md`.
+
+---
+
+## Задание №4: запуск мозга bot01 (OpenRouter) — «живой» Arkady
+
+**Ветка:** `claude/stage1-reproducible-delivery`
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+Включает задание №3 (gracefulStop v2). Отдельно его прогонять не нужно: шаг 4 проверяет выход тоже.
+
+### Что изменилось
+- `brain/live_brain` — мозг на Python (только стандартная библиотека): память SQLite в
+  `$LAB_ROOT/state/bot01/`, решения через OpenRouter с суточным лимитом, таймаутом и работой без LLM.
+- Плагин `bots/plugins/brainBridge`: отправляет мозгу состояние и события, исполняет только
+  `say`, `whisper`, `set_hunt_map` (карты из `brain/personas/bot01.json`), `pause`, `resume`.
+- `scripts/lab`: `brain-check`, `start live|brain`, `stop live|brain`, мозг в `status`.
+- Исправлено: `status`/`stop` молча обрывались, если находили больше одного подходящего процесса.
+
+### Предварительно (владелец или агент с ключом)
+В `/opt/ro-bot-lab/secrets/live_ro.env` (права 600) добавить строки:
+```
+OPENROUTER_API_KEY=<ключ OpenRouter>
+OPENROUTER_MODEL=deepseek/deepseek-chat
+BRAIN_DAILY_LIMIT=300
+```
+Ключ — только в этот файл. В чат, отчёт и Git его не вставлять.
+Модель сверить с каталогом OpenRouter. Лимит расходов поставить и в кабинете OpenRouter.
+
+### Какие процессы перезапускать
+- login/char/map — **не перезапускать**.
+- bot01 — один перезапуск (чтобы загрузить brainBridge). Мозг — новый процесс.
+
+### Команда запуска (от `ro-lab`)
+```sh
+sudo -u ro-lab -H bash -lc '
+  cd /opt/ro-bot-lab/src/live_ro-qa &&
+  git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive &&
+  export LAB_ROOT=/opt/ro-bot-lab &&
+  python3 scripts/check.py &&
+  (cd brain && python3 -m unittest tests.test_brain) &&
+  scripts/lab brain-check &&
+  scripts/lab stop bot01 &&
+  scripts/lab start live &&
+  scripts/lab status'
+```
+
+### Проверка (через 10–15 минут)
+```sh
+export LAB_ROOT=/opt/ro-bot-lab
+tail -n 30 $LAB_ROOT/logs/bot01/brain.log
+tail -n 10 $LAB_ROOT/state/bot01/decisions.jsonl
+grep -n 'brainBridge' $LAB_ROOT/logs/bot01/console.log | tail -10
+# Для чата: с любого другого аккаунта написать Arkady в личку, через 15-30 с:
+tail -n 4 $LAB_ROOT/state/bot01/decisions.jsonl
+# Память после перезапуска мозга:
+scripts/lab stop brain && scripts/lab start brain && sleep 3 && grep 'память:' $LAB_ROOT/logs/bot01/brain.log | tail -2
+```
+
+### Ожидаемый результат (не проверен)
+| Проверка | Ожидание |
+|---|---|
+| unittest | `OK` (3 теста) |
+| `brain-check` | `CHECK OK за N с ... <приветствие от Arkady>` |
+| `start live` | бот входит; в console.log `[brainBridge] подключён к мозгу`; в brain.log `тело на связи: Arkady` |
+| decisions.jsonl | строка `decision` с `thought` и `goal`; для каждого действия строка `ack` с `"ok": true` и командой OpenKore |
+| console.log | `[brainBridge] решение мозга -> ...` с той же командой |
+| личка | решение с поводом `<имя> пишет мне в личку` и ответ `whisper`/`say`; ответ виден в игре |
+| перезапуск мозга | `память: N воспоминаний`, N > 0 |
+
+Решение **и** его исполнение (`ack ok` + строка в console.log, а для чата — ответ, видимый
+в игре) считаются доказательством. Одна строка `decision` — нет.
+
+### Риски
+- Деньги: не больше `BRAIN_DAILY_LIMIT` запросов за 24 ч. По умолчанию ~300 коротких запросов.
+- Поведение: модель может сменить карту охоты только на карты из `hunt_maps`; пауза (`pause`) останавливает
+  охоту до `resume`. Если бот «завис» на паузе: `scripts/lab stop brain`, затем в консоли бота `ai auto`.
+- БД игры не меняется. Память мозга — отдельный файл `state/bot01/memory.sqlite`.
+
+### Откат
+- Только мозг: `scripts/lab stop brain`. Бот продолжает играть сам: без мозга плагин молча ждёт.
+- Полностью: `git checkout --detach d24e12841f2d286b46c69c710b3e22cec391d9db`, `scripts/lab stop bot01`, `scripts/lab start bot01`.
+
+### Что прислать
+Вывод команды запуска и проверок (без ключа), последние строки decisions.jsonl,
+`docs/qa/HERMES-<sha7>.md`.

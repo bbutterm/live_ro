@@ -39,8 +39,9 @@ usage() {
   releases              список версий (режим release)
 Изменяющие:
   prepare               создать недостающие каталоги и env-файл (ничего не перезаписывает)
-  start [server|BOT]    запустить login/char/map или бота (по умолчанию server)
-  stop  [server|BOT|all] [--force]   остановить (по умолчанию all)
+  start [server|bot01|brain|live]   запустить серверы, бота, мозг или бота+мозг
+  stop  [server|bot01|brain|live|all] [--force]   остановить (по умолчанию all)
+  brain-check           один тестовый запрос к модели OpenRouter (проверка ключа)
   db-backup             дамп основной и лог-БД в backups/
 Только режим release:
   build [DIR] | deploy <commit> | activate <release> | rollback | db-init
@@ -224,6 +225,10 @@ find_procs() {
         # cwd чужого процесса недоступен: тогда для отчёта достаточно совпадения имени.
         [[ -z "$cwd" || -z "$want_dir" || "$cwd" == "$want_dir" ]] || continue
         echo "$p $(proc_user "$p")" ;;
+      brain)
+        [[ "$(basename -- "$argv0")" == python* && "$args" == *"-m live_brain"* \
+           && "$args" == *"--lab-root $LAB_ROOT "* ]] || continue
+        echo "$p $(proc_user "$p")" ;;
       *)
         [[ "$(basename -- "$argv0")" == perl* && "$args" == *openkore.pl* ]] || continue
         if [[ "$args" == *"/$name/"* || "$args" == *"/$name "* ]]; then
@@ -239,8 +244,15 @@ find_procs() {
   fi
 }
 
+# Первая строка find_procs без конвейера: с pipefail `find_procs | head -n1`
+# падает по SIGPIPE, когда процессов больше одного, и set -e молча завершает скрипт.
+first_proc() {
+  local out; out=$(find_procs "$1")
+  printf '%s\n' "${out%%$'\n'*}"
+}
+
 running_pid() { # первый найденный pid или пусто
-  local line; line=$(find_procs "$1" | head -n1); echo "${line%% *}"
+  local line; line=$(first_proc "$1"); echo "${line%% *}"
 }
 
 port_open() { (exec 3<>"/dev/tcp/${BIND_IP:-127.0.0.1}/$1") 2>/dev/null; }
@@ -586,7 +598,8 @@ start_bot() {
   local tables="$od/tables" plugins="$od/plugins"
   [[ -d "$pr/bots/$bot/tables" ]] && tables="$pr/bots/$bot/tables:$tables"
   [[ -d "$pr/bots/plugins" ]] && plugins="$pr/bots/plugins:$plugins"
-  local -a cmd=(perl openkore.pl --control="$ctl" --tables="$tables" --plugins="$plugins"
+  local -a cmd=(env "LIVE_RO_BRAIN_SOCKET=$LAB_ROOT/run/brain/$bot.sock"
+                perl openkore.pl --control="$ctl" --tables="$tables" --plugins="$plugins"
                 --logs="$LAB_ROOT/logs/$bot")
   local log="$LAB_ROOT/logs/$bot/console.log"
   rotate_log "$log"
@@ -605,6 +618,27 @@ start_bot() {
   fi
 }
 
+# Мозг bot01 (brain/live_brain): решения и общение через OpenRouter, память в state/bot01.
+start_brain() {
+  local pr; pr=$(profile_root)
+  command -v python3 >/dev/null || die "нет python3"
+  [[ -d "$pr/brain/live_brain" ]] || die "нет $pr/brain/live_brain"
+  if ! is_set OPENROUTER_API_KEY; then
+    warn "OPENROUTER_API_KEY не задан: мозг запустится без LLM (только память и журнал)"
+  fi
+  mkdir -p "$LAB_ROOT/logs/bot01"
+  ( umask 077; mkdir -p "$LAB_ROOT/run/brain" "$LAB_ROOT/state/bot01" )
+  start_proc brain "$pr/brain" "$LAB_ROOT/logs/bot01/brain.log" \
+    python3 -m live_brain --env "$LAB_ENV" --bot bot01 --lab-root "$LAB_ROOT"
+  info "журнал решений: $LAB_ROOT/state/bot01/decisions.jsonl; бот должен быть запущен с этим commit (плагин brainBridge)"
+}
+
+cmd_brain_check() {
+  load_env
+  local pr; pr=$(profile_root)
+  ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot bot01 --lab-root "$LAB_ROOT" --check )
+}
+
 cmd_start() {
   load_env
   mkdir -p "$PIDS"
@@ -612,13 +646,15 @@ cmd_start() {
   case "$what" in
     server) start_server ;;
     bot[0-9]*) start_bot "$what" ;;
-    *) die "start server|<bot>" ;;
+    brain) start_brain ;;
+    live) start_bot bot01; start_brain ;;
+    *) die "start server|bot01|brain|live" ;;
   esac
 }
 
 stop_proc() {
   local name="$1" force="$2" line pid owner i
-  line=$(find_procs "$name" | head -n1)
+  line=$(first_proc "$name")
   [[ -n "$line" ]] || { rm -f "$PIDS/$name.pid"; return 0; }
   pid=${line%% *}; owner=$(proc_user "$pid")
   [[ "$owner" == "$(id -un)" ]] || die "$name (pid $pid) принадлежит $owner — остановите от его имени"
@@ -659,19 +695,22 @@ cmd_stop() {
     n=$(basename "$f" .pid); [[ "$n" == bot01 ]] || bots+=("$n")
   done
   case "$what" in
-    all)    for n in "${bots[@]}"; do stop_bot "$n" "$force"; done
+    all)    stop_proc brain "$force"
+            for n in "${bots[@]}"; do stop_bot "$n" "$force"; done
             for n in map char login; do stop_proc "$n" "$force"; done ;;
     server) for n in map char login; do stop_proc "$n" "$force"; done ;;
     bot[0-9]*) stop_bot "$what" "$force" ;;
-    *) die "stop server|<bot>|all" ;;
+    brain) stop_proc brain "$force" ;;
+    live) stop_proc brain "$force"; stop_bot bot01 "$force" ;;
+    *) die "stop server|bot01|brain|live|all" ;;
   esac
   info "остановлено: $what"
 }
 
 cmd_status_body() {
   local s line pid owner extra port
-  for s in "${SERVERS[@]}" bot01; do
-    line=$(find_procs "$s" | head -n1)
+  for s in "${SERVERS[@]}" bot01 brain; do
+    line=$(first_proc "$s")
     if [[ -n "$line" ]]; then
       read -r pid owner extra <<<"$line"
       line="pid $pid ($owner)${extra:+, $extra}"
@@ -715,6 +754,7 @@ main() {
     start)     cmd_start "$@" ;;
     stop)      cmd_stop "$@" ;;
     db-backup) load_env; cmd_db_backup ;;
+    brain-check) cmd_brain_check ;;
     build|deploy|activate|rollback)
       if [[ -f "$LAB_ENV" ]]; then load_env; fi
       require_release_mode "$sub"

@@ -15,3 +15,4 @@ backups/
 run/
 *.log
 live_ro.env
+decisions.jsonl
