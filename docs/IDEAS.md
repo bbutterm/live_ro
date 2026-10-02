@@ -957,6 +957,142 @@ CHRONICLE_LINES = {"card_found", "trophy_rare", "trophy_first"}
 
 **Готово.** Тесты зелёные; раздел в SOCIETY.md; статус ORG-074 «код, в игре не проверено».
 
+### Т-15 · ORG-069 · Ремесло-роль: лекарь у собора
+
+**Цель.** Житель-Acolyte с щедрым характером (Vera) иногда «работает» лекарем у собора Пронтеры: стоит у точки с
+вывеской «Лечу у собора», лечит (AL_HEAL) жителей и людей, которые попросили, и благословляет вылеченных
+(AL_BLESSING, AL_INCAGI), пока хватает SP. Жители с низким HP после охоты заходят к ней. Без попрошайничества и без
+платы за лечение: цены нет, лекарь ничего не просит. Без LLM.
+
+**Что честно реализуемо (сверено с upstream).**
+- HP чужих игроков клиенту не известен: OpenKore знает HP только участников группы (`AI/CoreLogic.pm:3132-3147`
+  smartHeal: `party.users{hp}` или `deltaHp`; `Misc.pm:6057-6067` — условие цели по HP только для группы).
+  `state.players` моста — имя, класс, пол, уровень, x, y (`brainBridge.pl nearbyPlayers`), без HP. Участников группы
+  и так лечит OpenKore (`partySkill` из `bots/combat/classes.json`) — модуль их не дублирует.
+- Поэтому лечение — **по просьбе**: житель знает свой HP и шепчет лекарю `[heal:ask:<hp%>]`; человек пишет
+  шёпотом или в общий чат рядом с лекарем «heal» / «хил» / «лечи» / «вылечи». Слово выбирает только «лечить
+  отправителя» — навык и цель фиксированы, текст не хранится (как у незнакомцев ORG-063).
+- Каст на игрока: команда OpenKore `sp <skill #> <player #> [level]` (`Commands.pm:639-642`, `cmdUseSkill`
+  `:6410-6424`: `Match::player` по номеру — индекс в `$playersList`); `Task::UseSkill` сам встаёт
+  (`Task/UseSkill.pm:330`) и берёт максимальный выученный уровень (`:272-275`).
+- rAthena отклоняет навык на цель в чат-комнате и сидя (`clif.cpp:12916-12923`: `pc_cant_act2 || chatID`,
+  `pc_issit`) — мост делает `chat leave` перед кастом (как перед движением). Дальность Heal/Blessing/Inc AGI — 9
+  клеток (`db/pre-re/skill_db.yml` AL_HEAL `Range: 9`, TargetType Support; SP 13..40 / 28..64 / 18..45).
+- Факт лечения — уже существующее событие `support` (пакет сервера `skilluse` с моим ID источником,
+  `brainBridge.pl onSkillUse`): `amount` у Heal — сколько HP вылечено.
+
+**Файлы.** `bots/plugins/brainBridge/brainBridge.pl` (действие `skill_on_player`, `support_skills` в state, блоки
+`# healer:`), `bots/tests/brain_bridge.t`, `brain/live_brain/safety.py` (`check_cast`), `brain/live_brain/healer.py`
+(новый), `brain/live_brain/modules.py` (строка в `MODULES`), `brain/live_brain/activity.py` + `brain/world/activities.json`
+(занятие `healer_post`: условие, исполнитель, факт), `brain/live_brain/society.py` (вывеска лекаря в `rooms`),
+`brain/live_brain/world_bus.py` (`healer_post` — тихий снимок, `healer_shift` — в летопись), `brain/live_brain/chronicle.py`,
+`brain/tests/test_healer.py`, `docs/SOCIETY.md`. `mind.py` не трогается.
+
+**Интерфейсы.**
+```text
+мост:  skill_on_player {skill: AL_HEAL|AL_BLESSING|AL_INCAGI, to}  ->  [chat leave;] sp <id> <номер игрока>
+       отказ: навык не из списка поддержки / не выучен / цель не видна, мертва, дальше 9 клеток / цель — я
+state: support_skills {AL_HEAL: ур., AL_BLESSING: ур., AL_INCAGI: ур.} — только выученные из списка
+safety.check_cast: только исполнитель правил (protocol), навык из SUPPORT_CASTS, имя ≤ 23 без '"', живой,
+       SP ≥ min_sp_pct, не больше CAST_LIMIT кастов за 10 мин
+```
+```python
+class Healer:                                  # mind.healer, goals.json "healer" (необязателен)
+    def role(self) -> "healer" | "patient"     # Acolyte/Priest/Monk… + generosity ≥ 0.6 + AL_HEAL выучен (если известно)
+    def can_post(self, state) -> bool          # условие занятия healer_post: роль, город, день, SP, не после смены
+    async def start_post(self)                 # исполнитель занятия: social.visit к точке, стоять post_minutes
+    def at_post(self, state) -> bool           # факт занятия: я у точки (≤ 4 клеток)
+    def on_post(self, state) -> bool           # занятие идёт и я у точки
+    def sign(self, state, now) -> str | None   # заголовок вывески для society.rooms (или None)
+    async def on_tag(self, sender, text)       # [heal:ask:<hp>] от жителя (лекарь) / [heal:no] (пациент)
+    async def on_chat(self, event)             # просьба человека «heal»… (лекарь на посту)
+    def on_support(self, event)                # факт: мой Heal/Blessing — счёт смены; меня вылечила — память/отношение
+    async def tick(self)                       # очередь кастов; пост в шине; пациент: попросить/зайти к лекарю
+```
+- Правила лекаря: просьба в очередь, если я на посту, цель видна не дальше 9 клеток, жителю — HP по его словам
+  < `heal_below` (70 %); один каст в `cast_gap_seconds` (5 с), одному — не чаще `person_gap_seconds` (60 с, человеку
+  — `stranger_gap_seconds` 120 с), SP ≥ `min_sp` (30 %); после подтверждённого Heal при SP ≥ `bless_sp` (60 %) —
+  AL_BLESSING и AL_INCAGI тому же, не чаще `bless_gap_minutes` (30) одному; Blessing/AGI только выученные.
+  Сутки — не больше `heals_per_day` (150). Чаевые: лекарь ничего не просит; сделки от людей — как раньше (dealAuto
+  только жителям), то есть чаевые от людей сейчас не принимаются (нечего «только принять» без правки OpenKore).
+- Пост: занятие `healer_post` (town, satisfies care 1.0 / social 0.5, requires `healer_role`, `day`; факт `at_post`
+  за 15 мин; перезарядка 180 мин). На посту — снимок шины `healer_post {map, x, y, until}` (тихий, затирание),
+  вывеска «Лечу у собора» через вывеску society (ORG-026) при открытии разрешённом safety (не чаще 10 мин,
+  не сразу после каста), конец смены — `healer_shift {heals, blesses, patients, minutes}` в память, шину и летопись.
+- Пациент: в городе, HP < `ask_below` (70 %), лекарь на посту по шине (снимок не старше 10 мин), не в ссоре:
+  лекарь виден — шёпот «Vera, подлечишь? HP 45%» `[heal:ask:45]` (не чаще `ask_gap_seconds` 180); не виден и
+  HP < `visit_below` (60 %) — `social.visit` к точке поста (не чаще `visit_gap_minutes` 30). Вылечила — память
+  «Vera вылечила меня у собора» и отношение +1 (не чаще раза в сутки); «спасибо» уже говорит social (support).
+- Выключатель: `BRAIN_DISABLE=healer`, `"healer": {"enabled": false}`; `role: "off"|"on"|"auto"`.
+
+**Тесты.** Perl: `skill_on_player` — команда `sp 28 <номер>`, chat leave в комнате, отказ для навыка вне списка, не
+выученного, невидимой/далёкой/мёртвой цели и себя; `support_skills` в state. Python: роль по профессии и щедрости;
+занятие доступно только лекарю днём в городе; исполнитель ведёт к собору, факт у точки; просьба жителя → каст
+(через safety), без поста → `[heal:no]`; лимиты SP, интервала и одного человека; просьба человека словом → Heal,
+обычная фраза — ничего; подтверждённый Heal → Blessing/AGI при SP; счёт смены и `healer_shift` в шине; вывеска
+«Лечу у собора» в society; пациент просит видимого лекаря, идёт к невидимому, не просит без поста/при высоком HP;
+память и отношение пациента; выключатель; safety отклоняет атакующий навык.
+
+**Готово.** Тесты зелёные; раздел в SOCIETY.md; статус ORG-069 «код, в игре не проверено».
+
+### Т-16 · ORG-070 · Заказы между жителями (контракты)
+
+**Цель.** Житель, которому нужен предмет, публикует заказ в шину мира: «Ищу 3 Jellopy, плачу 30z». Другой житель,
+у которого предмет есть (или который его добывает), берёт заказ шёпотом и выполняет его обычной сделкой рынка
+(`[offer:...]` → `offer_sell`/`offer_buy`, ORG-033) — протокол сделки не дублируется. Награда — по факту сделки,
+в летописи «Rook выполнил заказ Ilsa». Без LLM.
+
+**Данные (сверено).** Дропа монстров в атласе нет (`atlas.json monsters`: уровень, опыт, раса… — без `drops`;
+`prices.json` — цены, вес, тип). Поэтому исполнитель выбирает заказ **по фактам**: предмет есть в рюкзаке
+(`state.items`) или он сам добывал его за 7 дней (события `loot` памяти по имени предмета). Генерация дропа в атлас —
+отдельная задача (`gen_atlas.py` + `mob_db.yml Drops`).
+
+**Файлы.** `brain/live_brain/orders.py` (новый), `brain/live_brain/modules.py` (строка в `MODULES`),
+`brain/live_brain/economy.py` (`offer_lot(..., price=None)` — цена заказа; `for_sale` не продаёт зарезервированное,
+блоки `# orders:`), `brain/live_brain/world_bus.py` (`TEXTS` видов заказа), `brain/live_brain/chronicle.py`,
+`brain/tests/test_orders.py`, `docs/ECONOMY.md`. `mind.py` не трогается.
+
+**Протокол.**
+```text
+шина:  order {id, item, name, n, reward, until}              заказчик, важность 2 (новости жителей)
+       order_taken {id, by}  /  order_closed {id, why, by?}  заказчик, важность 1
+       order_done {id, for, item, name, n, reward}           исполнитель, важность 3 (летопись)
+шёпот: [order:<id>:take]   исполнитель -> заказчик: берусь
+       [order:<id>:ok] / [order:<id>:no]   заказчик: первый взявший — ok (поле taken_by), остальным no
+       [order:<id>:cancel]                 заказчик: больше не нужно
+сделка: исполнитель economy.offer_lot(заказчик, item, n, price=reward) -> [offer:...] (протокол ORG-033)
+```
+```python
+class Orders:                                  # mind.orders, goals.json "orders" (необязателен)
+    async def tick(self)                       # раз в check_seconds: свой заказ (опубликовать/закрыть), взятый (доставить/срок)
+    def candidates(self, state) -> [(item, n)] # из economy.wishlist: не share, не зени, не продаётся у NPC (atlas.item_shops)
+    def open_orders(self, now) -> [order]      # из шины: чужие, не закрыты, не взяты, не просрочены
+    def can_fill(self, order, state) -> str|None   # есть в рюкзаке / добывал за 7 дней; награда ≥ продажи NPC
+    def reserved(self) -> {item: n}            # для economy.for_sale: взятый заказ не продаю другим
+    async def on_tag(self, sender, text)       # [order:...]
+    def summary(self)                          # поле промпта «заказы»
+```
+- Заказчик: один открытый заказ; не чаще `post_gap_hours` (6); награда = `prices.buy_limit(item, n)` (столько же
+  экономика заказчика согласится заплатить в `offer_refuse_reason` — предмет в списке желаний, цена ≤ лимита); зени
+  после награды ≥ `economy.market.keep_zeny`; срок `days` (2). Закрытие: купил этот предмет (событие `trade_bought`
+  памяти после публикации) — `done` (у взявшего) или «купил у другого»; предмет больше не нужен — `cancel` и
+  шёпот взявшему; срок вышел — `expired` (взятый и не выполненный — `failed`).
+- Исполнитель: один взятый заказ; берёт лучший (сначала есть в рюкзаке, затем дороже), не свой, не из своего
+  списка желаний, заказчик не в ссоре. Взял — пока предмета хватает и заказчик виден, предлагает сделку
+  по цене заказа (не чаще `offer_gap_minutes` 10). Выполнено — событие `trade_sold` с заказчиком на этот предмет и
+  количество (оплата ≥ награды проверена economy) → `order_done`, репутация исполнителя +1 (kv), память.
+  Срыв срока — репутация −1, без изменения отношения (не ссора).
+- Выключатель: `BRAIN_DISABLE=orders`, `"orders": {"enabled": false}`; без шины мира модуль молчит.
+
+**Тесты.** Кандидаты (share, зени, NPC-товар — не заказываются); публикация в шину и цена; повтор не раньше
+интервала; исполнитель видит чужой открытый заказ и берёт его шёпотом; не берёт без предмета и без добычи,
+берёт по добыче из памяти; заказчик отвечает первому ok, второму no; `order_taken` в шине; доставка — `offer_lot`
+по цене заказа, только когда заказчик виден; `trade_sold` → `order_done` в шине и летописи; заказчик
+закрывает по `trade_bought`; отмена, когда предмет больше не нужен; срок — expired/failed; `for_sale` не
+продаёт зарезервированное; выключатель.
+
+**Готово.** Тесты зелёные; раздел в ECONOMY.md; статус ORG-070 «код, в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности
