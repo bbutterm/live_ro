@@ -902,8 +902,6 @@ class TwoResidentsDayTest(unittest.TestCase):
             recent = {n: mems[n].recent_events(50) for n in minds}
             kinds = {n: [r[0] for r in mems[n].db.execute("SELECT kind FROM events ORDER BY id")] for n in minds}
             calls = {n: mems[n].db.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0] for n in minds}
-            bus_rows = buses["Arkady"].read(since=0, limit=5000, min_importance=0) if "min_importance" in \
-                WorldBus.read.__code__.co_varnames else buses["Arkady"].read(since=0, limit=5000)
             bus_all = [dict(zip(("ts", "bot", "kind"), r)) for r in
                        buses["Arkady"].db.execute("SELECT ts, bot, kind FROM world_events ORDER BY id")]
             dream = {n: mems[n].get("dream") or {} for n in minds}
@@ -912,15 +910,6 @@ class TwoResidentsDayTest(unittest.TestCase):
             for b in buses.values():
                 b.close()
         end = clock.t
-        import os
-        if os.environ.get("REVIEW3_DEBUG"):
-            for n in minds:
-                print("==", n, [(int(t - t0), a["action"], a.get("to"), a.get("map"), a.get("x"), a.get("y"),
-                                 str(a.get("text", ""))[:60]) for t, a, _ in sent[n]][:80])
-                for line in (root / f"{n}.jsonl").read_text().splitlines():
-                    d = json.loads(line)
-                    if d.get("type") in ("healer", "orders", "activity"):
-                        print(n, d)
         for n in minds:
             self.assertEqual(replay.invariants(sent[n], llm_calls=calls[n]), [], n)
             self.assertIsInstance(recent[n], list)
