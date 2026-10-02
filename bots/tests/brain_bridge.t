@@ -386,4 +386,48 @@ package main;
 }
 
 
+# ---- achieve: достижения сервера (ORG-080) — пакеты 0A23/0A24/0A26 -> события; награда только невзятая ----
+{
+	no warnings 'redefine';
+	my @ev;
+	local *brainBridge::event = sub { my ($kind, %d) = @_; push @ev, {kind => $kind, %d} };
+	%Globals::achievements = (200005 => {title => 'Official Adventurer'});
+	# список при входе (OpenKore уже заполнил $achievementList — хук packet/ вызывается после обработчика)
+	$Globals::achievementList = {
+		200005 => {achievementID => 200005, completed => 1, completed_at => 1700000000, reward => 0},
+		220005 => {achievementID => 220005, completed => 1, completed_at => 1700000100, reward => 1},
+		128000 => {achievementID => 128000, completed => 0, completed_at => 0, reward => 0},
+	};
+	Plugins::call('packet/achievement_list', {total_points => 20, rank => 1});
+	is($ev[0]{kind}, 'achievement_list', 'achieve: 0A23 -> achievement_list');
+	is_deeply($ev[0]{done}, [[200005, 1700000000, 0], [220005, 1700000100, 1]], 'achieve: только выполненные');
+	is($ev[0]{points}, 20, 'achieve: очки из заголовка');
+	is_deeply(brainBridge::achState(), {points => 20, rank => 1, done => 2}, 'achieve: state.achievements');
+	@ev = ();
+	Plugins::call('packet/achievement_update', {total_points => 20, rank => 1, achievementID => 128000, completed => 0});
+	is(scalar @ev, 0, 'achieve: прогресс без выполнения — не событие');
+	Plugins::call('packet/achievement_update', {total_points => 20, rank => 1, achievementID => 200005, completed => 1,
+		completed_at => 1700000000, reward => 0});
+	is(scalar @ev, 0, 'achieve: уже сообщённое в списке — не повторяю');
+	$Globals::achievementList->{128000}{completed} = 1;
+	Plugins::call('packet/achievement_update', {total_points => 30, rank => 1, achievementID => 128000, completed => 1,
+		completed_at => 1700000500, reward => 0});
+	is($ev[0]{kind}, 'achievement', 'achieve: новое выполненное — событие');
+	is($ev[0]{id}, 128000, 'achieve: номер');
+	is($ev[0]{points}, 30, 'achieve: очки');
+	Plugins::call('packet/achievement_reward_ack', {received => 1, achievementID => 200005});
+	is($ev[-1]{kind}, 'achievement_reward', 'achieve: 0A26 -> achievement_reward');
+	ok($ev[-1]{ok}, 'achieve: 1 — награда выдана');
+	is((brainBridge::actionToCommand({action => 'achieve_reward', id => 200005}))[1], 'achieve reward 200005',
+	   'achieve: награда выполненного');
+	my @no = ([220005, qr/уже получена/], [999, qr/нет в списке/], ['1;quit', qr/неверный/]);
+	$Globals::achievementList->{777} = {achievementID => 777, completed => 0};
+	push @no, [777, qr/не выполнено/];
+	for my $c (@no) {
+		my ($okn, $why) = brainBridge::actionToCommand({action => 'achieve_reward', id => $c->[0]});
+		ok(!$okn && $why =~ $c->[1], "achieve: отказ награды $c->[0]");
+	}
+	undef $Globals::achievementList;
+}
+
 done_testing();

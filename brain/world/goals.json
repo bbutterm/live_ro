@@ -172,6 +172,13 @@
     "max_per_day": 1
   },
 
+  "achieve": {
+    "_comment": "ORG-080 достижения сервера (brain/live_brain/achieve.py, docs/SOCIETY.md): по пакетам rAthena 0A23/0A24 через мост; первый список молча, новое — воспоминание, летопись, шина, тема achieve (раз каждому за brag_days), сравнение с соперником. claim_rewards: true — житель сам забирает награду (achieve reward <id>); по умолчанию нет — решение владельца. В игре не проверено.",
+    "enabled": true,
+    "brag_days": 7,
+    "brag_chance": 0.6,
+    "claim_rewards": false
+  },
   "spar": {
     "_comment": "ORG-061 дружеский спарринг жителей на арене PvP Yoyo (brain/live_brain/spar.py, bots/plugins/spar, docs/SOCIETY.md). ВЫКЛЮЧЕНО: бой на PvP-карте, в игре не проверено. Как включить: enabled: true (BRAIN_DISABLE не должен содержать spar; плагин spar в loadPlugins_list профиля). Только житель против жителя (соперник недели или друг с affinity >= friend_min, не в ссоре) и только по согласию обоих: вызов шёпотом [spar:ask], ответ по смелости (>= min_bravery) и здоровью. Нужно: уровень >= min_level (Gate Keeper: BaseLevel > 30), зени >= fee + zeny_reserve, Butterfly Wing (602) — единственный выход с арены, HP >= min_hp, без смерти за hurt_hours, в городе town днём. Поход: Gate Keeper prt_in 52,140 -> приёмная #8 pvp_y_room 54,85 -> комната из rooms, только пустая (второй — ровно с 1 игроком). Бой до HP < 30% (spar_yieldHp в config.txt) или падения (nopenalty — без потерь); посторонний игрок — сразу выход. Не больше max_per_day в день, пауза gap_hours.",
     "enabled": false,

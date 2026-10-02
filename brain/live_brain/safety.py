@@ -42,6 +42,7 @@ CAST_LIMIT = 40                  # healer: кастов на игроков за
 CAST_MIN_SP = 10                 # healer: при меньшем SP % не кастовать вовсе (лекарь сам держит порог выше)
 PLAN_ACTIONS += ("bank_check", "bank_deposit", "bank_withdraw")   # dreams: банк rAthena (savings.py, ORG-073)
 PLAN_ACTIONS += ("spar", "spar_stop")   # spar: спарринг жителей на арене (spar.py, ORG-061)
+PLAN_ACTIONS += ("achieve_reward",)     # achieve: награда достижения сервера (achieve.py, ORG-080)
 SPAR_ROOMS = ("Prontera", "Izlude", "Payon", "Alberta", "Morocc")   # spar: пункты приёмной #8 (npc/other/pvp.txt:297)
 SPAR_MIN_LEVEL = 31              # spar: Gate Keeper — BaseLevel > 30 (npc/other/pvp.txt:202)
 MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
@@ -176,6 +177,11 @@ class SafetyPolicy:
             return self.check_guild(kind, action, state)                                             # guild:
         if kind == "skill_on_player":                                                                 # healer:
             return self.check_cast(action, state, now)                                               # healer:
+        if kind == "achieve_reward":                                                                  # achieve:
+            aid = action.get("id")                                                                   # achieve:
+            if isinstance(aid, bool) or not isinstance(aid, int) or not 0 < aid < 10 ** 9:           # achieve:
+                return None, "неверный номер достижения"                                             # achieve:
+            return {"action": "achieve_reward", "id": aid}, None                                     # achieve:
         if kind == "spar":                                                                            # spar:
             return self.check_spar(action, state)                                                    # spar:
         if kind == "explore":                                                                         # explore:

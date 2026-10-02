@@ -67,12 +67,14 @@ PUBLISH = {
     "mentor_end": ("mentor_end", 2),          # mentor: опека закончилась (срок)
     "spar_won": ("spar_won", 3),              # spar: ORG-061 победа в спарринге (пишет только победитель)
     "spar_draw": ("spar_draw", 2),            # spar: ничья (пишет только вызвавший)
+    "achievement_done": ("achievement", 3),   # achieve: ORG-080 новое достижение сервера
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 BACKSTAGE = {"director"}                      # director: решения режиссёра (ORG-086) — в дашборд, не в летопись/серию
 QUIET |= {"healer_post"}                      # healer: снимок поста лекаря (затирание)
 QUIET |= {"mentee_seek"}                      # mentor: снимок «ищу наставника» (затирание)
 QUIET |= {"bestiary_known"}                   # bestiary: снимок «какие виды и карты знаю» (затирание)
+QUIET |= {"achieve_known"}                    # achieve: снимок «сколько достижений» (затирание)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS world_events (
@@ -335,6 +337,7 @@ TEXTS = {
     "place_first": lambda d: f"первым(ой) из жителей дошёл(шла) до {d.get('map')} — «{d.get('name')}»",   # bestiary:
     "spar_won": lambda d: f"победил(а) {d.get('loser')} в спарринге на арене",            # spar: ORG-061
     "spar_draw": lambda d: f"ничья с {d.get('b')} в спарринге на арене",                 # spar:
+    "achievement": lambda d: f"получил(а) достижение «{d.get('name')}»",                # achieve: ORG-080
     "order_done": lambda d: f"выполнил(а) заказ {d.get('for')}: {d.get('name')} x{d.get('n')}",   # orders:
     "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
                                      f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)

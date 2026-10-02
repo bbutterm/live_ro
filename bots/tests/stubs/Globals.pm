@@ -7,3 +7,5 @@ our ($char, $field, $net, $monstersList, $playersList, %config, %jobs_lut, %sex_
 package Globals; push @EXPORT_OK, qw($currentChatRoom %chatRooms); our ($currentChatRoom, %chatRooms); 1;
 # guild: гильдия (brainBridge guild_*, ORG-052) — %guild (состав, master_char_id) и $charID
 package Globals; push @EXPORT_OK, qw(%guild $charID); our (%guild, $charID); 1;
+# achieve: достижения сервера (brainBridge achievement_*, ORG-080) — $achievementList (id -> запись) и %achievements (таблица)
+package Globals; push @EXPORT_OK, qw($achievementList %achievements); our ($achievementList, %achievements); 1;

@@ -617,3 +617,33 @@
   выключить — `BRAIN_DISABLE=spar`. Перед включением владельцу: проверить в игре вручную одним персонажем (консоль OpenKore:
   `talknpc 52 140` в `prt_in`, меню, приёмная, вход в `pvp_y_8-1`, выход крылом), затем пару жителей.
 
+## Достижения сервера (ORG-080, Т-31) — `brain/live_brain/achieve.py`, `brain/world/achievements.json`
+
+Код и тесты (`brain/tests/test_achieve.py`, `bots/tests/brain_bridge.t`); в игре не проверено (приходят ли пакеты на
+нашем сервере — первое, что смотреть в `console.log`: «Achievement '...' added»).
+
+- **Источник — сервер.** rAthena: `feature.achievement: on` (`conf/battle/feature.conf:81`), 361 достижение
+  (`db/re/achievement_db.yml`). Пакеты `0A23` (список при входе — только если у персонажа есть хоть одна запись,
+  `clif.cpp:21831`) и `0A24` (одно обновление) при `PACKETVER 20180620` есть (`clif_packetdb.hpp:1766`, блок
+  `>= 20150513`); OpenKore (`kRO_RagexeRE_2018_06_20e` → `kRO/Sakexe_0.pm:640-642`) разбирает их побайтно так же
+  (`Receive.pm:9800-9842`, запись 50 байт `V C V10 V C`). Мост (`# achieve:`) после разбора шлёт мозгу только
+  **выполненные**: `achievement {id, at, reward, points, rank, title}` и `achievement_list {points, rank, done}`;
+  прогресс счётчиков не шлётся. В `state` — `achievements {points, rank, done}`.
+- **Что получат жители сейчас** (по своим делам, ничего не меняя): «Official Adventurer» (первая профессия),
+  «Let's Party~» (группа), «My friend's friend~» (друг), «Community begin» (чат-комната society.py),
+  «Rich King (1)» (10 000 z), достижения питомцев (Taming), «Activating the market economy (1)» (траты).
+- **Мозг.** Первый список после установки модуля — молча (история не объявляется). Новое выполненное —
+  воспоминание «Получил(а) достижение «Let's Party~» — по данным сервера», событие `achievement_done` → шина
+  `achievement` (важность 3) и летопись («получил(а) достижение «Let's Party~»»). Тема разговора `achieve`
+  (реестр тем ORG-066): «Получил(а) достижение «...»!» — каждому жителю раз за `brag_days`; ответ `achieve_re`.
+  Соперник недели: тихий снимок шины `achieve_known {n, points}`; если у меня больше — «У меня 5 достижений, у тебя
+  3!» раз в день; соперничество (ORG-060) получило метрику «по достижениям». Поле промпта «достижения».
+- **Названия** — `brain/world/achievements.json` (`scripts/gen_achievements.py upstream/rathena`; руками не править,
+  тест сверяет с upstream), иначе `title` из таблицы OpenKore, иначе «№ id».
+- **Награда** — `goals.json → achieve.claim_rewards` (по умолчанию **нет**, решение владельца): действие
+  `achieve_reward {id}` → `achieve reward <id>` (`Commands.pm:59`), мост пропускает только выполненное и ещё не
+  полученное; итог — `achievement_reward {id, ok}` (`0A26`, 1 — выдана).
+- **Если пакеты не придут**, модуль молчит: «достижения» по памяти не выдумываются — личные вехи уже ведут
+  коллекция (ORG-074), бестиарий (ORG-077) и мечта (ORG-081).
+- Выключить: `BRAIN_DISABLE=achieve` или `"achieve": {"enabled": false}` (события моста при этом поглощаются, в
+  gate/LLM не идут).

@@ -42,6 +42,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
 orders (ORG-070) — метка [order:] 25, тик 25.  # orders:
 mentor (ORG-057) — метка [mentor:] 55, тик 95, промпт 215.  # mentor:
 bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # bestiary:
+achieve (ORG-080) — события achievement/achievement_list/achievement_reward 80 (own), тик 227, промпт 237.  # achieve:
 spar (ORG-061) — метка [spar:] 47, события spar_step/spar_result 85 (own), тик 195 (без поля промпта).  # spar:
 """
 import inspect
@@ -82,6 +83,7 @@ from .mentor import Mentor           # mentor: ORG-057 наставничест�
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
 from .places import Places           # places: ORG-084 имена мест
 from .spar import Spar               # spar: ORG-061 спарринг на арене (по умолчанию выключен)
+from .achieve import Achieve         # achieve: ORG-080 достижения сервера
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -124,6 +126,7 @@ MODULES = (
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
     Bestiary,          # bestiary: ORG-077 после social (тема bestiary); тик 225, событие kill 75, промпт 235
     Spar,              # spar: ORG-061 после rivalry и society (соперник, ссоры); тик 195, метка [spar:] 47
+    Achieve,           # achieve: ORG-080 после social (тема achieve) и rivalry; тик 227, события 80, промпт 237
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
