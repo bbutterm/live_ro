@@ -50,8 +50,10 @@ def menu_options(line):
 
 class ScenarioDataTest(unittest.TestCase):
     def test_paths_loaded_with_refs(self):
-        self.assertEqual(set(DATA["paths"]), {"knight", "priest"})
-        for path, p in DATA["paths"].items():
+        # newborn: первые профессии (Novice -> …) проверяет tests/test_newborn.py
+        second = {k: p for k, p in DATA["paths"].items() if p["from"] != "Novice"}
+        self.assertEqual(set(second), {"knight", "priest"})
+        for path, p in second.items():
             self.assertTrue(p["script"].startswith("npc/jobs/2-1/"), path)
             self.assertEqual(p["requirements"]["job_lv"], 40)
             self.assertTrue(all(re.match(r"npc/.+\.txt:\d+", r) for r in p["requirements"]["refs"]))

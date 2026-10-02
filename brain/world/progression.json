@@ -4,14 +4,84 @@
     "Каждый шаг сценария выведен из скрипта rAthena (ссылка file:line, пути от upstream/rathena) — ветки не угаданы (AUT-078/081).",
     "Статус всего файла: «выведено из скрипта, проверено тестом разбора»; в игре сценарии НЕ проходились.",
     "select — номер пункта меню в скрипте (с 1); в OpenKore это r<select-1>. text — текст пункта: тело отвечает по тексту.",
-    "Справочник магазинов и добычи — brain/world/jobs/catalog.json (scripts/gen_progression.py)."
+    "Справочник магазинов и добычи — brain/world/jobs/catalog.json (scripts/gen_progression.py).",
+    "newborn: Novice -> Swordsman/Acolyte/Merchant/Archer/Thief/Mage (npc/re/jobs/1-1); путь Novice выбирается по цели жителя (classes.Novice.next_by_target, roster.json job). route — маршрут по данным OpenKore (scripts/okroute.py); status blocked — этап не запускается."
   ],
   "rathena": {
     "loaded": "npc/re/scripts_main.conf:31 import: npc/scripts_jobs.conf -> npc/scripts_jobs.conf:14 (knight.txt), :15 (priest.txt); в npc/re/jobs своих версий Knight/Priest нет",
     "pilgrimage_npcs": "npc/re/scripts_jobs.conf:7 npc/re/jobs/1-1/acolyte.txt (вызывает F_FatherRub/F_MotherMart/F_FatherYos из priest.txt)",
-    "reset_npc": "npc/re/jobs/repair.txt:66 Valerie (prt_in 38,104) — сброс переменных квеста при поломке; боту не нужен"
+    "reset_npc": "npc/re/jobs/repair.txt:66 Valerie (prt_in 38,104) — сброс переменных квеста при поломке; боту не нужен",
+    "first_jobs": "npc/re/scripts_main.conf:39 import: npc/re/scripts_jobs.conf -> :7-12 npc/re/jobs/1-1/{acolyte,archer,mage,merchant,swordman,thief}.txt; старых 1-1 (npc/jobs/1-1) в дереве нет",
+    "first_job_check": "npc/other/Global_Functions.txt:626-628 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8; conf/battle/player.conf:47 basic_skill_check: yes"
+  },
+  "start": {
+    "_comment": "newborn: где появляется новый житель и как оттуда выйти (docs/POPULATION.md «Первые шаги новичка»).",
+    "upstream": "conf/char_athena.conf:115 start_point: iz_int,18,26:iz_int01,18,26:...:iz_int04,18,26 (RENEWAL читает start_point — src/char/char.cpp:3008-3012); точка пишется и в last_map, и в save_map (src/char/char.cpp:1503-1509)",
+    "maps": ["iz_int", "iz_int01", "iz_int02", "iz_int03", "iz_int04", "int_land", "int_land01", "int_land02", "int_land03", "int_land04"],
+    "override": {
+      "file": "server/conf/optional/char_start_point.txt",
+      "point": ["prontera", 156, 180],
+      "enabled": false,
+      "why": "включает владелец: изменение сервера. Новичок появляется и возрождается в Пронтере (home_town реестра)"
+    },
+    "academy_exit": {
+      "status": "blocked",
+      "steps": [
+        {"do": "walk", "map": "iz_int", "x": 27, "y": 30, "next_xy": [51, 30], "ref": "npc/re/warps/cities/izlude.txt:57 warp #room_out 1,1 -> iz_int 51,30"},
+        {"do": "walk", "map": "iz_int", "x": 56, "y": 15, "next_map": "int_land", "ref": "npc/re/warps/cities/izlude.txt:69-77 #ship_out OnTouch: savepoint int_land 77,101; warp int_land 85,107"},
+        {"do": "walk", "map": "int_land", "x": 49, "y": 57, "next_map": "izlude", "ref": "npc/re/warps/cities/izlude.txt:83-109 #intro_to_izlude OnTouch: без квеста 21008 меню нет (mes, close2); warp izlude 196,209; savepoint izlude 128,142"}
+      ],
+      "variants": "iz_int0N -> int_land0N -> izlude_a..d (izlude.txt:72-73, 105; дубликаты :78-81, :110-113)",
+      "why": [
+        "OpenKore fields/iz_int.fld2.gz — старая карта 200x200, у rAthena db/map_cache.dat iz_int 80x80: клетки старта для OpenKore непроходимы. Обход: servers.txt field_iz_int iz_int01 (iz_int01.fld2 совпадает с картой rAthena клетка в клетку)",
+        "выход ведёт в izlude, а он в renewal перестроен: rAthena db/re/map_cache.dat izlude 268x300, OpenKore fields/izlude.fld2.gz 268x268; переходы izlude в tables/portals.txt старые (izlude 52,140 -> izlude_in; у rAthena npc/re/warps/cities/izlude.txt:27 izlude 52,172). Нужен патч tables/portals.txt OpenKore (server/patches/openkore) и field_izlude izlude_a",
+        "после выхода точка сохранения — izlude 128,142: смерть возвращает в тот же перестроенный город"
+      ]
+    }
   },
   "classes": {
+    "Novice": {
+      "rathena": "Novice",
+      "next": null,
+      "next_by_target": {"Swordsman": "swordman", "Acolyte": "acolyte", "Merchant": "merchant", "Archer": "archer",
+                         "Thief": "thief", "Mage": "mage"},
+      "max_job": 10,
+      "weapon_types": ["Dagger"],
+      "use_shield": true,
+      "why": "newborn: путь выбирается по цели жителя (roster.json job / шаблон); стартовое оружие Knife 1201 (conf/char_athena.conf start_items)"
+    },
+    "Merchant": {
+      "rathena": "Merchant",
+      "next": null,
+      "max_job": 50,
+      "weapon_types": ["2hAxe", "1hAxe"],
+      "use_shield": true,
+      "why": "newborn: гильдия выдаёт N_Battle_Axe 1381 (2hAxe, merchant.txt:94); вторая профессия не описана"
+    },
+    "Archer": {
+      "rathena": "Archer",
+      "next": null,
+      "max_job": 50,
+      "weapon_types": ["Bow"],
+      "use_shield": false,
+      "why": "newborn: N_Composite_Bow 1742 (archer.txt:96); лук двуручный"
+    },
+    "Thief": {
+      "rathena": "Thief",
+      "next": null,
+      "max_job": 50,
+      "weapon_types": ["Dagger"],
+      "use_shield": true,
+      "why": "newborn: N_Main_Gauche 13041 (thief.txt:169)"
+    },
+    "Mage": {
+      "rathena": "Mage",
+      "next": null,
+      "max_job": 50,
+      "weapon_types": ["Staff"],
+      "use_shield": true,
+      "why": "newborn: N_Rod 1639 (Staff, mage.txt:107)"
+    },
     "Swordsman": {
       "rathena": "Swordman",
       "next": "knight",
@@ -786,6 +856,372 @@
             "ref": "npc/jobs/2-1/priest.txt:503-515 changequest 8015,8016, completequest 8016, Job_Change Job_Priest"
           },
           "fail": "есть очки навыков — close (priest.txt:493-497)"
+        }
+      ]
+    },
+    "swordman": {
+      "title": "Novice -> Swordsman",
+      "from": "Novice",
+      "to": "Swordsman",
+      "script": "npc/re/jobs/1-1/swordman.txt",
+      "variable": null,
+      "requirements": {
+        "job_lv": 10,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/re/jobs/1-1/swordman.txt:95 F_CanChangeJob -> отказ (нужен NV_BASIC 9 — все 9 очков Novice, то есть job 10)",
+          "npc/other/Global_Functions.txt:626 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8"
+        ],
+        "note": "Предметов, зени и испытаний нет (renewal). Job level скрипт сам не проверяет: NV_BASIC 9 возможен только на job 10."
+      },
+      "reward": {"items": {"13415": 1}, "ref": "npc/re/jobs/1-1/swordman.txt:120 getitem 13415,1 (N_Falchion)"},
+      "route": {
+        "status": "blocked",
+        "from": ["prontera", 156, 180],
+        "why": "izlude в renewal перестроен: OpenKore fields/izlude.fld2.gz 268x268 и старые переходы tables/portals.txt (prt_fild08 371,212 -> izlude 30,78; izlude 52,140 -> izlude_in), у rAthena db/re/map_cache.dat izlude 268x300, npc/re/warps/cities/izlude.txt:22 (-> izlude 24,98), :27 (izlude 52,172 -> izlude_in 74,161). Нужен патч portals.txt OpenKore и field_izlude izlude_a",
+        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "hops": [
+          ["prontera", 156, 22, "prt_fild08", 170, 378],
+          ["prt_fild08", 371, 212, "izlude", 30, 78],
+          ["izlude", 52, 140, "izlude_in", 74, 158]
+        ]
+      },
+      "npcs": {
+        "guildsman": {"name": "Swordman#swd", "map": "izlude_in", "x": 74, "y": 172, "ref": "npc/re/jobs/1-1/swordman.txt:15"}
+      },
+      "note": "Диалог из двух меню. Upper == 1 (перерождённые) — другая ветка (:16-60), житель её не встретит.",
+      "stages": [
+        {
+          "id": "first_job",
+          "_comment": "id не apply: career хранит пройденные этапы без пути (done), apply уже есть у Knight/Priest",
+          "title": "Гильдия: смена профессии Novice -> Swordsman",
+          "npc": "guildsman",
+          "needs": {"job_lv": 10, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "izlude_in", "x": 73, "y": 172},
+            {
+              "do": "talk",
+              "npc": "guildsman",
+              "x": 74,
+              "y": 172,
+              "answers": [
+                {"select": 2, "text": "I want to be a Swordman.", "ref": "npc/re/jobs/1-1/swordman.txt:65"},
+                {"select": 1, "text": "Yes, I do.", "ref": "npc/re/jobs/1-1/swordman.txt:107"}
+              ]
+            }
+          ],
+          "success": {"job": "Swordsman", "ref": "npc/re/jobs/1-1/swordman.txt:119 callfunc \"Job_Change\",Job_Swordman"},
+          "fail": "NV_BASIC < 9 — close без изменений (npc/re/jobs/1-1/swordman.txt:95)"
+        }
+      ]
+    },
+    "acolyte": {
+      "title": "Novice -> Acolyte",
+      "from": "Novice",
+      "to": "Acolyte",
+      "script": "npc/re/jobs/1-1/acolyte.txt",
+      "variable": null,
+      "requirements": {
+        "job_lv": 10,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/re/jobs/1-1/acolyte.txt:78 F_CanChangeJob -> отказ (нужен NV_BASIC 9 — все 9 очков Novice, то есть job 10)",
+          "npc/other/Global_Functions.txt:626 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8"
+        ],
+        "note": "Предметов, зени и испытаний нет (renewal). Job level скрипт сам не проверяет: NV_BASIC 9 возможен только на job 10."
+      },
+      "reward": {"items": {"1545": 1}, "ref": "npc/re/jobs/1-1/acolyte.txt:90 getitem 1545,1 (N_Mace)"},
+      "route": {
+        "status": "ok",
+        "from": ["prontera", 156, 180],
+        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "hops": [
+          ["prontera", 237, 317, "prt_church", 100, 56],
+          ["prt_church", 109, 81, "prt_church", 168, 19]
+        ]
+      },
+      "npcs": {
+        "cleric": {"name": "Cleric#aco", "map": "prt_church", "x": 184, "y": 41, "ref": "npc/re/jobs/1-1/acolyte.txt:16"}
+      },
+      "note": "Одно меню. Паломники Ascetic (acolyte.txt:113-333) нужны только квесту Priest.",
+      "stages": [
+        {
+          "id": "first_job",
+          "_comment": "id не apply: career хранит пройденные этапы без пути (done), apply уже есть у Knight/Priest",
+          "title": "Гильдия: смена профессии Novice -> Acolyte",
+          "npc": "cleric",
+          "needs": {"job_lv": 10, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "prt_church", "x": 183, "y": 41},
+            {
+              "do": "talk",
+              "npc": "cleric",
+              "x": 184,
+              "y": 41,
+              "answers": [
+                {"select": 1, "text": "Change your job to acolyte.", "ref": "npc/re/jobs/1-1/acolyte.txt:65"}
+              ]
+            }
+          ],
+          "success": {"job": "Acolyte", "ref": "npc/re/jobs/1-1/acolyte.txt:89 callfunc \"Job_Change\",Job_Acolyte"},
+          "fail": "NV_BASIC < 9 — close без изменений (npc/re/jobs/1-1/acolyte.txt:78)"
+        }
+      ]
+    },
+    "merchant": {
+      "title": "Novice -> Merchant",
+      "from": "Novice",
+      "to": "Merchant",
+      "script": "npc/re/jobs/1-1/merchant.txt",
+      "variable": null,
+      "requirements": {
+        "job_lv": 10,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/re/jobs/1-1/merchant.txt:78 F_CanChangeJob -> отказ (нужен NV_BASIC 9 — все 9 очков Novice, то есть job 10)",
+          "npc/other/Global_Functions.txt:626 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8"
+        ],
+        "note": "Предметов, зени и испытаний нет (renewal). Job level скрипт сам не проверяет: NV_BASIC 9 возможен только на job 10."
+      },
+      "reward": {"items": {"1381": 1}, "ref": "npc/re/jobs/1-1/merchant.txt:94 getitem 1381,1 (N_Battle_Axe)"},
+      "route": {
+        "status": "ok",
+        "from": ["prontera", 156, 180],
+        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "hops": [
+          ["prontera", 156, 22, "prt_fild08", 170, 378],
+          ["prt_fild08", 233, 16, "moc_fild01", 239, 382],
+          ["moc_fild01", 321, 16, "moc_fild02", 67, 342],
+          ["moc_fild02", 378, 272, "pay_gld", 16, 276],
+          ["pay_gld", 374, 149, "payon", 16, 143],
+          ["payon", 267, 89, "pay_fild08", 17, 75],
+          ["pay_fild08", 160, 16, "pay_fild07", 280, 382],
+          ["pay_fild07", 164, 17, "pay_fild03", 172, 281],
+          ["pay_fild03", 392, 63, "alberta", 15, 234],
+          ["alberta", 33, 42, "alberta_in", 78, 44]
+        ]
+      },
+      "npcs": {
+        "mahnsoo": {"name": "Merchant#mer", "map": "alberta_in", "x": 53, "y": 43, "ref": "npc/re/jobs/1-1/merchant.txt:15"}
+      },
+      "note": "Одно меню, платы нет (merchant.txt:241-245: «we used to receive a start-up fee»). Маршрут длинный — 10 переходов пешком, через Пайон (промежуточный move).",
+      "stages": [
+        {
+          "id": "first_job",
+          "_comment": "id не apply: career хранит пройденные этапы без пути (done), apply уже есть у Knight/Priest",
+          "title": "Гильдия: смена профессии Novice -> Merchant",
+          "npc": "mahnsoo",
+          "needs": {"job_lv": 10, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "payon", "x": 22, "y": 143, "time_limit": 1800, "why": "точка на пути: через Пайон, а не через moc_fild03 (агрессивные монстры до 47 ур., атлас)"},
+            {"do": "move", "map": "alberta_in", "x": 56, "y": 43, "time_limit": 1800},
+            {
+              "do": "talk",
+              "npc": "mahnsoo",
+              "x": 53,
+              "y": 43,
+              "answers": [
+                {"select": 1, "text": "I want to be a merchant.", "ref": "npc/re/jobs/1-1/merchant.txt:59"}
+              ]
+            }
+          ],
+          "success": {"job": "Merchant", "ref": "npc/re/jobs/1-1/merchant.txt:93 callfunc \"Job_Change\",Job_Merchant"},
+          "fail": "NV_BASIC < 9 — close без изменений (npc/re/jobs/1-1/merchant.txt:78)"
+        }
+      ]
+    },
+    "archer": {
+      "title": "Novice -> Archer",
+      "from": "Novice",
+      "to": "Archer",
+      "script": "npc/re/jobs/1-1/archer.txt",
+      "variable": null,
+      "requirements": {
+        "job_lv": 10,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/re/jobs/1-1/archer.txt:79 F_CanChangeJob -> отказ (нужен NV_BASIC 9 — все 9 очков Novice, то есть job 10)",
+          "npc/other/Global_Functions.txt:626 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8"
+        ],
+        "note": "Предметов, зени и испытаний нет (renewal). Job level скрипт сам не проверяет: NV_BASIC 9 возможен только на job 10."
+      },
+      "reward": {"items": {"1742": 1}, "ref": "npc/re/jobs/1-1/archer.txt:96 getitem 1742,1 (N_Composite_Bow)"},
+      "route": {
+        "status": "ok",
+        "from": ["prontera", 156, 180],
+        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "hops": [
+          ["prontera", 156, 22, "prt_fild08", 170, 378],
+          ["prt_fild08", 233, 16, "moc_fild01", 239, 382],
+          ["moc_fild01", 321, 16, "moc_fild02", 67, 342],
+          ["moc_fild02", 378, 272, "pay_gld", 16, 276],
+          ["pay_gld", 374, 149, "payon", 16, 143],
+          ["payon", 228, 329, "pay_arche", 81, 22],
+          ["pay_arche", 145, 165, "payon_in02", 64, 56]
+        ]
+      },
+      "npcs": {
+        "guildsman": {"name": "Archer Guildsman#archer", "map": "payon_in02", "x": 64, "y": 71, "ref": "npc/re/jobs/1-1/archer.txt:15"}
+      },
+      "note": "Одно меню. Кроме лука гильдия даёт колчаны 12004, 12009, 12008 (archer.txt:97-99): стрелы появятся, только если их открыть — тело этого не делает.",
+      "stages": [
+        {
+          "id": "first_job",
+          "_comment": "id не apply: career хранит пройденные этапы без пути (done), apply уже есть у Knight/Priest",
+          "title": "Гильдия: смена профессии Novice -> Archer",
+          "npc": "guildsman",
+          "needs": {"job_lv": 10, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "payon_in02", "x": 63, "y": 71, "time_limit": 1800},
+            {
+              "do": "talk",
+              "npc": "guildsman",
+              "x": 64,
+              "y": 71,
+              "answers": [
+                {"select": 1, "text": "I want to be an Archer.", "ref": "npc/re/jobs/1-1/archer.txt:65"}
+              ]
+            }
+          ],
+          "success": {"job": "Archer", "ref": "npc/re/jobs/1-1/archer.txt:95 callfunc \"Job_Change\",Job_Archer"},
+          "fail": "NV_BASIC < 9 — close без изменений (npc/re/jobs/1-1/archer.txt:79)"
+        }
+      ]
+    },
+    "thief": {
+      "title": "Novice -> Thief",
+      "from": "Novice",
+      "to": "Thief",
+      "script": "npc/re/jobs/1-1/thief.txt",
+      "variable": null,
+      "requirements": {
+        "job_lv": 10,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/re/jobs/1-1/thief.txt:139 F_CanChangeJob -> отказ (нужен NV_BASIC 9 — все 9 очков Novice, то есть job 10)",
+          "npc/other/Global_Functions.txt:626 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8"
+        ],
+        "note": "Предметов, зени и испытаний нет (renewal). Job level скрипт сам не проверяет: NV_BASIC 9 возможен только на job 10."
+      },
+      "reward": {"items": {"13041": 1}, "ref": "npc/re/jobs/1-1/thief.txt:169 getitem 13041,1 (N_Main_Gauche)"},
+      "route": {
+        "status": "blocked",
+        "from": ["morocc", 156, 47],
+        "why": "пешего пути prontera -> morocc по простым переходам tables/portals.txt OpenKore нет (scripts/okroute.py); есть только телепорт Kafra (portals.txt: prontera 146 89 morocc 156 47 с диалогом и платой), его диалог с renewal-скриптом npc/re/kafras не сверен. Последняя часть пути — подземелье moc_pryd01 (монстры 24-30 ур.)",
+        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "hops": [
+          ["morocc", 25, 294, "moc_ruins", 159, 37],
+          ["moc_ruins", 54, 161, "moc_pryd01", 195, 9],
+          ["moc_pryd01", 90, 109, "moc_prydb1", 100, 191],
+          ["moc_prydb1", 87, 115, "moc_prydb1", 59, 115]
+        ]
+      },
+      "npcs": {
+        "guide": {"name": "Thief Guide#thief", "map": "moc_prydb1", "x": 39, "y": 129, "ref": "npc/re/jobs/1-1/thief.txt:15"},
+        "guildsman": {"name": "Thief Guildsman#thief", "map": "moc_prydb1", "x": 42, "y": 133, "ref": "npc/re/jobs/1-1/thief.txt:157"}
+      },
+      "note": "Два NPC: Thief Guide ставит q_job_thief 1 (:153), Thief Guildsman меняет профессию (:157-168). Второй и третий ответ Guide любой из пунктов ведёт дальше (:106-123); выбран первый. Повторный разговор с Guide при q_job_thief 1 — без меню (:60-68).",
+      "stages": [
+        {
+          "id": "first_job",
+          "_comment": "id не apply: career хранит пройденные этапы без пути (done), apply уже есть у Knight/Priest",
+          "title": "Гильдия: смена профессии Novice -> Thief",
+          "npc": "guide",
+          "needs": {"job_lv": 10, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "moc_prydb1", "x": 39, "y": 126},
+            {
+              "do": "talk",
+              "npc": "guide",
+              "x": 39,
+              "y": 129,
+              "answers": [
+                {"select": 1, "text": "I want to be a Thief.", "ref": "npc/re/jobs/1-1/thief.txt:92"},
+                {"select": 1, "text": "Yes.", "ref": "npc/re/jobs/1-1/thief.txt:106"},
+                {"select": 1, "text": "Yes, I do.", "ref": "npc/re/jobs/1-1/thief.txt:130"}
+              ]
+            },
+            {"do": "move", "map": "moc_prydb1", "x": 45, "y": 133},
+            {
+              "do": "talk",
+              "npc": "guildsman",
+              "x": 42,
+              "y": 133,
+              "answers": []
+            }
+          ],
+          "success": {"job": "Thief", "ref": "npc/re/jobs/1-1/thief.txt:167 callfunc \"Job_Change\",Job_Thief"},
+          "fail": "NV_BASIC < 9 — close без изменений (npc/re/jobs/1-1/thief.txt:139)"
+        }
+      ]
+    },
+    "mage": {
+      "title": "Novice -> Mage",
+      "from": "Novice",
+      "to": "Mage",
+      "script": "npc/re/jobs/1-1/mage.txt",
+      "variable": null,
+      "requirements": {
+        "job_lv": 10,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/re/jobs/1-1/mage.txt:87 F_CanChangeJob -> отказ (нужен NV_BASIC 9 — все 9 очков Novice, то есть job 10)",
+          "npc/other/Global_Functions.txt:626 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8"
+        ],
+        "note": "Предметов, зени и испытаний нет (renewal). Job level скрипт сам не проверяет: NV_BASIC 9 возможен только на job 10."
+      },
+      "reward": {"items": {"1639": 1}, "ref": "npc/re/jobs/1-1/mage.txt:107 getitem 1639,1 (N_Rod)"},
+      "route": {
+        "status": "ok",
+        "from": ["prontera", 156, 180],
+        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "hops": [
+          ["prontera", 22, 203, "prt_fild05", 373, 205],
+          ["prt_fild05", 15, 333, "prt_fild04", 384, 334],
+          ["prt_fild04", 160, 387, "prt_fild00", 165, 18],
+          ["prt_fild00", 18, 129, "gef_fild00", 381, 137],
+          ["gef_fild00", 40, 199, "geffen", 217, 119],
+          ["geffen", 61, 180, "geffen_in", 163, 94]
+        ]
+      },
+      "npcs": {
+        "guildsman": {"name": "Mage Guildsman#mage", "map": "geffen_in", "x": 164, "y": 124, "ref": "npc/re/jobs/1-1/mage.txt:15"}
+      },
+      "note": "Два меню с почти одинаковыми пунктами: «I want to be a Mage» (:67, без точки) и «I want to be a Mage.» (:81) — ответ выбирается по точному тексту.",
+      "stages": [
+        {
+          "id": "first_job",
+          "_comment": "id не apply: career хранит пройденные этапы без пути (done), apply уже есть у Knight/Priest",
+          "title": "Гильдия: смена профессии Novice -> Mage",
+          "npc": "guildsman",
+          "needs": {"job_lv": 10, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "geffen_in", "x": 163, "y": 124, "time_limit": 1800},
+            {
+              "do": "talk",
+              "npc": "guildsman",
+              "x": 164,
+              "y": 124,
+              "answers": [
+                {"select": 1, "text": "I want to be a Mage", "ref": "npc/re/jobs/1-1/mage.txt:67"},
+                {"select": 1, "text": "I want to be a Mage.", "ref": "npc/re/jobs/1-1/mage.txt:81"}
+              ]
+            }
+          ],
+          "success": {"job": "Mage", "ref": "npc/re/jobs/1-1/mage.txt:106 callfunc \"Job_Change\",Job_Mage"},
+          "fail": "NV_BASIC < 9 — close без изменений (npc/re/jobs/1-1/mage.txt:87)"
         }
       ]
     }

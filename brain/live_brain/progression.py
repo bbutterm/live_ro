@@ -1,13 +1,17 @@
 """Рост жителя: цели по уровню, смена профессии, снаряжение (AUT-049..054, 079..084). Правила без LLM.
 
-Данные: brain/world/progression.json (сценарии Swordman -> Knight, Acolyte -> Priest, выведенные из
-скриптов rAthena со ссылками file:line) и brain/world/jobs/catalog.json (магазины и добыча, генерирует
+Данные: brain/world/progression.json (сценарии Swordman -> Knight, Acolyte -> Priest и Novice -> шесть
+первых профессий, выведенные из скриптов rAthena со ссылками file:line) и brain/world/jobs/catalog.json (магазины и добыча, генерирует
 scripts/gen_progression.py). Все функции чистые: принимают state (как у brainBridge) и данные.
 
 state: job (имя OpenKore: Swordsman, Acolyte…), lv, job_lv, zeny, sex, items {id: n};
     необязательно: skill_points, quests [id] (журнал квестов), equip {слот: id},
     job_change {quests, skill_points, items} — статус плагина jobChange (если его добавят в state).
 Чего нет в state — «неизвестно», не «выполнено» и не «не выполнено».
+
+Novice (newborn): путь зависит от цели жителя — target (Mage, Thief…, см. target_job по roster.json),
+classes.Novice.next_by_target. blocked() — этап не запускается: житель в учебном полигоне iz_int (выход
+не автоматизирован) или маршрут пути не совпадает с сервером (route.status blocked).
 
 Цель (plan): этапы пути; следующий шаг — первый незавершённый; срок годности (expires) — по виду
 шага из goals.ttl_hours; unreachable — нужен предмет, который нигде не продаётся и не падает
@@ -62,9 +66,49 @@ def items(state):
     return out
 
 
-def path_for(state, data):
+def path_for(state, data, target=None):
+    """Путь смены профессии. Novice (newborn): по цели жителя target (имя OpenKore: Mage, Thief…) из
+    classes.Novice.next_by_target; без цели пути нет. Остальные — classes[job].next."""
     cls = data["classes"].get(state.get("job") or "")
-    return cls and cls.get("next")
+    if not cls:
+        return None
+    if cls.get("next_by_target"):
+        return cls["next_by_target"].get(target or "")
+    return cls.get("next")
+
+
+def target_job(name, world_dir=None):
+    """newborn: цель жителя (первая профессия, имя OpenKore) по реестру brain/world/roster.json: поле job
+    записи с этим именем, без него — job шаблона bots/templates/<template>/template.json. None — не найден."""
+    world = Path(world_dir) if world_dir else WORLD
+    try:
+        roster = json.loads((world / "roster.json").read_text(encoding="utf-8")).get("residents") or {}
+    except (OSError, ValueError):
+        return None
+    for r in roster.values():
+        if (r.get("name") or "").lower() != (name or "").lower():
+            continue
+        if r.get("job"):
+            return r["job"]
+        tpl = world.parents[1] / "bots" / "templates" / (r.get("template") or "") / "template.json"
+        try:
+            return json.loads(tpl.read_text(encoding="utf-8")).get("job")
+        except (OSError, ValueError):
+            return None
+    return None
+
+
+def blocked(state, data, path=None):
+    """newborn: почему этап нельзя запускать (None — можно): житель в учебном полигоне iz_int / int_land,
+    откуда тело выйти не умеет, или маршрут пути помечен blocked (данные OpenKore не совпадают с сервером)."""
+    start = data.get("start") or {}
+    if state.get("map") in start.get("maps", ()):
+        return "учебный полигон " + state["map"] + ": выход не автоматизирован (" + "; ".join(
+            start.get("academy_exit", {}).get("why", [])[:1]) + ")"
+    route = (data["paths"].get(path) or {}).get("route") if path else None
+    if route and route.get("status") == "blocked":
+        return route.get("why") or "маршрут помечен blocked"
+    return None
 
 
 # ---------- источники предметов ----------
@@ -129,10 +173,10 @@ def _when(stage, state, q):
     return True
 
 
-def current_stage(state, data, path=None, done=()):
+def current_stage(state, data, path=None, done=(), target=None):
     """Этап квеста, который делать сейчас (по журналу квестов). done — этапы, пройденные по памяти мозга
     (паломничество Priest не меняет журнал). Без журнала — первый этап (apply) как предположение."""
-    path = path or path_for(state, data)
+    path = path or path_for(state, data, target)
     if not path:
         return None
     q = quest_ids(state)
@@ -146,9 +190,9 @@ def current_stage(state, data, path=None, done=()):
     return None
 
 
-def readiness(state, data, path=None):
+def readiness(state, data, path=None, target=None):
     """Готовность к смене профессии: missing (точно не хватает), unknown (нет в state), unreachable."""
-    path = path or path_for(state, data)
+    path = path or path_for(state, data, target)
     if not path:
         return {"path": None, "ready": False, "missing": [], "unknown": [], "unreachable": []}
     p = data["paths"][path]
@@ -206,8 +250,9 @@ def _goal_step(kind, text, data, now, **extra):
     return dict(kind=kind, text=text, expires=now + ttl * 3600, **extra)
 
 
-def plan(state, data, now=None, done=()):
-    """Цель жителя: этапы и следующий шаг. Чистая функция; now — для срока годности."""
+def plan(state, data, now=None, done=(), target=None):
+    """Цель жителя: этапы и следующий шаг. Чистая функция; now — для срока годности.
+    target — цель жителя (первая профессия для Novice, newborn), см. target_job."""
     now = now if now is not None else time.time()
     job = state.get("job")
     cls = data["classes"].get(job or "")
@@ -215,7 +260,16 @@ def plan(state, data, now=None, done=()):
     if not cls:
         return {"job": job, "path": None, "stages": [], "unreachable": False,
                 "next": _goal_step("base_lv", f"профессия {job!r} не описана в progression.json — просто расти", data, now)}
-    path = cls.get("next")
+    path = path_for(state, data, target)
+    start_maps = (data.get("start") or {}).get("maps", ())
+    if state.get("map") in start_maps:                    # newborn: из учебного полигона тело не выйдет само
+        return {"job": job, "path": path, "stages": [], "unreachable": False, "blocked": True,
+                "next": _goal_step("quest_stage", blocked(state, data) + " — нужен перенос оператором или "
+                                   "start_point владельца (docs/POPULATION.md)", data, now, blocked=True)}
+    if not path and cls.get("next_by_target") and job_lv >= cls["max_job"]:
+        return {"job": job, "path": None, "stages": [], "unreachable": False,
+                "next": _goal_step("quest_stage", f"первая профессия не выбрана: цель {target!r} не из "
+                                   f"{sorted(cls['next_by_target'])} (roster.json job)", data, now)}
     if not path:
         nxt = (_goal_step("job_lv", f"добрать уровень профессии до {cls['max_job']} (сейчас {job_lv})", data, now,
                           target=cls["max_job"], have=job_lv) if job_lv < cls["max_job"] else
@@ -264,6 +318,9 @@ def plan(state, data, now=None, done=()):
         need = [m for m in ready["missing"] if m["kind"] == "item"]
         text = "собрать для Sir Andrew: " + ", ".join(f"{m['name'] or m['id']} {m['have']}/{m['need']}" for m in need)
         nxt = _goal_step("collect_items", text, data, now, items=need)
+    elif blocked(state, data, path):                       # newborn: этап не запускается — честно в цели
+        nxt = _goal_step("quest_stage", f"{p['to']}: требования выполнены, но этап не запускается — "
+                         f"{blocked(state, data, path)}", data, now, blocked=True)
     elif cur:
         nxt = _goal_step("quest_stage", f"квест {p['to']}: {cur['title']}", data, now, stage=cur["id"],
                          npc=(p["npcs"].get(cur.get("npc")) if cur.get("npc") else None))
@@ -280,11 +337,12 @@ def expired(goal, now=None):
     return goal is None or goal.get("expires", 0) <= now
 
 
-def stage_action(state, data, path=None, done=()):
-    """Действие для тела (плагин jobChange): шаги текущего этапа. None — нечего делать или не готов."""
-    path = path or path_for(state, data)
+def stage_action(state, data, path=None, done=(), target=None):
+    """Действие для тела (плагин jobChange): шаги текущего этапа. None — нечего делать, не готов или
+    этап заблокирован (blocked: учебный полигон, маршрут не совпадает с сервером)."""
+    path = path or path_for(state, data, target)
     stage = current_stage(state, data, path, done)
-    if not stage:
+    if not stage or blocked(state, data, path):
         return None
     for need, value in (stage.get("needs") or {}).items():
         if need == "job_lv" and int(state.get("job_lv") or 0) < value:
@@ -374,10 +432,10 @@ def next_equipment(state, budget, data=None):
 
 # ---------- для промпта ----------
 
-def summary(state, data=None, now=None, budget=None):
+def summary(state, data=None, now=None, budget=None, target=None):
     """Короткий текст для промпта модели: путь, следующий шаг, недостающее, покупка."""
     data = data or load()
-    g = plan(state, data, now)
+    g = plan(state, data, now, target=target)
     parts = []
     if g["path"]:
         parts.append(f"путь {state.get('job')} -> {g['to']}")

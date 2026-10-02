@@ -1,0 +1,21 @@
+// live_ro (newborn): стартовая точка новых персонажей — Пронтера вместо учебного полигона iz_int.
+// НЕ ВКЛЮЧЕНО. Это изменение сервера, включает владелец (docs/POPULATION.md, «Первые шаги новичка»).
+//
+// Зачем. В renewal новичок появляется в iz_int..iz_int04 18,26 (upstream conf/char_athena.conf:115).
+// Выйти оттуда бот не может: поле OpenKore fields/iz_int.fld2.gz — старая карта 200x200, у сервера
+// iz_int 80x80 (db/map_cache.dat), а выход ведёт в перестроенный izlude, которого нет в таблицах OpenKore.
+//
+// Что делает. char-server пишет точку старта и в last_map, и в save_map (src/char/char.cpp:1503-1509):
+// новичок появляется в Пронтере у фонтана (156,180) и после смерти возрождается там же. Учебный полигон
+// (квесты Criatura Academy) житель пропускает. Действует только на персонажей, созданных после
+// перезапуска char-server; существующих не двигает, БД не меняет.
+// Клетка проходима и на карте сервера (db/re/map_cache.dat), и на поле OpenKore — brain/tests/test_newborn.py.
+//
+// Как включить (одно из двух, затем перезапуск char-server):
+//  - рендер conf/import (release или RENDER_SERVER_CONF=1): дописать строку ниже в
+//    server/conf/import-tmpl/char_conf.txt, commit, доставка, scripts/lab start;
+//  - existing (conf/import не рендерится): дописать строку в $RATHENA/conf/import/char_conf.txt вручную.
+// Как выключить: удалить строку, перезапустить char-server.
+// rAthena читает start_point только в renewal (src/char/char.cpp:3008-3012); последнее значение побеждает:
+// conf/import/char_conf.txt импортируется в конце conf/char_athena.conf (:305).
+start_point: prontera,156,180
