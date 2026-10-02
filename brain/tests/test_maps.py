@@ -76,6 +76,11 @@ class MapStatsTest(unittest.TestCase):
         self.assertEqual(places["prontera"]["source"], "seen")
         self.assertEqual(places["gef_fild10"]["source"], "told")
         self.assertEqual(places["gef_fild10"]["rumors"][0]["from"], "Vera")
+        self.clock.t += 700
+        self.ms.seen("gef_fild10")                                # побывал сам — слух с автором остаётся
+        places = self.mem.get("places")
+        self.assertEqual(places["gef_fild10"]["source"], "seen")
+        self.assertEqual(places["gef_fild10"]["rumors"][0]["from"], "Vera")
 
 
 class PromiseTest(unittest.TestCase):

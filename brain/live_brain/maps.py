@@ -130,10 +130,12 @@ class MapStats:
             return
         now = now or self.clock()
         places = self.mind.mem.get("places", {})
-        p = places.get(hmap)
-        if p and p.get("source") == "seen" and now - p.get("last", 0) < 600:
+        p = places.get(hmap) or {}
+        if p.get("source") == "seen" and now - p.get("last", 0) < 600:
             return                                              # не писать в БД каждый тик
-        places[hmap] = {"source": "seen", "first": (p or {}).get("first", now), "last": now}
+        # Обновить поля, а не заменить запись: слухи с авторами сохраняются (ORG D12, AUT-076).
+        p.update(source="seen", first=p.get("first", now), last=now)
+        places[hmap] = p
         self.mind.mem.set("places", places)
 
     def told(self, hmap, author, what):
