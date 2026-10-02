@@ -47,6 +47,7 @@ herbal (ORG-076) — событие job_change_result 15 (consume "result": по
 промпт 207.  # herbal:
 arrows (ORG-075) — события job_change_result 16 (consume "result", path arrows), arrowcraft_result 16 (own), тик 104,
 промпт 208.  # arrows:
+trek (ORG-078) — метка [trek:] 45, событие job_change_result 17 (consume "result", path trek), тик 112, промпт 212.  # trek:
 """
 import inspect
 import re
@@ -87,6 +88,7 @@ from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и �
 from .places import Places           # places: ORG-084 имена мест
 from .herbal import Herbal           # herbal: ORG-076 травник у старого фармацевта
 from .arrows import Arrows           # arrows: ORG-075 Arrow Crafting — ремесло лучника
+from .trek import Trek               # trek: ORG-078 дальний поход группой
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -130,6 +132,7 @@ MODULES = (
     Bestiary,          # bestiary: ORG-077 после social (тема bestiary); тик 225, событие kill 75, промпт 235
     Herbal,            # herbal: ORG-076 после social (тема herbal) и routine; job_change_result path herbal
     Arrows,            # arrows: ORG-075 после social (тема arrows); спит без жителя-лучника
+    Trek,              # trek: ORG-078 после explorer, party, crew (REQUIRES), social (тема trek)
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 

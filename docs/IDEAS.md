@@ -1707,7 +1707,7 @@ craft_setup {keep: [id], bottles: N}   -> %items_control{id} = не продав
                                           buyAuto «Empty Bottle»: maxAmount N, minAmount N-1, disabled 0 (N=0 — выкл.)
 job_change {path herbal, stage pharmacist, steps: [move по клеткам прибытия пути] + move к NPC + talk × рецепт,
             success {text "Here you go", map alberta_in}}
-kv herbal {pending {ts, recipes, before}, trips [...], brewed {зелье: n}, saved, next_try, fails, told}
+kv herbal {pending {ts, plan, before, result_ok?}, trips [...], brewed {зелье: n}, saved, last, back, next_try, fails, told}
 события памяти: herbal_start, herbal_brewed {potions, saved}, herbal_failed {reason}, herbal_returned
 ```
 ```python
@@ -1791,14 +1791,14 @@ Tree Root → 7 Arrow, Empty Bottle → 2 Iron Arrow, …). OpenKore: `arrowcraf
 **Протокол.**
 ```text
 [trek:go:<город>]   лидер зовёт участников на той же карте      [trek:ok:<город>] / [trek:no:<город>] ответ участника
-kv trek {trip {target, legs [[город, переходы]], i, phase gather|leg|halt|stay|back, led_by, members, started}, last, done [...]}
-события памяти: trek_start {target, members, legs}, trek_halt {town}, trek_arrived {target}, trek_done {target, ok, why}
+kv trek {trip {target, legs [{to, hops, path}], i, phase gather|leg|save|saved, led_by, members, started}, last, visited, done [...]}
+события памяти: trek_start {target, members, legs}, trek_halt {town}, trek_arrived {target}, trek_saved {town}, trek_done {target, ok, why}
 ```
 - Сбор: лидер (crew активна, я лидер группы), участники онлайн на той же карте ≥ `min_members − 1` (до
   `max_members − 1`), `explorer.blocked(joining=True)` пусто, не чаще `gap_days` (7), любопытство ≥ `min_curiosity`,
   запасы: зелий ≥ `min_potions` (10), вес < 50 %, зени ≥ `min_zeny`; оценка длительности (переходы × `hop_minutes` × 2
   + привалы + стоянка) заканчивается не позже чем за час до сна. Цель — из `targets`, путь есть, риск всех карт пути
-  ниже `max_risk` для слабейшего (уровни участников — из crew), давно не был. Ответы ждём `gather_seconds` (120):
+  ниже `max_risk` (0.35: `pay_fild04` с Ghostring — 0.3) для слабейшего (уровни участников — из crew), давно не был. Ответы ждём `gather_seconds` (120):
   согласных меньше нужного — поход отменён.
 - Плечо: `explorer.start(город, led_by)`, `deadline = переходы × hop_minutes`, стоянка — `halt_minutes` (в цели —
   `stay_minutes`). Конец плеча ok → привал (`halt_save`: сохранение у Kafra города через jobChange `path trek`, если

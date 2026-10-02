@@ -206,5 +206,15 @@
     "quest_auto": false,
     "craft_minutes": 20,
     "sources": [1019, 909, 902]
+  },
+
+  "trek": {
+    "_comment": "ORG-078 дальний поход группой (brain/live_brain/trek.py, docs/EXPLORE.md): лидер группы (crew) раз в gap_days ведёт 2-3 жителей в город другого региона цепочкой плеч brain/world/trek_routes.json (scripts/gen_trek_routes.py) с привалами и сохранением у Kafra (halt_save); каждое плечо — экспедиция explorer. Выключено: в игре не проверено.",
+    "enabled": false,
+    "targets": ["geffen", "payon", "alberta", "aldebaran"],
+    "min_members": 2,
+    "max_members": 3,
+    "gap_days": 7,
+    "halt_save": true
   }
 }
