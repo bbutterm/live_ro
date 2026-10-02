@@ -69,6 +69,11 @@
 #                            $CAST_RANGE клеток, не я. rAthena не даёт кастовать в чат-комнате и сидя (clif.cpp
 #                            clif_parse_skill_toid: chatID, pc_issit) — chat leave здесь, встать — Task::UseSkill.
 #                            В state — support_skills {AL_HEAL: ур., ...}: выученные навыки из %CAST.
+#   craft_setup {keep:[id], bottles:N} -> ремесло (ORG-076/075): keep — %items_control{id} «не продавать, не   # herbal:
+#                            складывать» (до перезагрузки таблиц; своя строка профиля по ИМЕНИ важнее — так ищет   # herbal:
+#                            Misc::items_control); bottles — блок buyAuto «Empty Bottle»/713 профиля: maxAmount N,   # herbal:
+#                            minAmount N-1, disabled 0 (N=0 — disabled 1). В state — craft {items {id: n} по          # herbal:
+#                            @CRAFT_IDS и keep, kept [id], weight_free, skills {AC_MAKINGARROW: ур.}}.                # herbal:
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -92,6 +97,7 @@ use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %s
                %friends @friendsID $currentChatRoom %chatRooms);   # society: чат-комната
 use Globals qw(%guild $charID);                                     # guild: состав гильдии (ORG-052)
 use Globals qw($messageSender %currentDeal %outgoingDeal %incomingDeal $shopstarted);   # dreams: банк (ORG-073)
+use Globals qw(%items_control);                                     # herbal: ремесло — не продавать материалы
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -237,6 +243,7 @@ sub sendState {
 		chat_room => chatTitle(),                                                 # society: комната, где я сейчас
 		guild     => guildState(), emperium => emperiumCount(),                   # guild: ORG-052
 		support_skills => supportSkills(),                                        # healer: ORG-069
+		craft     => craftStatus(),                                               # herbal: ремесло (ORG-076/075)
 	});
 }
 
@@ -657,6 +664,8 @@ sub actionToCommand {
 		return (0, 'плагин economy не загружен') unless defined &economy::startMailTake;          # market:
 		my ($ok, $desc) = economy::startMailTake($a);                                             # market:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'craft_setup') {                                    # herbal: ремесло (ORG-076/075)
+		return craftSetup($a);                                                # herbal:
 	} elsif ($kind eq 'bank_check' || $kind eq 'bank_deposit' || $kind eq 'bank_withdraw') {   # dreams: ORG-073
 		my ($ok, $desc) = bankAction($kind, $a);                                               # dreams:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                       # dreams:
@@ -776,6 +785,61 @@ sub onBank {   # dreams: аргументы пакета (Receive/kRO/Sakexe_0.p
 	my $reason = ($args->{reason} // -1) + 0;
 	event('bank_result', op => $op, ok => ($reason == 0 ? JSON::PP::true : JSON::PP::false), reason => $reason,
 	      vault => $vault + 0, zeny => ($args->{balance} // 0) + 0);
+}
+
+# herbal: ремесло (ORG-076 травник, ORG-075 стрелы). Счётчики материалов для мозга и «не продавать» без правки
+# items_control.txt профиля: запись в %items_control живёт до перезагрузки таблиц — мозг видит это по craft.kept
+# и присылает keep снова.
+our @CRAFT_IDS = (507 .. 511, 713, 902, 906, 907, 909, 921, 1019, 1750, 1770);   # травы, бутылка, материалы и стрелы
+our %craftKept;
+my $CRAFT_KEEP_MAX = 40;
+my $CRAFT_BOTTLES_MAX = 100;
+
+sub craftStatus {
+	return undef unless $char;
+	my %n = map { $_ => 0 } (@CRAFT_IDS, keys %craftKept);
+	my $inv = (ref $char ne 'HASH' && $char->can('inventory')) ? $char->inventory : $char->{inv};
+	for my $item (@{$inv || []}) {
+		next if $item->{equipped};
+		$n{$item->{nameID}} += $item->{amount} if exists $n{$item->{nameID}};
+	}
+	my $sk = $char->{skills} || {};
+	return {items => \%n,
+	        kept => [sort { $a <=> $b } grep { ($items_control{$_} || {})->{_craft} } keys %craftKept],
+	        weight_free => (defined $char->{weight_max} ? ($char->{weight_max} - ($char->{weight} // 0)) + 0 : undef),
+	        skills => {AC_MAKINGARROW => ($sk->{AC_MAKINGARROW} && $sk->{AC_MAKINGARROW}{lv} ? $sk->{AC_MAKINGARROW}{lv} + 0 : 0)}};
+}
+
+sub bottleBlock {
+	for (my $i = 0; exists $config{"buyAuto_$i"}; $i++) {
+		return $i if ($config{"buyAuto_$i"} // '') =~ /^(Empty Bottle|713)$/i;
+	}
+	return;
+}
+
+# Возвращает (1, [команды]) или (0, причина).
+sub craftSetup {
+	my ($a) = @_;
+	my @cmds;
+	return (0, 'пустая настройка ремесла') unless exists $a->{keep} || exists $a->{bottles};
+	if (exists $a->{keep}) {
+		my $keep = $a->{keep};
+		return (0, "keep: до $CRAFT_KEEP_MAX ID предметов")
+			unless ref $keep eq 'ARRAY' && @$keep <= $CRAFT_KEEP_MAX && !grep { !defined $_ || $_ !~ /^\d{1,6}$/ } @$keep;
+		for my $id (@$keep) {
+			$items_control{$id + 0} = {keep => 0, storage => 0, sell => 0, cart_add => 0, cart_get => 0, _craft => 1};
+			$craftKept{$id + 0} = 1;
+		}
+	}
+	if (exists $a->{bottles}) {
+		my $n = $a->{bottles} // '';
+		return (0, "bottles: 0..$CRAFT_BOTTLES_MAX") unless $n =~ /^\d{1,3}$/ && $n <= $CRAFT_BOTTLES_MAX;
+		my $i = bottleBlock();
+		return (0, 'нет блока buyAuto Empty Bottle в config.txt') unless defined $i;
+		@cmds = $n > 0 ? ("conf buyAuto_${i}_maxAmount $n", "conf buyAuto_${i}_minAmount " . ($n - 1), "conf buyAuto_${i}_disabled 0")
+		               : ("conf buyAuto_${i}_disabled 1");
+	}
+	return (1, \@cmds);
 }
 
 sub handleLine {

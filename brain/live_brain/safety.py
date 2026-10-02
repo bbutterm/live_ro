@@ -41,6 +41,9 @@ SUPPORT_CASTS = ("AL_HEAL", "AL_BLESSING", "AL_INCAGI")   # healer: тот же 
 CAST_LIMIT = 40                  # healer: кастов на игроков за 10 мин (каст раз в 5 с — с запасом на очередь)
 CAST_MIN_SP = 10                 # healer: при меньшем SP % не кастовать вовсе (лекарь сам держит порог выше)
 PLAN_ACTIONS += ("bank_check", "bank_deposit", "bank_withdraw")   # dreams: банк rAthena (savings.py, ORG-073)
+PLAN_ACTIONS += ("craft_setup",)   # herbal: не продавать материалы ремесла, докупка бутылок (herbal.py, ORG-076)
+CRAFT_KEEP_MAX = 40                # herbal: ID в списке keep (тот же предел в brainBridge.pl)
+CRAFT_BOTTLES_MAX = 100            # herbal: бутылок к докупке
 MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
 BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
@@ -175,6 +178,8 @@ class SafetyPolicy:
             return self.check_explore(action, state)                                                 # explore:
         if kind in ("bank_check", "bank_deposit", "bank_withdraw"):                                  # dreams:
             return self.check_bank(kind, action, state, now)                                         # dreams:
+        if kind == "craft_setup":                                                                     # herbal:
+            return self.check_craft_setup(action)                                                    # herbal:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":
@@ -445,3 +450,21 @@ class SafetyPolicy:
     def pause_expired(self, now=None):
         now = now or time.time()
         return self.paused_at is not None and now - self.paused_at >= self.max_pause
+
+    # herbal: настройка ремесла (ORG-076/075) — только от правил; списки ID, не текст
+    def check_craft_setup(self, action):                                                          # herbal:
+        out = {"action": "craft_setup"}
+        if "keep" in action:
+            keep = action.get("keep")
+            if not (isinstance(keep, list) and len(keep) <= CRAFT_KEEP_MAX
+                    and all(isinstance(i, int) and not isinstance(i, bool) and 0 < i < 1000000 for i in keep)):
+                return None, f"keep: до {CRAFT_KEEP_MAX} ID предметов"
+            out["keep"] = keep
+        if "bottles" in action:
+            n = action.get("bottles")
+            if isinstance(n, bool) or not isinstance(n, int) or not 0 <= n <= CRAFT_BOTTLES_MAX:
+                return None, f"bottles: 0..{CRAFT_BOTTLES_MAX}"
+            out["bottles"] = n
+        if len(out) == 1:
+            return None, "пустая настройка ремесла"
+        return out, None

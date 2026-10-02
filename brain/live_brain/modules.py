@@ -24,6 +24,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
               метод(event) или метод(kind, event) при "kind"; "consume" — после вызова событие поглощено
               (если модуль включён); "own" — вид принадлежит модулю: поглощается ВСЕГДА, даже если модуль
               выключен (не уходит в gate/LLM). EVENT_ORDER — место модуля среди подписчиков одного вида.
+              "consume": "result" — поглощено, только если метод вернул истину (свой path у job_change_result).
   PROMPT      [("поле", "метод", порядок)] — поле промпта LLM = метод() или None, если модуль выключен.
               Порядок — общий с полями ядра (mind.CORE_PROMPT), шаг 10.
 
@@ -42,6 +43,8 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
 orders (ORG-070) — метка [order:] 25, тик 25.  # orders:
 mentor (ORG-057) — метка [mentor:] 55, тик 95, промпт 215.  # mentor:
 bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # bestiary:
+herbal (ORG-076) — событие job_change_result 15 (consume "result": поглощает только свой path herbal), тик 103,
+промпт 207.  # herbal:
 """
 import inspect
 import re
@@ -80,6 +83,7 @@ from .memoir import Memoir           # dreams: ORG-082 мемуары жител
 from .mentor import Mentor           # mentor: ORG-057 наставничество новичков
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
 from .places import Places           # places: ORG-084 имена мест
+from .herbal import Herbal           # herbal: ORG-076 травник у старого фармацевта
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -121,6 +125,7 @@ MODULES = (
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
     Bestiary,          # bestiary: ORG-077 после social (тема bestiary); тик 225, событие kill 75, промпт 235
+    Herbal,            # herbal: ORG-076 после social (тема herbal) и routine; job_change_result path herbal
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
@@ -136,7 +141,9 @@ async def call(fn, *args):
 def _sub(spec):
     if isinstance(spec, str) or spec is None:
         spec = {"call": spec}
-    return {"call": spec.get("call"), "kind": bool(spec.get("kind")), "consume": bool(spec.get("consume")),
+    consume = spec.get("consume")
+    consume = consume if consume == "result" else bool(consume)          # herbal: поглотить по ответу метода
+    return {"call": spec.get("call"), "kind": bool(spec.get("kind")), "consume": consume,
             "own": bool(spec.get("own"))}
 
 
@@ -257,8 +264,8 @@ class Registry:
             module = getattr(mind, attr, None)
             if module and sub["call"]:
                 fn = getattr(module, sub["call"])
-                await call(fn, *((kind, event) if sub["kind"] else (event,)))
-                if sub["consume"]:
+                res = await call(fn, *((kind, event) if sub["kind"] else (event,)))
+                if (bool(res) if sub["consume"] == "result" else sub["consume"]):   # herbal: "result"
                     return True
             if sub["own"]:
                 return True

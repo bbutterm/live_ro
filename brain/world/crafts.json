@@ -1,0 +1,1986 @@
+{
+ "_comment": "Сгенерировано scripts/gen_crafts.py (ORG-075, ORG-076): NPC ремёсел и рецепты из скриптов rAthena (ссылки file:line), путь OpenKore до NPC. Не править руками.",
+ "arrows": {
+  "1000": {
+   "make": [
+    [
+     1760,
+     "Flash Arrow",
+     30
+    ]
+   ],
+   "name": "Star Crumb"
+  },
+  "1001": {
+   "make": [
+    [
+     1760,
+     "Flash Arrow",
+     10
+    ]
+   ],
+   "name": "Star Dust"
+  },
+  "1002": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     50
+    ]
+   ],
+   "name": "Iron Ore"
+  },
+  "1003": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     8
+    ]
+   ],
+   "name": "Coal"
+  },
+  "1010": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     50
+    ]
+   ],
+   "name": "Phracon"
+  },
+  "1011": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     200
+    ],
+    [
+     1751,
+     "Silver Arrow",
+     40
+    ]
+   ],
+   "name": "Emveretarcon"
+  },
+  "1018": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     50
+    ],
+    [
+     1756,
+     "Stone Arrow",
+     60
+    ]
+   ],
+   "name": "Mole Claw"
+  },
+  "1019": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     40
+    ]
+   ],
+   "name": "Trunk"
+  },
+  "1021": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     2
+    ],
+    [
+     1770,
+     "Iron Arrow",
+     40
+    ]
+   ],
+   "name": "Dokebi Horn"
+  },
+  "1027": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     70
+    ],
+    [
+     1756,
+     "Stone Arrow",
+     30
+    ]
+   ],
+   "name": "Porcupine Quill"
+  },
+  "1031": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     1
+    ]
+   ],
+   "name": "Mantis Scythe"
+  },
+  "1035": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     50
+    ],
+    [
+     1765,
+     "Oridecon Arrow",
+     1
+    ]
+   ],
+   "name": "Dragon Canine"
+  },
+  "1038": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     2
+    ],
+    [
+     1770,
+     "Iron Arrow",
+     50
+    ]
+   ],
+   "name": "Little Evil Horn"
+  },
+  "1041": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     80
+    ]
+   ],
+   "name": "Lantern"
+  },
+  "1043": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     10
+    ]
+   ],
+   "name": "Orc Claw"
+  },
+  "1044": {
+   "make": [
+    [
+     1762,
+     "Rusty Arrow",
+     5
+    ]
+   ],
+   "name": "Zenorc's Fang"
+  },
+  "1053": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     300
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     20
+    ]
+   ],
+   "name": "Ancient Tooth"
+  },
+  "1063": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     2
+    ],
+    [
+     1751,
+     "Silver Arrow",
+     40
+    ]
+   ],
+   "name": "Fang"
+  },
+  "1064": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     100
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     50
+    ]
+   ],
+   "name": "Reins"
+  },
+  "1066": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     20
+    ]
+   ],
+   "name": "Fine-grained Trunk"
+  },
+  "1067": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     20
+    ]
+   ],
+   "name": "Solid Trunk"
+  },
+  "1068": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     20
+    ]
+   ],
+   "name": "Barren Trunk"
+  },
+  "1095": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     100
+    ],
+    [
+     1768,
+     "Sleep Arrow",
+     5
+    ]
+   ],
+   "name": "Needle of Alarm"
+  },
+  "1098": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     50
+    ]
+   ],
+   "name": "Manacles"
+  },
+  "2257": {
+   "make": [
+    [
+     1751,
+     "Silver Arrow",
+     1000
+    ]
+   ],
+   "name": "Unicorn Horn"
+  },
+  "2281": {
+   "make": [
+    [
+     1769,
+     "Mute Arrow",
+     40
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     200
+    ]
+   ],
+   "name": "Opera Masque"
+  },
+  "2288": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     200
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     300
+    ]
+   ],
+   "name": "Mr. Scream"
+  },
+  "2292": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     200
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     40
+    ]
+   ],
+   "name": "Welding Mask"
+  },
+  "2319": {
+   "make": [
+    [
+     1760,
+     "Flash Arrow",
+     1000
+    ]
+   ],
+   "name": "Glittering Jacket"
+  },
+  "2328": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     700
+    ],
+    [
+     1770,
+     "Iron Arrow",
+     500
+    ]
+   ],
+   "name": "Wooden Mail"
+  },
+  "2329": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     1000
+    ],
+    [
+     1770,
+     "Iron Arrow",
+     700
+    ]
+   ],
+   "name": "Wooden Mail"
+  },
+  "2332": {
+   "make": [
+    [
+     1751,
+     "Silver Arrow",
+     700
+    ]
+   ],
+   "name": "Silver Robe"
+  },
+  "2333": {
+   "make": [
+    [
+     1757,
+     "Immaterial Arrow",
+     10
+    ],
+    [
+     1751,
+     "Silver Arrow",
+     1000
+    ]
+   ],
+   "name": "Silver Robe"
+  },
+  "2408": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     700
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     50
+    ]
+   ],
+   "name": "Shackles"
+  },
+  "2618": {
+   "make": [
+    [
+     1755,
+     "Arrow of Wind",
+     150
+    ],
+    [
+     1764,
+     "Sharp Arrow",
+     10
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     100
+    ]
+   ],
+   "name": "Matyr's Leash"
+  },
+  "5014": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     600
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     200
+    ]
+   ],
+   "name": "Fin Helm"
+  },
+  "603": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     50
+    ],
+    [
+     1768,
+     "Sleep Arrow",
+     50
+    ]
+   ],
+   "name": "Old Blue Box"
+  },
+  "604": {
+   "make": [
+    [
+     1769,
+     "Mute Arrow",
+     40
+    ]
+   ],
+   "name": "Dead Branch"
+  },
+  "609": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     40
+    ]
+   ],
+   "name": "Amulet"
+  },
+  "7002": {
+   "make": [
+    [
+     1762,
+     "Rusty Arrow",
+     5
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     30
+    ]
+   ],
+   "name": "Ogre Tooth"
+  },
+  "7008": {
+   "make": [
+    [
+     1758,
+     "Stun Arrow",
+     2
+    ]
+   ],
+   "name": "Stiff Horn"
+  },
+  "7010": {
+   "make": [
+    [
+     1763,
+     "Poison Arrow",
+     1
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     250
+    ]
+   ],
+   "name": "Tail of Steel Scorpion"
+  },
+  "7018": {
+   "make": [
+    [
+     1769,
+     "Mute Arrow",
+     1000
+    ]
+   ],
+   "name": "Young Twig"
+  },
+  "7019": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     1000
+    ]
+   ],
+   "name": "Loki's Whispers"
+  },
+  "7020": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     1000
+    ]
+   ],
+   "name": "Mother's Nightmare"
+  },
+  "7021": {
+   "make": [
+    [
+     1760,
+     "Flash Arrow",
+     200
+    ]
+   ],
+   "name": "Foolishness of the Blind"
+  },
+  "7022": {
+   "make": [
+    [
+     1765,
+     "Oridecon Arrow",
+     1000
+    ]
+   ],
+   "name": "Old Hilt"
+  },
+  "7023": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     200
+    ],
+    [
+     1764,
+     "Sharp Arrow",
+     600
+    ]
+   ],
+   "name": "Blade Lost in Darkness"
+  },
+  "7024": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     200
+    ],
+    [
+     1764,
+     "Sharp Arrow",
+     600
+    ]
+   ],
+   "name": "Bloody Edge"
+  },
+  "7025": {
+   "make": [
+    [
+     1769,
+     "Mute Arrow",
+     400
+    ],
+    [
+     1768,
+     "Sleep Arrow",
+     800
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     800
+    ]
+   ],
+   "name": "Lucifer's Lament"
+  },
+  "7026": {
+   "make": [
+    [
+     1765,
+     "Oridecon Arrow",
+     50
+    ]
+   ],
+   "name": "Key of Clock Tower"
+  },
+  "7027": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     100
+    ]
+   ],
+   "name": "Key of Underground"
+  },
+  "7035": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     3000
+    ]
+   ],
+   "name": "Matchstick"
+  },
+  "7036": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     300
+    ]
+   ],
+   "name": "Fang of Hatii"
+  },
+  "7066": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     100
+    ]
+   ],
+   "name": "Ice Cubic"
+  },
+  "7067": {
+   "make": [
+    [
+     1756,
+     "Stone Arrow",
+     50
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     30
+    ]
+   ],
+   "name": "Stone Fragment"
+  },
+  "7068": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     250
+    ]
+   ],
+   "name": "Burnt Tree"
+  },
+  "7069": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     150
+    ]
+   ],
+   "name": "Destroyed Armor"
+  },
+  "7097": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     150
+    ]
+   ],
+   "name": "Burning Heart"
+  },
+  "7098": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     100
+    ]
+   ],
+   "name": "Live Coal"
+  },
+  "7100": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     30
+    ]
+   ],
+   "name": "Sharp Leaf"
+  },
+  "7108": {
+   "make": [
+    [
+     1757,
+     "Immaterial Arrow",
+     300
+    ],
+    [
+     1765,
+     "Oridecon Arrow",
+     100
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     100
+    ]
+   ],
+   "name": "Piece of Shield"
+  },
+  "7109": {
+   "make": [
+    [
+     1765,
+     "Oridecon Arrow",
+     100
+    ]
+   ],
+   "name": "Shining Spear Blade"
+  },
+  "7120": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     100
+    ]
+   ],
+   "name": "Burning Horseshoe"
+  },
+  "7123": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     50
+    ],
+    [
+     1769,
+     "Mute Arrow",
+     50
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     10
+    ]
+   ],
+   "name": "Dragon Skin"
+  },
+  "713": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     2
+    ]
+   ],
+   "name": "Empty Bottle"
+  },
+  "714": {
+   "make": [
+    [
+     1757,
+     "Immaterial Arrow",
+     600
+    ],
+    [
+     1765,
+     "Oridecon Arrow",
+     600
+    ],
+    [
+     1769,
+     "Mute Arrow",
+     600
+    ]
+   ],
+   "name": "Emperium"
+  },
+  "715": {
+   "make": [
+    [
+     1768,
+     "Sleep Arrow",
+     1
+    ],
+    [
+     1756,
+     "Stone Arrow",
+     30
+    ]
+   ],
+   "name": "Yellow Gemstone"
+  },
+  "7150": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     100
+    ]
+   ],
+   "name": "Piece of Bamboo"
+  },
+  "7155": {
+   "make": [
+    [
+     1763,
+     "Poison Arrow",
+     20
+    ]
+   ],
+   "name": "Poisonous Toad Skin"
+  },
+  "716": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     1
+    ],
+    [
+     1763,
+     "Poison Arrow",
+     1
+    ],
+    [
+     1762,
+     "Rusty Arrow",
+     10
+    ]
+   ],
+   "name": "Red Gemstone"
+  },
+  "7163": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     20
+    ]
+   ],
+   "name": "Hard Feeler"
+  },
+  "7164": {
+   "make": [
+    [
+     1758,
+     "Stun Arrow",
+     30
+    ]
+   ],
+   "name": "Solid Peach"
+  },
+  "717": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     30
+    ],
+    [
+     1759,
+     "Frozen Arrow",
+     1
+    ]
+   ],
+   "name": "Blue Gemstone"
+  },
+  "7172": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     10
+    ]
+   ],
+   "name": "Leopard Claw"
+  },
+  "7210": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     150
+    ]
+   ],
+   "name": "Armor Piece of Dullahan"
+  },
+  "7221": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     50
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     50
+    ]
+   ],
+   "name": "Tangled Chains"
+  },
+  "724": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     50
+    ],
+    [
+     1768,
+     "Sleep Arrow",
+     10
+    ]
+   ],
+   "name": "Cursed Ruby"
+  },
+  "7263": {
+   "make": [
+    [
+     1755,
+     "Arrow of Wind",
+     200
+    ]
+   ],
+   "name": "Cat's Eye"
+  },
+  "7315": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     50
+    ],
+    [
+     1761,
+     "Cursed Arrow",
+     30
+    ]
+   ],
+   "name": "Dark Crystal Fragment"
+  },
+  "7316": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     10
+    ],
+    [
+     1763,
+     "Poison Arrow",
+     50
+    ]
+   ],
+   "name": "Insect Leg"
+  },
+  "7318": {
+   "make": [
+    [
+     1762,
+     "Rusty Arrow",
+     100
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     50
+    ]
+   ],
+   "name": "Old Pick"
+  },
+  "7319": {
+   "make": [
+    [
+     1762,
+     "Rusty Arrow",
+     100
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     100
+    ]
+   ],
+   "name": "Used Iron Plate"
+  },
+  "7321": {
+   "make": [
+    [
+     1760,
+     "Flash Arrow",
+     10
+    ],
+    [
+     1768,
+     "Sleep Arrow",
+     30
+    ]
+   ],
+   "name": "Crystal Fragment"
+  },
+  "7323": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     50
+    ]
+   ],
+   "name": "Battered Kettle"
+  },
+  "733": {
+   "make": [
+    [
+     1764,
+     "Sharp Arrow",
+     50
+    ]
+   ],
+   "name": "Cracked Diamond"
+  },
+  "7340": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     50
+    ],
+    [
+     1761,
+     "Cursed Arrow",
+     30
+    ],
+    [
+     1763,
+     "Poison Arrow",
+     30
+    ]
+   ],
+   "name": "Will of the Darkness"
+  },
+  "7435": {
+   "make": [
+    [
+     1772,
+     "Holy Arrow",
+     300
+    ],
+    [
+     1751,
+     "Silver Arrow",
+     200
+    ]
+   ],
+   "name": "Golden Ornament"
+  },
+  "7442": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     50
+    ],
+    [
+     1769,
+     "Mute Arrow",
+     50
+    ]
+   ],
+   "name": "Cursed Seal"
+  },
+  "7445": {
+   "make": [
+    [
+     1763,
+     "Poison Arrow",
+     80
+    ],
+    [
+     1756,
+     "Stone Arrow",
+     100
+    ]
+   ],
+   "name": "Green Bijou"
+  },
+  "7446": {
+   "make": [
+    [
+     1755,
+     "Arrow of Wind",
+     50
+    ],
+    [
+     1754,
+     "Crystal Arrow",
+     50
+    ],
+    [
+     1759,
+     "Frozen Arrow",
+     80
+    ]
+   ],
+   "name": "Blue Bijou"
+  },
+  "7447": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     100
+    ],
+    [
+     1760,
+     "Flash Arrow",
+     80
+    ]
+   ],
+   "name": "Red Bijou"
+  },
+  "7448": {
+   "make": [
+    [
+     1757,
+     "Immaterial Arrow",
+     50
+    ],
+    [
+     1751,
+     "Silver Arrow",
+     50
+    ],
+    [
+     1768,
+     "Sleep Arrow",
+     80
+    ]
+   ],
+   "name": "Yellow Bijou"
+  },
+  "7450": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     200
+    ],
+    [
+     1757,
+     "Immaterial Arrow",
+     500
+    ],
+    [
+     1765,
+     "Oridecon Arrow",
+     100
+    ]
+   ],
+   "name": "Skeletal Armor Piece"
+  },
+  "7451": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     300
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     300
+    ]
+   ],
+   "name": "Fire Dragon Scale"
+  },
+  "7510": {
+   "make": [
+    [
+     1772,
+     "Holy Arrow",
+     600
+    ],
+    [
+     1757,
+     "Immaterial Arrow",
+     600
+    ],
+    [
+     1764,
+     "Sharp Arrow",
+     600
+    ]
+   ],
+   "name": "Valhalla's Flower"
+  },
+  "7511": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     300
+    ],
+    [
+     1760,
+     "Flash Arrow",
+     150
+    ]
+   ],
+   "name": "Rune of Darkness"
+  },
+  "756": {
+   "make": [
+    [
+     1765,
+     "Oridecon Arrow",
+     50
+    ]
+   ],
+   "name": "Rough Oridecon"
+  },
+  "7561": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     50
+    ],
+    [
+     1759,
+     "Frozen Arrow",
+     50
+    ]
+   ],
+   "name": "Glacial Heart"
+  },
+  "7562": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     150
+    ],
+    [
+     1759,
+     "Frozen Arrow",
+     400
+    ],
+    [
+     1769,
+     "Mute Arrow",
+     200
+    ]
+   ],
+   "name": "Ice Scale"
+  },
+  "7566": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     100
+    ],
+    [
+     1761,
+     "Cursed Arrow",
+     200
+    ],
+    [
+     1763,
+     "Poison Arrow",
+     200
+    ]
+   ],
+   "name": "Will of Red Darkness"
+  },
+  "757": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     200
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     5
+    ]
+   ],
+   "name": "Rough Elunium"
+  },
+  "7752": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     50
+    ],
+    [
+     1761,
+     "Cursed Arrow",
+     50
+    ]
+   ],
+   "name": "Clattering Skull"
+  },
+  "7753": {
+   "make": [
+    [
+     1761,
+     "Cursed Arrow",
+     20
+    ],
+    [
+     1770,
+     "Iron Arrow",
+     10
+    ],
+    [
+     1762,
+     "Rusty Arrow",
+     50
+    ]
+   ],
+   "name": "Broken Farming Utensil"
+  },
+  "902": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     7
+    ]
+   ],
+   "name": "Tree Root"
+  },
+  "904": {
+   "make": [
+    [
+     1762,
+     "Rusty Arrow",
+     3
+    ]
+   ],
+   "name": "Scorpion Tail"
+  },
+  "909": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     4
+    ]
+   ],
+   "name": "Jellopy"
+  },
+  "910": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     12
+    ]
+   ],
+   "name": "Garlet"
+  },
+  "911": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     8
+    ]
+   ],
+   "name": "Scell"
+  },
+  "912": {
+   "make": [
+    [
+     1751,
+     "Silver Arrow",
+     50
+    ]
+   ],
+   "name": "Zargon"
+  },
+  "913": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     1
+    ]
+   ],
+   "name": "Tooth of Bat"
+  },
+  "920": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     15
+    ]
+   ],
+   "name": "Wolf Claw"
+  },
+  "922": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     30
+    ],
+    [
+     1753,
+     "Steel Arrow",
+     5
+    ],
+    [
+     1756,
+     "Stone Arrow",
+     10
+    ]
+   ],
+   "name": "Orc's Fang"
+  },
+  "923": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     20
+    ],
+    [
+     1760,
+     "Flash Arrow",
+     10
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     5
+    ]
+   ],
+   "name": "Evil Horn"
+  },
+  "937": {
+   "make": [
+    [
+     1763,
+     "Poison Arrow",
+     1
+    ]
+   ],
+   "name": "Venom Canine"
+  },
+  "939": {
+   "make": [
+    [
+     1762,
+     "Rusty Arrow",
+     1
+    ]
+   ],
+   "name": "Bee Sting"
+  },
+  "947": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     35
+    ]
+   ],
+   "name": "Horn"
+  },
+  "952": {
+   "make": [
+    [
+     1750,
+     "Arrow",
+     50
+    ]
+   ],
+   "name": "Cactus Needle"
+  },
+  "956": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     150
+    ],
+    [
+     1770,
+     "Iron Arrow",
+     80
+    ]
+   ],
+   "name": "Gill"
+  },
+  "957": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     1
+    ],
+    [
+     1762,
+     "Rusty Arrow",
+     1
+    ]
+   ],
+   "name": "Decayed Nail"
+  },
+  "958": {
+   "make": [
+    [
+     1767,
+     "Arrow of Shadow",
+     5
+    ]
+   ],
+   "name": "Horrendous Mouth"
+  },
+  "959": {
+   "make": [
+    [
+     1763,
+     "Poison Arrow",
+     1
+    ]
+   ],
+   "name": "Stinky Scale"
+  },
+  "968": {
+   "make": [
+    [
+     1765,
+     "Oridecon Arrow",
+     1
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     5
+    ]
+   ],
+   "name": "Heroic Emblem"
+  },
+  "969": {
+   "make": [
+    [
+     1760,
+     "Flash Arrow",
+     50
+    ],
+    [
+     1765,
+     "Oridecon Arrow",
+     50
+    ]
+   ],
+   "name": "Gold"
+  },
+  "984": {
+   "make": [
+    [
+     1765,
+     "Oridecon Arrow",
+     250
+    ]
+   ],
+   "name": "Oridecon"
+  },
+  "985": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     1000
+    ],
+    [
+     1758,
+     "Stun Arrow",
+     50
+    ]
+   ],
+   "name": "Elunium"
+  },
+  "990": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     600
+    ]
+   ],
+   "name": "Red Blood"
+  },
+  "991": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     150
+    ]
+   ],
+   "name": "Crystal Blue"
+  },
+  "992": {
+   "make": [
+    [
+     1755,
+     "Arrow of Wind",
+     150
+    ]
+   ],
+   "name": "Wind of Verdure"
+  },
+  "993": {
+   "make": [
+    [
+     1756,
+     "Stone Arrow",
+     150
+    ]
+   ],
+   "name": "Green Live"
+  },
+  "994": {
+   "make": [
+    [
+     1752,
+     "Fire Arrow",
+     1800
+    ],
+    [
+     1769,
+     "Mute Arrow",
+     5
+    ]
+   ],
+   "name": "Flame Heart"
+  },
+  "995": {
+   "make": [
+    [
+     1754,
+     "Crystal Arrow",
+     450
+    ],
+    [
+     1759,
+     "Frozen Arrow",
+     5
+    ]
+   ],
+   "name": "Mystic Frozen"
+  },
+  "996": {
+   "make": [
+    [
+     1755,
+     "Arrow of Wind",
+     450
+    ],
+    [
+     1768,
+     "Sleep Arrow",
+     5
+    ]
+   ],
+   "name": "Rough Wind"
+  },
+  "997": {
+   "make": [
+    [
+     1760,
+     "Flash Arrow",
+     5
+    ],
+    [
+     1756,
+     "Stone Arrow",
+     450
+    ]
+   ],
+   "name": "Great Nature"
+  },
+  "998": {
+   "make": [
+    [
+     1770,
+     "Iron Arrow",
+     100
+    ]
+   ],
+   "name": "Iron"
+  },
+  "999": {
+   "make": [
+    [
+     1753,
+     "Steel Arrow",
+     100
+    ]
+   ],
+   "name": "Steel"
+  }
+ },
+ "atlas_sha": "4313fe2cac3c0a48",
+ "max_hops": 12,
+ "pharmacist": {
+  "amount": {
+   "src": [
+    "npc/merchants/old_pharmacist.txt:81",
+    "npc/merchants/old_pharmacist.txt:205"
+   ],
+   "text": "Make as many as I can."
+  },
+  "bottle": 713,
+  "free_weight": 500,
+  "free_weight_src": "npc/merchants/old_pharmacist.txt:42",
+  "map": "alberta_in",
+  "menu": {
+   "src": "npc/merchants/old_pharmacist.txt:40",
+   "text": "Make Potion"
+  },
+  "name": "Pharmacist",
+  "potion_menu_src": "npc/merchants/old_pharmacist.txt:55",
+  "proof": {
+   "src": [
+    "npc/merchants/old_pharmacist.txt:130",
+    "npc/merchants/old_pharmacist.txt:251"
+   ],
+   "text": "Here you go"
+  },
+  "recipes": [
+   {
+    "answer": "Red Potion.",
+    "fee": 3,
+    "herbs": {
+     "507": 2
+    },
+    "name": "Red Potion",
+    "potion": 501,
+    "src": "npc/merchants/old_pharmacist.txt:57"
+   },
+   {
+    "answer": "Orange Potion.",
+    "fee": 5,
+    "herbs": {
+     "507": 1,
+     "508": 1
+    },
+    "name": "Orange Potion",
+    "potion": 502,
+    "src": "npc/merchants/old_pharmacist.txt:88"
+   },
+   {
+    "answer": "Yellow Potion.",
+    "fee": 10,
+    "herbs": {
+     "508": 2
+    },
+    "name": "Yellow Potion",
+    "potion": 503,
+    "src": "npc/merchants/old_pharmacist.txt:133"
+   },
+   {
+    "answer": "White Potion.",
+    "fee": 20,
+    "herbs": {
+     "509": 2
+    },
+    "name": "White Potion",
+    "potion": 504,
+    "src": "npc/merchants/old_pharmacist.txt:135"
+   },
+   {
+    "answer": "Blue Potion.",
+    "fee": 30,
+    "herbs": {
+     "510": 2
+    },
+    "name": "Blue Potion",
+    "potion": 505,
+    "src": "npc/merchants/old_pharmacist.txt:137"
+   },
+   {
+    "answer": "Green Potion.",
+    "fee": 3,
+    "herbs": {
+     "511": 2
+    },
+    "name": "Green Potion",
+    "potion": 506,
+    "src": "npc/merchants/old_pharmacist.txt:139"
+   }
+  ],
+  "src": "npc/merchants/old_pharmacist.txt:27",
+  "x": 16,
+  "y": 28
+ },
+ "roberto": {
+  "items": {
+   "1019": 13,
+   "501": 1,
+   "906": 41,
+   "907": 20,
+   "921": 7
+  },
+  "items_src": "npc/quests/skills/archer_skills.txt:43",
+  "job_lv": 30,
+  "job_lv_src": "npc/quests/skills/archer_skills.txt:37",
+  "map": "moc_ruins",
+  "name": "Roberto",
+  "proof": {
+   "src": "npc/quests/skills/archer_skills.txt:47",
+   "text": "as I promised"
+  },
+  "skill": "AC_MAKINGARROW",
+  "skill_src": "npc/quests/skills/archer_skills.txt:54",
+  "src": "npc/quests/skills/archer_skills.txt:18",
+  "x": 118,
+  "y": 99
+ },
+ "routes": {
+  "prontera": {
+   "pharmacist": {
+    "back": 11,
+    "hops": 11,
+    "legs": [
+     [
+      "prt_fild08",
+      170,
+      374
+     ],
+     [
+      "moc_fild01",
+      235,
+      382
+     ],
+     [
+      "pay_fild04",
+      17,
+      161
+     ],
+     [
+      "moc_fild02",
+      346,
+      339
+     ],
+     [
+      "moc_fild03",
+      66,
+      341
+     ],
+     [
+      "pay_fild01",
+      17,
+      152
+     ],
+     [
+      "pay_fild02",
+      79,
+      386
+     ],
+     [
+      "pay_fild03",
+      15,
+      106
+     ],
+     [
+      "alberta",
+      15,
+      230
+     ],
+     [
+      "alberta_in",
+      74,
+      44
+     ],
+     [
+      "alberta_in",
+      24,
+      29
+     ]
+    ],
+    "path": [
+     "prontera",
+     "prt_fild08",
+     "moc_fild01",
+     "pay_fild04",
+     "moc_fild02",
+     "moc_fild03",
+     "pay_fild01",
+     "pay_fild02",
+     "pay_fild03",
+     "alberta",
+     "alberta_in",
+     "alberta_in"
+    ],
+    "stand": [
+     15,
+     28
+    ]
+   },
+   "roberto": {
+    "route": null,
+    "why": "нет пути по portals.txt профиля и варпам сервера за 12 переходов"
+   },
+   "x": 156,
+   "y": 185
+  }
+ }
+}

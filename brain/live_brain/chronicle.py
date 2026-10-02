@@ -28,6 +28,7 @@ from .dream import CHRONICLE_LINES as DREAM_LINES       # dreams: жизненн
 from .savings import CHRONICLE_LINES as SAVINGS_LINES   # dreams: копилка и банк (ORG-073)
 from .mentor import CHRONICLE_LINES as MENTOR_LINES     # mentor: наставничество (ORG-057)
 from .bestiary import CHRONICLE_LINES as BESTIARY_LINES  # bestiary: первооткрыватели (ORG-077)
+from .herbal import CHRONICLE_LINES as HERBAL_LINES      # herbal: травник у фармацевта (ORG-076)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
@@ -61,6 +62,7 @@ LINES = {
     **SAVINGS_LINES,                                      # dreams: ORG-073
     **MENTOR_LINES,                                       # mentor: ORG-057
     **BESTIARY_LINES,                                     # bestiary: ORG-077
+    **HERBAL_LINES,                                       # herbal: ORG-076
     **places.CHRONICLE_LINES,                             # places: ORG-084
 }
 

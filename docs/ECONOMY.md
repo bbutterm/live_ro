@@ -156,6 +156,56 @@ NPC-продажи с его Overcharge + 1z; не больше `slots` (MC_VEND
 атомарна — не используется); OpenKore `sellAuto` может продать NPC собранное под заказ (предмет из
 `items_control.txt` с флагом продажи) — модуль это не запрещает; дроп по атласу не проверяется; в игре не проверено.
 
+## Травник у старого фармацевта (ORG-076) — `brain/live_brain/herbal.py`
+
+Житель-травник (`goals.json → herbal.residents` или `persona.herbalist: true`) не продаёт травы, копит их и иногда
+едет в Альберту к Old Pharmacist: тот варит зелья из трав за плату. Ремесло без Alchemist. **Выключено по умолчанию**
+(`herbal.enabled: false`): дорога в Альберту в игре не проверена. ТЗ — `docs/IDEAS.md` Т-32.
+
+**Данные** — `brain/world/crafts.json`, генератор `scripts/gen_crafts.py` (ссылки file:line, тест сверяет с upstream):
+
+| Что | Откуда |
+|---|---|
+| NPC `alberta_in,16,28` | `npc/merchants/old_pharmacist.txt:27` |
+| меню по тексту: «Make Potion» → «White Potion.» → «Make as many as I can.» | :40, :55, :81/:205 |
+| итог «Here you go» | :130, :251 |
+| свободный вес ≥ 500 (`MaxWeight - Weight < 5000`, вес ×10) | :42 |
+| рецепты из КОДА: 2 травы + Empty Bottle 713 + плата (Red 3z — в тексте 2z; Orange — Red+Yellow Herb, 5z; Yellow 10z; White 20z; Blue 30z; Green 3z) | :57–139, подпрограмма `L_Making` |
+| бутылки: Tool Dealer `prt_in,126,76`, 400z | `npc/re/merchants/Dealer_Update.txt:169` |
+| путь `prontera 156,185` → клетка 15,28 у NPC: 11 переходов, обратно 11 | `portals.txt` профиля, подтверждённые варпами сервера (как `explore_reach.json`); внутренний варп комнаты `alberta_in 64,31 → 24,29` — по скрипту `npc/warps/cities/alberta.txt:49` (атлас переходы внутри карты не хранит) |
+
+Клетки шагов `move` — клетки прибытия на каждой карте пути не ближе 4 клеток к входу любого перехода (иначе тело
+унесёт варпом обратно).
+
+**Как едет.** Действие `job_change {path: herbal, stage: pharmacist}` плагину jobChange (как дом у Kafra): шаги `move`
+по клеткам пути (у каждого свой таймаут 900 с), `move` к NPC, `talk` с ответами по тексту (по одному на рецепт,
+`ordered`), `success {text: "Here you go", map: alberta_in}`. Итог `job_change_result` с `path: herbal` забирает
+модуль (реестр: `consume: "result"`) — в career он не попадает. **Верит только факту**: зелий рецепта в `state.items`
+стало больше, чем перед поездкой (`herbal_brewed`); «Here you go» без зелий — провал. Возвращение — как после любого
+этапа jobChange: плагин возвращает lockMap города, распорядок ведёт домой (`herbal_returned`).
+
+**Когда.** Травник; путь есть; не чаще `gap_hours` (96); трав на ≥ `min_potions` (5) **выгодных** зелий; бутылок
+хватает; зени ≥ плата + `reserve_zeny` (2000); свободный вес ≥ 500 + `weight_margin`; в городе отдыха, HP ≥ 80, не ночь,
+сон не ближе 3 ч; нет плана встречи, этапа jobChange, экспедиции, сделки, лавки; арбитр разрешает `plan`.
+
+**Выгода** зелья = цена NPC зелья − плата − бутылка − продажная цена трав (`prices.json`). По ценам renewal выгодны
+только White (1200 − 20 − 400 − 120 = 660z) и Blue; Red/Orange/Yellow/Green дешевле купить в лавке — их травник не
+варит. Экономия поездки — в событии `herbal_brewed {potions, saved}`, kv `herbal.saved`, теме разговора `herbal`
+(«Сварил(а) у фармацевта 6 White Potion, сберёг(ла) 3960z!») и строке летописи.
+
+**Тело (brainBridge).** `state.craft {items, kept, weight_free, skills}` — счётчики трав, бутылки и материалов стрел.
+`craft_setup {keep}` — запись «не продавать, не складывать» в `%items_control` (до перезагрузки таблиц; мозг видит
+это по `craft.kept` и шлёт снова); `craft_setup {bottles: N}` — блок `buyAuto Empty Bottle` профиля
+(`bots/bot0*/control/config.txt`, `disabled 1`): maxAmount N, minAmount N−1, включить; затем `service` — OpenKore
+после продажи докупает. После поездки — `bottles: 0`.
+
+**Не проверено и риски.** Поездка не проходилась в игре: маршрут OpenKore может отличаться от нашего (он строит свой),
+11 переходов через поля Морокка и Пайона — смерть в пути даёт провал этапа; переход между комнатами `alberta_in`
+OpenKore должен найти сам (`move` в другую компоненту карты). Белые/синие травы на полях Пронтеры почти не падают —
+травник наберёт их только на картах Геффена/Мьёльнира (охоту модуль не меняет). Строка профиля по ИМЕНИ в
+`items_control.txt` важнее записи по ID (так ищет `Misc::items_control`) — для трав таких строк нет. Подарки/продажа
+зелий жителям — следующий шаг (рынок ORG-033 продаёт их как обычный лут).
+
 ## Метрики (ORG-037)
 
 `economy.economy_metrics(memory, since)` → dict (для report; `__main__.py` не изменён):

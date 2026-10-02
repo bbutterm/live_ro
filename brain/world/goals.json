@@ -190,5 +190,13 @@
     "town_bonus": 0.2,
     "rich_kills_per_hour": 60,
     "group": true
+  },
+
+  "herbal": {
+    "_comment": "ORG-076 травник (brain/live_brain/herbal.py, docs/ECONOMY.md): травник (residents или persona.herbalist) копит травы и едет к Old Pharmacist alberta_in,16,28 (brain/world/crafts.json, scripts/gen_crafts.py). Выключено: дорога в Альберту (11 переходов) в игре не проверена.",
+    "enabled": false,
+    "residents": [],
+    "gap_hours": 96,
+    "min_potions": 5
   }
 }
