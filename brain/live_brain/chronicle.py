@@ -20,6 +20,7 @@ from .economy import CHRONICLE_LINES, metrics_from_rows
 from .society import CHRONICLE_LINES as SOCIETY_LINES   # society: ссоры, примирения, вывески
 from .guild import CHRONICLE_LINES as GUILD_LINES       # guild: основание и вступление (ORG-052)
 from .rivalry import CHRONICLE_LINES as RIVAL_LINES     # rivalry: обгоны соперника (ORG-060)
+from .collection import CHRONICLE_LINES as COLLECT_LINES   # collect: карты и трофеи (ORG-074)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 
 LINES = {
@@ -44,6 +45,7 @@ LINES = {
     **SOCIETY_LINES,                                      # society: ORG-026/027
     **GUILD_LINES,                                        # guild: ORG-052
     **RIVAL_LINES,                                        # rivalry: ORG-060
+    **COLLECT_LINES,                                      # collect: ORG-074
 }
 
 

@@ -43,11 +43,13 @@ DEFAULTS = {"enabled": True, "llm": False, "scenes_min": 3, "scenes_max": 5}
 KINDS = ("society_quarrel", "society_reconciled", "career_stage_done", "job_changed", "pet_tamed", "pet_hatched",
          "pet_gone", "death_report", "died", "kill", "level_up", "explore_start", "explore_found", "explore_arrived",
          "explore_done", "explore_returned", "rival_chosen", "rival_overtook", "aim_new", "aim_done", "aim_result",
-         "tradition_stage", "tradition_gathering", "guild_founded", "guild_joined", "rumor_checked", "map_banned")
+         "tradition_stage", "tradition_gathering", "guild_founded", "guild_joined", "rumor_checked", "map_banned",
+         "card_found", "trophy_rare")                                         # collect: ORG-074
 BUS_KINDS = {"place_found": "explore_found", "tradition": "tradition_stage", "rumor_checked": "rumor_checked",
              **{k: k for k in ("society_quarrel", "society_reconciled", "career_stage_done", "job_changed",
                                "pet_tamed", "pet_hatched", "death_report", "level_up", "rival_overtook", "aim_new",
-                               "aim_done", "aim_result", "guild_founded", "guild_joined", "map_banned")}}
+                               "aim_done", "aim_result", "guild_founded", "guild_joined", "map_banned",
+                               "card_found", "trophy_rare")}}                  # collect: ORG-074
 WEIGHT = {"quarrel": 8, "career": 6, "pet": 6, "death": 6, "expedition": 4, "rivalry": 4, "aims": 3,
           "tradition": 4, "single": 1}
 RETURN_KINDS = ("kill", "level_up", "explore_start", "explore_found")
@@ -358,6 +360,9 @@ def aims_arc(who, fs, fmt):
 SINGLE = {   # заметные одиночные события — если сюжетных линий меньше scenes_min
     "guild_founded": (5, lambda w, d: f"{w} основал(а) гильдию {d.get('name')}."),
     "guild_joined": (3, lambda w, d: f"{w} вступил(а) в гильдию {d.get('name')}."),
+    "card_found": (4, lambda w, d: f"{w} нашёл(шла) карту {d.get('name')}"                   # collect: ORG-074
+                                   + (" — первую в жизни." if d.get("first") else ".")),
+    "trophy_rare": (3, lambda w, d: f"{w} добыл(а) редкость: {d.get('name')}."),              # collect:
     "level_up": (2, lambda w, d: f"{w} достиг(ла) {d.get('level')} уровня."),
     "rumor_checked": (2, lambda w, d: f"{w} проверил(а) слух о {d.get('map')}: "
                                       + ("подтвердился." if d.get("ok") else "не подтвердился.")),

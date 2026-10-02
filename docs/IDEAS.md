@@ -920,6 +920,43 @@ colorize(ep, settings, budget, call=llm.chat) -> (текст | None, почем�
 
 **Готово.** Тесты зелёные; раздел в WORLD_EVENTS.md; статус ORG-091 «код, в игре не проверено».
 
+### Т-12 · ORG-074 · Коллекции: карты и трофеи
+
+**Цель.** Житель собирает альбом карт монстров и трофеи по фактам игры: первая карта — событие мира, о новой карте
+он рассказывает жителям, карты альбома не продаёт (дубликаты — можно). Без LLM, без изменений сервера и OpenKore.
+
+**Файлы.** `brain/live_brain/collection.py` (новый), `brain/live_brain/economy.py` (`for_sale` через `sellable`,
+блок `# collect:`), `brain/live_brain/world_bus.py` (`card_found`, `trophy_rare` в `PUBLISH`/`TEXTS`; первая карта —
+важность 5), `brain/live_brain/chronicle.py` (`CHRONICLE_LINES` модуля), `brain/live_brain/__main__.py` (метрики),
+`brain/live_brain/episode.py` (карта — заметное событие серии), `brain/live_brain/mind.py` (создание и tick, метка
+`# collect:`), `brain/tests/test_collection.py`, `docs/SOCIETY.md`.
+
+**Интерфейсы.**
+```python
+class Collection:
+    def __init__(self, mind, world=None, clock=None, rng=None, prices=None)   # регистрирует тему card в social
+    def tick(self)                    # события kill/loot по курсору kv (как world_bus.Feed.pump); первый запуск — молча
+    def sellable(self, items) -> dict # рюкзак без одной копии каждой карты альбома (для economy.for_sale)
+    def facts(self, peer, now)        # тема card: свежая (brag_days) найденная карта, о которой peer не слышал
+    def said(self, peer, facts, now)  # отметка «рассказал»
+CHRONICLE_LINES = {"card_found", "trophy_rare", "trophy_first"}
+```
+- Карта — предмет `type: Card` в `prices.json` (по имени из `loot`). Альбом — kv `collection.album {id: {ts, name, src}}`.
+- Добыча — `loot` не позже 60 с после своей победы `kill` и без сделки/подарка/письма/покупки в окне ±120 с
+  (OpenKore зовёт `item_gathered` на любое пополнение рюкзака). Не добыча — в альбом молча, без хвастовства.
+- Новая добытая карта → `card_found {id, name, first, n}` (шина: первая в жизни — 5, иначе 3; летопись; память).
+- Трофеи: первая победа над видом (`trophy_first`, только летопись) и первая добыча редкости (`trophy_rare`: тип
+  Weapon/Armor или цена NPC ≥ 1000z; шина 3).
+- Метрики `organic_metrics`: «карт в альбоме», «трофеев за период».
+- Выключатель: `BRAIN_DISABLE=collection`, `"collection": {"enabled": false}`.
+
+**Тесты.** Первый запуск молчит (карта рюкзака в альбоме, прошлые победы — трофеи); первая карта → событие, шина 5,
+вторая — 3, дубликат — тишина; loot без победы и рядом со сделкой — молча; ожидание окна сделки; редкость и первая
+победа; for_sale не предлагает карту альбома, дубликат — предлагает; тема card: факт, фраза ≤ 60, метка, «уже
+рассказал», устаревание; выключатель.
+
+**Готово.** Тесты зелёные; раздел в SOCIETY.md; статус ORG-074 «код, в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности

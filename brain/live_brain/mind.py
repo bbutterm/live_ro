@@ -49,6 +49,7 @@ from .episodes import Episodes                          # talk: «помнишь
 from .mood import Mood                                  # talk: настроение (ORG-064)
 from .world_calendar import WorldCalendar               # calendar: календарь мира (ORG-059)
 from .tradition import Tradition                        # tradition: вечерний круг у фонтана (ORG-058)
+from .collection import Collection                      # collect: карты и трофеи (ORG-074)
 
 log = logging.getLogger("mind")
 
@@ -189,6 +190,8 @@ class Mind:
             topics.install(self.social, self, world)                                  # talk:
         self.tradition = (Tradition(self, world.get("tradition"), world=world) if world and feat("tradition")   # tradition:
                           and (world.get("tradition") or {}).get("enabled", True) else None)                 # tradition:
+        self.collection = (Collection(self, world) if feat("collection")                          # collect: ORG-074,
+                           and ((world or {}).get("collection") or {}).get("enabled", True) else None)  # collect: после social
 
     # ---------- входящие сообщения плагина ----------
 
@@ -651,6 +654,8 @@ class Mind:
             self.crowd.tick()                                  # crowd:
         if self.episodes:                                      # talk: ORG-055 эпизоды пары из событий памяти
             self.episodes.tick()                               # talk:
+        if self.collection:                                    # collect: ORG-074 карты и трофеи по событиям памяти
+            self.collection.tick()                             # collect:
         await self.read_inbox()
         now = time.time()
         self.peer_smalltalk(now)

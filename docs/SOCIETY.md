@@ -324,3 +324,33 @@
 - Как проверить в игре: два жителя в городе после 20:00 по миру → `activity gathering` в `decisions.jsonl`, оба у
   фонтана (state x/y), `activity_done`; после 21:00 — `tradition update` у Arkady и `seen` у Vera; через три вечера —
   событие `tradition` в «Событиях мира» хроники.
+
+## Коллекции: карты и трофеи (ORG-074) — `brain/live_brain/collection.py`
+
+Житель собирает альбом карт монстров и трофеи — только по фактам памяти: события тела `kill {monster}` и
+`loot {item, amount}` (OpenKore `item_gathered`, имя предмета) и рюкзак `state.items` (economy::itemCounts).
+Модуль читает события по курсору (kv `collection.cursor`) раз в 10 с, как шина мира, — `mind.on_event` не меняется.
+Первый запуск историю не объявляет: карты рюкзака попадают в альбом молча, виды прошлых побед — в трофеи.
+
+- **Карта** — предмет `type: Card` в `brain/world/prices.json` (по имени). Альбом — kv `collection.album`
+  `{id: {ts, name, src}}`; `src`: `drop` (добыл сам) или `inventory` (склад, сделка, рюкзак при запуске).
+- **Добыча, а не «пришло в рюкзак».** OpenKore зовёт `item_gathered` на любое пополнение рюкзака (склад, NPC, сделка),
+  поэтому «нашёл» — только `loot` не позже 60 с после своей победы и без `deal_complete`/`gift_received`/
+  `trade_bought`/`mail_got`/`mail_taken`/`buy_result` в окне ±120 с (событие разбирается, когда окно прошло).
+  Остальное — в альбом молча.
+- **Новая карта** → событие `card_found {id, name, first, n}`: шина мира (первая карта в жизни — важность 5, иначе 3),
+  летопись «нашёл(шла) карту Fabre Card — первая карта!», воспоминание (5/3), серия недели (ORG-091).
+- **Хвастовство** — тема `card` реестра `social.register_topic` (ORG-066): свежая (≤ `brag_days`, 7) добытая карта, о
+  которой этому жителю ещё не говорил (kv `collection.told`); шанс предложить тему `brag_chance` (0.7). Фразы по
+  умолчанию — `collection.PHRASES` (`card`, `card_first`, ответ `card_re`; ≤ 60 символов), персона может задать свои.
+- **Не продаёт альбом.** `economy.for_sale` (продажа жителям ORG-033 и лавка ORG-034) видит рюкзак через
+  `Collection.sellable`: одна копия каждой карты альбома остаётся, дубликаты продаются как раньше.
+- **Трофеи**: первая победа над видом монстра — `trophy_first {monster}` (летопись, без шины); первая добыча
+  редкости — `trophy_rare {id, name}` (тип `Weapon`/`Armor` или цена NPC ≥ `rare_sell` 1000z; шина важность 3).
+- **Метрики** (`scripts/lab report`, дашборд): «карт в альбоме», «трофеев за период».
+
+Настройки `goals.json` `collection` (необязательно): `enabled`, `tick_seconds`, `rare_sell`, `rare_types`, `brag_days`,
+`brag_chance`. Выключатель: `BRAIN_DISABLE=collection`. Тесты: `brain/tests/test_collection.py`.
+Ограничения: имя предмета OpenKore (tables/items.txt) должно совпадать с именем rAthena в `prices.json`, иначе
+предмет не узнаётся; карта на складе не видна (альбом не уменьшается, но и о ней житель не хвастается); цель недели
+«собрать N карт» не сделана. В игре не проверено.

@@ -43,7 +43,7 @@ def long_day(t0):
     """Город (10 мин) → охота (1 ч) → смерть → восстановление → Vera рядом, торговля и метки."""
     rng = random.Random(11)
     msgs = [{"type": "hello", "char": "Arkady", "ts": t0}]
-    loot = {"501": 30, "4001": 1, "909": 40}
+    loot = {"501": 30, "4001": 2, "909": 40}     # collect: одна Poring Card — в альбоме (ORG-074), дубликат продаётся
     base = {"type": "state", "name": "Arkady", "job": "Swordsman", "lv": 41, "job_lv": 20, "sp_pct": 80,
             "zeny": 40000, "ai": "auto", "players": [], "party": None, "party_members": [], "friends": [],
             "vend": {"can": 0, "open": 0}}

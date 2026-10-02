@@ -125,6 +125,11 @@ class EpisodeTest(unittest.TestCase):
         self.assertEqual(len(ep["scenes"]), 1)
         self.assertIn("Arkady достиг(ла) 32 уровня", ep["scenes"][0]["text"])
 
+    def test_card_single(self):                                        # collect: ORG-074 карта — заметное событие
+        self.ev("Vera", "card_found", 5, id="4002", name="Fabre Card", first=True, n=1)
+        ep = episode.build(self.root, ["bot01", "bot02"], "2026-W40", TZ)
+        self.assertIn("Vera нашёл(шла) карту Fabre Card — первую в жизни.", ep["scenes"][0]["text"])
+
     def test_bus_only_resident(self):
         bus = world_bus.WorldBus(self.root / "state" / "shared" / "world.sqlite", "Lena")
         bus.publish("pet_hatched", {"name": "Lunatic"}, 4, now=WEEK_START + 5 * H)

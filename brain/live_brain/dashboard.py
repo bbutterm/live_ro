@@ -27,7 +27,7 @@ from .economy import metrics_from_rows
 
 WORLD = Path(__file__).resolve().parents[1] / "world"
 KV_KEYS = ("last_state", "status", "needs", "aims", "activity", "mood", "pets", "party", "crew", "society",
-           "career", "resources", "routine")
+           "career", "resources", "routine", "collection")   # collect: альбом карт (ORG-074) для метрик
 MAX_EVENTS = 400            # лента дня: последние N строк (файл остаётся < 1 МБ)
 MAX_CARD_TEXT = 160
 STATUS_RU = {"SLEEPING": "спит", "OFFLINE": "не в сети", "DEAD": "погиб", "ESCAPING": "спасается",

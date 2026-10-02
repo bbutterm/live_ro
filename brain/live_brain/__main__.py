@@ -22,6 +22,7 @@ from .routine import load_world
 from .memory import Memory
 from .mind import Mind
 from . import resources  # ops: ORG-047 замер ресурсов
+from .collection import album_size  # collect: ORG-074 метрика альбома
 
 log = logging.getLogger("live_brain")
 RESOURCE_EVERY = 600      # ops: ORG-047 — замер RSS/CPU мозга раз в 10 мин
@@ -192,12 +193,15 @@ def organic_metrics(memory, since, now=None):
     st = memory.get("routine") or {}
     sleep_s = sleep_seconds(memory, since, now or time.time(), st.get("mode") == "sleep")
     sleep_h = round(sleep_s / 3600, 1)
+    trophies = memory.db.execute("SELECT COUNT(*) FROM events WHERE kind IN ('card_found', 'trophy_first', "   # collect:
+                                 "'trophy_rare') AND ts >= ?", (since,)).fetchone()[0]                      # collect:
     found = memory.db.execute("SELECT COUNT(*) FROM events WHERE kind = 'explore_found' AND ts >= ?",   # explore:
                               (since,)).fetchone()[0]                                                  # explore:
     return {"занятий": len(acts - {None}), "мест в городе": len(points - {None}),
             "реплик без LLM": said, "из них о событиях": fact_said, "сон, ч": sleep_h,
             "вызовов моделей": calls, "дневников": diaries,
             "открытых мест": found,                                                                     # explore: ORG-054
+            "карт в альбоме": album_size(memory), "трофеев за период": trophies,                         # collect: ORG-074
             "разнообразие занятий": round(len(acts - {None}) / starts, 2) if starts else 0.0}           # crowd: ORG-089
 
 

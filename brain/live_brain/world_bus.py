@@ -54,6 +54,8 @@ PUBLISH = {
     "explore_found": ("place_found", 3),      # explore: житель открыл новое место (ORG-054)
     "rival_overtook": ("rival_overtook", 2),  # rivalry: ORG-060 обогнал соперника
     "tradition_stage": ("tradition", 3),      # tradition: смена ступени вечернего круга (ORG-058)
+    "card_found": ("card_found", 3),          # collect: ORG-074 новая карта (первая в жизни — 5)
+    "trophy_rare": ("trophy_rare", 3),        # collect: первая добыча редкости
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 
@@ -229,6 +231,8 @@ class Feed:
             if kind == "world_msg":
                 d = {"text": d.get("text"), "source": d.get("source")}
             bus_kind, importance = PUBLISH[kind]
+            if kind == "card_found" and d.get("first"):      # collect: первая карта в жизни — важность 5
+                importance = 5                               # collect:
             if self.bus.publish(bus_kind, d, importance, now=ts):
                 n += 1
         mem.set("world_pub_cursor", last)
@@ -264,6 +268,8 @@ TEXTS = {
     "guild_joined": lambda d: f"вступил в гильдию {d.get('name')}",         # guild:
     "place_found": lambda d: f"открыл(а) {d.get('map')}",                    # explore: ORG-054
     "rival_overtook": lambda d: f"обогнал(а) {d.get('rival')} {d.get('label')} ({d.get('mine')} против {d.get('theirs')})",  # rivalry:
+    "card_found": lambda d: f"нашёл(шла) карту {d.get('name')}" + (" — первая карта!" if d.get("first") else ""),  # collect:
+    "trophy_rare": lambda d: f"добыл(а) редкость: {d.get('name')}",                                       # collect:
     "tradition": lambda d: d.get("text") or f"вечерний круг: {d.get('label')}",   # tradition: ORG-058
     "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
                                      f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)
