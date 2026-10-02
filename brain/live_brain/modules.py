@@ -79,6 +79,7 @@ from .savings import Savings         # dreams: ORG-073 копилка мечты
 from .memoir import Memoir           # dreams: ORG-082 мемуары жителя
 from .mentor import Mentor           # mentor: ORG-057 наставничество новичков
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
+from .places import Places           # places: ORG-084 имена мест
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -110,6 +111,7 @@ MODULES = (
     Episodes,
     Tradition,
     Collection,        # после social: регистрирует тему card
+    Places,            # places: ORG-084 после social (резолвер карт в grammar, тема place); шину читает в тике
     Gossip,            # gossip: ORG-056, после social (тема gossip) и rumors
     Habits,            # habits: ORG-068 (activity.scores, social.pick_point читают mind.habits)
     Healer,            # healer: ORG-069 (тик 135, метка [heal:] 65, события support/чат 25)

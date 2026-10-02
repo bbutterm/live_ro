@@ -29,6 +29,7 @@ from .savings import CHRONICLE_LINES as SAVINGS_LINES   # dreams: копилка
 from .mentor import CHRONICLE_LINES as MENTOR_LINES     # mentor: наставничество (ORG-057)
 from .bestiary import CHRONICLE_LINES as BESTIARY_LINES  # bestiary: первооткрыватели (ORG-077)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
+from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -60,6 +61,7 @@ LINES = {
     **SAVINGS_LINES,                                      # dreams: ORG-073
     **MENTOR_LINES,                                       # mentor: ORG-057
     **BESTIARY_LINES,                                     # bestiary: ORG-077
+    **places.CHRONICLE_LINES,                             # places: ORG-084
 }
 
 
@@ -131,7 +133,7 @@ def chronicle(lab_root, bots, day=None, tz_hours=3):
         if day_alerts:
             out += ["", "## Оповещения владельцу"] + [f"- {a['ts'][11:16]}Z {a['bot']}: {a['kind']} — {a['text']}"
                                                        for a in day_alerts]
-    return "\n".join(out)
+    return places.humanize("\n".join(out), places.chronicle_resolver(lab_root, end))   # places: имена вместо кодов
 
 
 def world_section(lab_root, start, end, tz):

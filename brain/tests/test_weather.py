@@ -105,6 +105,7 @@ class WeatherTalkTest(unittest.TestCase):
                     peers={"Arkady", "Vera"}, world=WORLD)
         mind.social.clock = self.clock
         mind.social.rng = random.Random(1)
+        mind.social.grammar = None   # grammar: здесь — точные фразы персоны (ORG-065 — test_grammar)
         mind.safety.whisper_gap = 0
         mind.state = {"name": name, "map": "prontera", "x": 156, "y": 185, "dead": False, "lv": 30}
         self.addCleanup(mem.close)

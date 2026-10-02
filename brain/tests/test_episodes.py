@@ -56,6 +56,7 @@ class EpisodesTest(unittest.TestCase):
         mind.episodes.clock = self.clock
         mind.social.clock = self.clock
         mind.social.rng = random.Random(2)
+        mind.social.grammar = None   # grammar: здесь — точные фразы персоны (ORG-065 — test_grammar)
         mind.safety.whisper_gap = 0
         mind.state = {"name": name, "map": "prontera", "x": 156, "y": 185, "dead": False, "lv": 30, "players": []}
         mind.fresh_state = True
@@ -199,6 +200,7 @@ class EpisodesTest(unittest.TestCase):
         self.tick()
         now = self.clock.t + 3 * DAY
         self.a.social.rng = random.Random(11)
+        self.a.social.grammar = None   # grammar: здесь — точные фразы персоны (ORG-065 — test_grammar)
         hits = sum("remember" in self.a.social.registry_topics("Vera", now, opener=True) for _ in range(200))
         self.assertTrue(40 < hits < 110, hits)                               # шанс 0.35
 
