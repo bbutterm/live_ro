@@ -253,6 +253,14 @@ class RoutineTest(unittest.TestCase):
         self.assertTrue(self.r.st["recover"])
 
 
+    def test_recover_blocked_by_weight_noted_once(self):
+        self.run_for(2)
+        asyncio.run(self.r.force("rest"))
+        self.mind.state.update(hp_pct=10, weight_pct=72, items={"501": 0})
+        self.run_for(20 * 60, step=5, on_tick=self.walk_to_town)
+        self.assertEqual(sum(1 for d in self.mind.decisions if d.get("event") == "recover_blocked"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
 

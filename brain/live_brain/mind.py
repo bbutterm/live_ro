@@ -20,6 +20,7 @@ from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
 from .party import TAG as PARTY_TAG, Party
 from .plans import TAG, PlanExecutor, PlanStore
+from .postmortem import Postmortem
 from .routine import Routine
 from .safety import SafetyPolicy
 
@@ -89,6 +90,7 @@ class Mind:
         self.fresh_state = False       # было ли состояние от тела после запуска мозга
         self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
         self.plans = PlanExecutor(self, PlanStore(memory.db))
+        self.postmortem = Postmortem(self)
         self.routine = Routine(self, world) if world else None
         self.economy = Economy(self, world["economy"]) if world and world.get("economy") else None
         party_cfg = (world or {}).get("party", {})
@@ -109,6 +111,7 @@ class Mind:
             self.remember_players(self.state.get("players") or [])
             self.notice_peers(self.state.get("players") or [])
             self.mem.set("last_state", self.state)
+            self.postmortem.on_state(self.state)
             self.fresh_state = True
         elif kind == "event":
             await self.on_event(msg)
@@ -172,6 +175,14 @@ class Mind:
             self.mem.add_event(kind, {k: v for k, v in event.items() if k != "kind"})
         if self.routine and kind in ("attack", "kill"):
             self.routine.on_combat()
+        if kind in ("attack", "survival", "danger"):
+            self.postmortem.observe(kind, event)
+        if kind == "kill":
+            self.postmortem.on_kill(event.get("monster"))
+        if kind == "died":
+            self.postmortem.report(event)
+            if self.party:
+                await self.party.on_my_death(event)
         if self.routine and kind == "died":
             await self.routine.on_death()
         if self.routine and kind == "escape":
@@ -516,6 +527,9 @@ class Mind:
             "распорядок": self.routine.summary() if self.routine else None,
             "глобальные_цели": self.routine.goals() if self.routine else None,
             "хозяйство": self.economy.summary() if self.economy else None,
+            "опасные_монстры": self.postmortem.risky_monsters(),
+            "закрытые_карты_до": {m: time.strftime("%H:%M", time.localtime(t))
+                                  for m, t in self.postmortem.bans().items()},
             "группа": ({"имя": self.party.name, "лидер": self.party.leader,
                         "подтверждена_сервером": bool(self.party.st.get("confirmed")),
                         "состав": self.state.get("party_members")} if self.party else None),

@@ -89,9 +89,13 @@ class Routine:
         return self.rng.uniform(lo, hi) * 60
 
     def hunt_map(self):
+        """Карта охоты: выбор модели/группы, но не исключённая после смертей (AUT-010)."""
         pref = self.st.get("prefer_map")
         maps = self.mind.persona["hunt_maps"]
-        return pref if pref in maps else maps[0]
+        pm = getattr(self.mind, "postmortem", None)
+        bans = pm.bans(self.clock()) if pm else {}
+        allowed = [m for m in maps if m not in bans] or maps
+        return pref if pref in allowed else allowed[0]
 
     def summary(self, now=None):
         now = now or self.clock()
@@ -334,6 +338,8 @@ class Routine:
                 and now - self.last_vend >= RESEND):
             self.last_vend = now
             await self.send({"action": "shop_open"}, "распорядок: открыть лавку в городе")
+        if not self.hp_ok(state):
+            await self.check_recover_blocked(now, state)
         if own_schedule and self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
             if not self.hp_ok(state):                      # AUT-086: больной не идёт драться по расписанию
                 if not self.waiting_hp_noted:
@@ -349,6 +355,26 @@ class Routine:
             self.note("routine_hunt", f"Отдохнул, иду качаться на {self.hunt_map()}.", 2)
             self.set_goal(f"охочусь на {self.hunt_map()}")
             self.last_sent = 0
+
+    async def check_recover_blocked(self, now, state):
+        """AUT-014: при весе >= 50% RO не восстанавливает HP, а зелий нет — сидеть бессмысленно.
+        Попросить зелья у жителя рядом (economy) и один раз сообщить оператору (alert)."""
+        stuck = (state.get("weight_pct") or 0) >= 50 and self.heal_items(state) == 0
+        if not stuck:
+            self.st.pop("recover_blocked_since", None)
+            return
+        since = self.st.setdefault("recover_blocked_since", now)
+        if now - since < 300 or self.st.get("recover_blocked_noted"):
+            return
+        self.st["recover_blocked_noted"] = True
+        self.note("recover_blocked", f"Вес {state.get('weight_pct')}% и нет зелий — HP не восстанавливается. "
+                                     "Прошу зелья у жителей; нужна разгрузка.", 3)
+        alert = getattr(self.mind, "alert", None)
+        if alert:
+            alert("recover_blocked", f"вес {state.get('weight_pct')}%, зелий нет, HP {state.get('hp_pct')}%")
+        economy = getattr(self.mind, "economy", None)
+        if economy:
+            await economy.ask("501", 10, force=True)
 
     def set_goal(self, text):
         """AUT-098: цель в памяти следует за распорядком (модель может уточнить, но не отменить режим)."""

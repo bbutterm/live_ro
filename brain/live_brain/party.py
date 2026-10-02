@@ -24,7 +24,7 @@ import time
 
 log = logging.getLogger("party")
 
-TAG = re.compile(r"\[party:(hunt|town|danger|recover):([a-z0-9_]{0,16})\]")
+TAG = re.compile(r"\[party:(hunt|town|danger|recover|dead):([a-z0-9_]{0,16})\]")
 CREATE_GAP = 300
 INVITE_GAP = 300
 ANNOUNCE = 300
@@ -235,12 +235,29 @@ class Party:
             if m2 and m2.get("map") == self.mind.state.get("map"):
                 self.help_until = now + HELP_SEC
                 await self.act([{"action": "follow", "to": sender}], f"группа: помогаю {sender}")
+        elif kind == "dead":
+            pm = getattr(self.mind, "postmortem", None)
+            can = pm.can_resurrect() if pm else False
+            # AUT-011: не обещать недоступное воскрешение — только факт и честное «не могу».
+            self.note("party_member_dead", f"{sender} погиб на {arg or '?'}." +
+                      ("" if can else " Воскресить не могу — нет навыка; он вернётся после возрождения."), 3,
+                      who=sender, map=arg, can_resurrect=can)
+            if self.waiting_since is not None:
+                self.waiting_since = None
+                await self.act([{"action": "resume"}], f"группа: {sender} погиб — не жду")
         elif kind == "recover" and self.is_leader:
             r = self.mind.routine
             if r and r.st and r.st.get("mode") == "hunt":
                 self.note("party_recover", f"{sender} нужно восстановиться — отдыхаем вместе.", 2, who=sender)
                 await r.to_town(now, rest_minutes=r.cfg.get("after_death_rest_minutes", 10))
                 r.save()
+
+    async def on_my_death(self, event):
+        """Я погиб — сказать жителям группы (срочно, свой лимит)."""
+        if self.st.get("confirmed") and self.due("dead", SIGNAL_GAP, self.clock()):
+            for m in self.members():
+                if m.get("online"):
+                    await self.signal(m["name"], "dead", event.get("map") or "")
 
     async def on_danger(self, event):
         """Событие danger от плагина survival у меня — сказать лидеру (срочный сигнал, свой лимит)."""
