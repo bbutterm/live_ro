@@ -151,5 +151,59 @@ class MindBusTest(unittest.TestCase):
         a.world.bus = WorldBus(self.root / "state" / "shared" / "world.sqlite", "Arkady")
 
 
+def _open_bus(path, barrier, out):                     # flaky: процесс-житель, открывающий шину при запуске
+    barrier.wait()
+    try:
+        bus = WorldBus(path, "x")
+        out.put(bus.db.execute("PRAGMA journal_mode").fetchone()[0])
+    except Exception as e:                              # noqa: BLE001 — причина уходит в сообщение теста
+        out.put(f"{type(e).__name__}: {e}")
+
+
+class ConcurrentCreateTest(unittest.TestCase):
+    """flaky: MeetingTest (два настоящих мозга) изредка падал — один мозг умирал при старте с «database is
+    locked» на PRAGMA journal_mode=WAL новой общей шины (оба жителя создают state/shared/world.sqlite
+    одновременно; busy-обработчик SQLite эту смену режима не ждёт). Здесь два процесса стартуют по барьеру."""
+
+    def test_two_residents_create_bus_at_once(self):
+        import multiprocessing as mp
+        ctx = mp.get_context("fork")
+        with tempfile.TemporaryDirectory() as tmp:
+            results = []
+            for i in range(30):                        # без повтора ≈ треть прогонов падала (замер 78/200)
+                barrier, out = ctx.Barrier(2), ctx.Queue()
+                procs = [ctx.Process(target=_open_bus, args=(str(Path(tmp) / f"w{i}.sqlite"), barrier, out))
+                         for _ in range(2)]
+                for p in procs:
+                    p.start()
+                for p in procs:
+                    p.join(30)
+                results += [out.get(timeout=5) for _ in procs]
+            self.assertEqual(set(results), {"wal"}, [r for r in results if r != "wal"][:3])
+
+    def test_enable_wal_retries_only_lock(self):
+        import sqlite3
+
+        class Db:
+            def __init__(self, errors):
+                self.errors = list(errors)
+
+            def execute(self, sql):
+                if self.errors:
+                    raise sqlite3.OperationalError(self.errors.pop(0))
+                return self
+
+            def fetchone(self):
+                return ("wal",)
+
+        naps = []
+        self.assertEqual(world_bus.enable_wal(Db(["database is locked"] * 3), sleep=naps.append), "wal")
+        self.assertEqual(len(naps), 3)
+        with self.assertRaises(sqlite3.OperationalError):          # не блокировка — сразу наружу
+            world_bus.enable_wal(Db(["disk I/O error"]), sleep=naps.append)
+        with self.assertRaises(sqlite3.OperationalError):          # блокировка дольше timeout — наружу
+            world_bus.enable_wal(Db(["database is locked"] * 1000), timeout=0, sleep=naps.append)
+
+
 if __name__ == "__main__":
     unittest.main()

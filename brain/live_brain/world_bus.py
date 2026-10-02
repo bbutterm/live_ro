@@ -96,12 +96,30 @@ def encode(data):
     return json.dumps({"truncated": True, "text": text[:MAX_DATA // 2]}, ensure_ascii=False)
 
 
+def enable_wal(db, timeout=10.0, sleep=time.sleep):
+    """PRAGMA journal_mode=WAL с повтором (тест: test_world_bus.ConcurrentCreateTest).
+
+    Общую шину создают все мозги при запуске. Если два жителя открывают ещё не существующий файл одновременно,
+    смена режима журнала у одного из них сразу отвечает SQLITE_BUSY («database is locked»): SQLite не зовёт
+    busy-обработчик для этой смены, поэтому timeout соединения не помогает, и мозг падал при старте.
+    Повторяем, пока режим не станет WAL (другой житель обычно уже переключил его), не дольше timeout.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return db.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+        except sqlite3.OperationalError as e:
+            if "locked" not in str(e) or time.monotonic() >= deadline:
+                raise
+            sleep(0.05)
+
+
 class WorldBus:
     def __init__(self, path, bot, clock=None):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.path = str(path)
         self.db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
-        self.db.execute("PRAGMA journal_mode=WAL")
+        enable_wal(self.db)                          # flaky: файл создают сразу несколько жителей
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA)
         self.bot = bot

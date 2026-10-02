@@ -8,7 +8,6 @@ import asyncio
 import json
 import random
 import tempfile
-import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,6 +21,7 @@ from live_brain.memory import Memory
 from live_brain.mind import Mind
 from live_brain.routine import load_world
 from live_brain.safety import CAST_LIMIT, SafetyPolicy
+from tests.worldtime import world_ts                      # timefix:
 
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
