@@ -76,6 +76,17 @@
     "night_factor": 3
   },
 
+  "grammar": {
+    "_comment": "ORG-065 (Т-24): грамматика реплик поверх фраз персон (brain/live_brain/grammar.py, шаблоны brain/world/speech.json). mix — доля шаблонов вместо фразы персоны; tic_chance × (0.5 + whimsy) — словечко в начале, tail_chance — в конце; recent — сколько последних текстов не повторять (tries пересборок); limit — длина реплики без метки. Выключить: enabled=false или BRAIN_DISABLE=grammar.",
+    "enabled": true,
+    "mix": 0.5,
+    "tic_chance": 0.3,
+    "tail_chance": 0.12,
+    "recent": 60,
+    "tries": 6,
+    "limit": 60
+  },
+
   "guild": {
     "_comment": "ORG-052, brain/live_brain/guild.py, docs/GUILD.md. ВЫКЛЮЧЕНО, пока не проверено в игре. emperium_check — как на сервере (rAthena guild_emperium_check: yes); false — только если владелец включил server/conf/optional/guild_no_emperium.txt. founder — имя основателя (иначе самый общительный онлайн), name — имя гильдии (латиница/цифры/пробел, до 23).",
     "enabled": false,

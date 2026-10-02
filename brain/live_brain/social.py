@@ -34,6 +34,9 @@
     питомец, слух, цель недели, новости мира; weather.py — погода; episodes.py — «помнишь?»). Тема шага 3 —
     случайно среди фактов дня и тем реестра, по которым есть факты и фразы (гибель и уровень — первыми);
     на тему собеседника из реестра ответ — фразой <тема>_re (тот же тег темы, шаг +1), а не своим монологом.
+Грамматика реплик (ORG-065, grammar.py): фраза персоны по прежней ротации, поверх — шаблоны speech.json с
+    альтернативами, род глагола по полу, коды карт с предлогами («на карте X» или имя места ORG-084), словечки
+    по характеру, без повтора последних текстов (kv social.said_recent). Выкл.: goals.json grammar.enabled=false.
 Все реплики идут через SafetyPolicy как обычный чат (лимиты лички, без повторов за час);
 эмоции и переходы — служебные действия (protocol=True), модель их не получает.
 """
@@ -41,11 +44,11 @@ import json
 import logging
 import random
 import re
-import string
 import time
 from datetime import datetime, timedelta, timezone
 
 from . import weather
+from . import grammar as grammar_mod                       # grammar: ORG-065 слой реплик поверх фраз персон
 from .world_calendar import PHRASES as CALENDAR_PHRASES   # calendar: фразы тем holiday/birthday по умолчанию
 
 log = logging.getLogger("social")
@@ -98,7 +101,7 @@ def merged_social(world, persona):
 
 
 def fields(template):
-    return {f for _, f, _, _ in string.Formatter().parse(template) if f}
+    return grammar_mod.fields(template)        # grammar: слоты {name}; альтернативы {a|b} — не слоты
 
 
 class Social:
@@ -133,6 +136,28 @@ class Social:
         self.last_save = 0.0
         self.topics = {}                  # реестр тем (ORG-066): имя -> поставщик фактов, ключ ответа, флаги
         self.register_topic("weather", self.weather_facts, fallback=True)   # ORG-085: общая погода мира
+        self.st.setdefault("said_recent", [])                                 # grammar: анти-повтор текстов
+        self.grammar = self.make_grammar(world)                               # grammar: ORG-065, None — выкл.
+
+    # ---------- грамматика реплик (ORG-065) ----------
+
+    def make_grammar(self, world):                                            # grammar:
+        """Слой грамматики (grammar.py) или None: goals.json grammar.enabled, BRAIN_DISABLE=grammar."""
+        cfg = dict(grammar_mod.DEFAULTS, **((world or {}).get("grammar") or {}))
+        s = getattr(self.mind, "s", None)
+        if not cfg.get("enabled", True) or (s is not None and hasattr(s, "feature") and not s.feature("grammar")):
+            return None
+        return grammar_mod.Grammar(grammar_mod.load_speech(), self.mind.persona, lambda: self.rng, cfg,
+                                   sex=self.my_sex, peer_sex=self.peer_sex)
+
+    def my_sex(self):                                                         # grammar: пол по данным игры
+        state = getattr(self.mind, "state", None) or {}
+        return grammar_mod.sex_of(state.get("sex")) or grammar_mod.sex_of(self.mind.persona.get("sex"))
+
+    def peer_sex(self, name):                                                 # grammar: как в topics.py
+        if not name:
+            return None
+        return grammar_mod.sex_of(((self.mind.mem.get("known_players") or {}).get(name) or {}).get("sex"))
 
     # ---------- данные ----------
 
@@ -357,6 +382,13 @@ class Social:
         choice = self.rng.choice(fresh)
         used = [u for u in used if u != choice] + [choice]
         self.st["used"][key] = used[-max(1, len(self.phrases.get(key) or []) - 1):]
+        if self.grammar is not None:                       # grammar: ORG-065 шаблоны, род, карты, словечки
+            recent = self.st.setdefault("said_recent", [])
+            text = self.grammar.say(key, choice, facts, recent)
+            if text is not None:
+                keep = int(self.grammar.cfg["recent"])
+                self.st["said_recent"] = (recent + [text])[-keep:] if keep > 0 else []
+                return text[:MAX_PHRASE]
         text = choice.format(**facts)
         return " ".join(text.split())[:MAX_PHRASE]
 
@@ -559,7 +591,8 @@ class Social:
         self.st["pairs"][peer] = now
         await self.mind.execute([{"action": "whisper", "to": peer, "text": f"{text} {tag}"}],
                                 source="social", reason=f"общение: {topic} жителю {peer}")
-        self.mind.mem.add_event("social_said", {"peer": peer, "topic": topic, "fact": topic in FACT_TOPICS})
+        self.mind.mem.add_event("social_said", {"peer": peer, "topic": topic, "fact": topic in FACT_TOPICS,
+                                                "text": text})     # grammar: текст — для метрики повторов
         self.mind.write_decision({"type": "social", "event": "said", "to": peer, "topic": topic, "step": step,
                                   "key": key or (extra or {}).get("_key") or topic})
         said = (self.topics.get(topic) or {}).get("said")

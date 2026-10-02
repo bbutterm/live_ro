@@ -61,6 +61,7 @@ class GossipTest(unittest.TestCase):
         self.g.clock = self.clock
         self.mind.social.clock = self.clock
         self.mind.social.rng = random.Random(2)
+        self.mind.social.grammar = None   # grammar: здесь — точные фразы персоны (ORG-065 — test_grammar)
         self.mind.state = {"name": "Arkady", "map": "prontera", "x": 156, "y": 185, "hp_pct": 100, "lv": 40,
                            "dead": False, "players": []}
         self.mind.fresh_state = True

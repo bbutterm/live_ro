@@ -62,6 +62,7 @@ def make_mind(root, bot, name, peers, clock, sent):
                 world=WORLD)
     mind.social.clock = clock
     mind.social.rng = random.Random(3)
+    mind.social.grammar = None   # grammar: здесь — точные фразы персоны (ORG-065 — test_grammar)
     mind.rumors.clock = clock
     mind.safety.whisper_gap, mind.safety.whisper_limit = 0, 10 ** 6
     mind.state = {"name": name, "map": "prontera", "x": 156, "y": 185, "hp_pct": 100, "lv": 40, "dead": False,

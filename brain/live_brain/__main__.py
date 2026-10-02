@@ -175,6 +175,7 @@ def organic_metrics(memory, since, now=None):
     rows = memory.db.execute("SELECT kind, data FROM events WHERE ts >= ? AND kind IN "
                              "('activity', 'social_walk', 'social_said')", (since,)).fetchall()
     acts, points, said, fact_said, sleep_h = set(), set(), 0, 0, 0.0
+    texts = []                                                          # grammar: ORG-065 повторы реплик
     starts = 0                                                          # crowd: ORG-089 начатых занятий
     for kind, data in rows:
         d = json.loads(data)
@@ -186,6 +187,8 @@ def organic_metrics(memory, since, now=None):
         elif kind == "social_said":
             said += 1
             fact_said += 1 if d.get("fact") else 0
+            if d.get("text"):                                           # grammar:
+                texts.append(d["text"])                                 # grammar:
     diaries = memory.db.execute("SELECT COUNT(*) FROM events WHERE kind = 'diary' AND ts >= ?", (since,)).fetchone()[0]
     calls = memory.db.execute("SELECT COUNT(*) FROM llm_calls WHERE ts >= ?", (since,)).fetchone()[0]
     # ops: сон — фактическое время между routine_sleep и routine_wake за период (раньше — плановая длина
@@ -202,7 +205,13 @@ def organic_metrics(memory, since, now=None):
             "вызовов моделей": calls, "дневников": diaries,
             "открытых мест": found,                                                                     # explore: ORG-054
             "карт в альбоме": album_size(memory), "трофеев за период": trophies,                         # collect: ORG-074
-            "разнообразие занятий": round(len(acts - {None}) / starts, 2) if starts else 0.0}           # crowd: ORG-089
+            "разнообразие занятий": round(len(acts - {None}) / starts, 2) if starts else 0.0,           # crowd: ORG-089
+            "повторов реплик, %": repeat_share(texts)}                                                 # grammar: ORG-065
+
+
+def repeat_share(texts):
+    """grammar: ORG-065 — доля реплик (в %), чей текст уже звучал раньше в этот период; цель < 20 %."""
+    return round(100 * (len(texts) - len(set(texts))) / len(texts)) if texts else 0
 
 
 def sleep_seconds(memory, since, now, sleeping_now):

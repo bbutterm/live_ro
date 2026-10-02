@@ -56,6 +56,7 @@ class MoodTest(unittest.TestCase):
         self.mood.clock = self.clock
         self.mind.social.clock = self.clock
         self.mind.social.rng = random.Random(4)
+        self.mind.social.grammar = None   # grammar: здесь — точные фразы персоны (ORG-065 — test_grammar)
         self.mind.state = {"name": "Arkady", "map": "prontera", "x": 156, "y": 185, "dead": False, "lv": 30,
                            "players": []}
         self.mind.fresh_state = True

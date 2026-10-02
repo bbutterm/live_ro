@@ -149,6 +149,7 @@ class CalendarMindTest(unittest.TestCase):
         self.mind.calendar = wc.WorldCalendar(self.mind, WORLD, roster=ROSTER, clock=self.clock)
         self.mind.social.clock = self.clock
         self.mind.social.rng = random.Random(1)
+        self.mind.social.grammar = None   # grammar: здесь — точные фразы персоны (ORG-065 — test_grammar)
         self.mind.needs.clock = self.clock
         self.mind.state.update(name="Arkady", zeny=1000, hp_pct=100)
 
