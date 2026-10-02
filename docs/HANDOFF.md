@@ -27,6 +27,8 @@ commit: <полный sha>
 
 ## Задание №1: управление существующей лабораторией и fallback выживания
 
+**Результат:** PARTIAL PASS, `docs/qa/HERMES-56bdba0.md`. Исправления — в задании №2.
+
 **Ветка:** `claude/stage1-reproducible-delivery`
 **Commit:** указан в сообщении разработчика. Это последний commit ветки, менявший этот файл:
 `git log -1 --format=%H origin/claude/stage1-reproducible-delivery -- docs/HANDOFF.md`.
@@ -122,3 +124,89 @@ scripts/lab status
 
 ### Что прислать
 Вывод шагов 1–8 по формату выше. Плюс `diff -r` из раздела «Риски» без паролей и любые ошибки дословно.
+
+---
+
+## Задание №2: исправления по отчёту №1 и завершение наблюдения
+
+**Ветка:** `claude/stage1-reproducible-delivery`
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+
+### Что изменилось
+1. Проверка логинов/паролей больше не зависит от локали: внутри функции `LC_ALL=C`,
+   класс `[[:graph:]]` вместо диапазона. `LC_ALL=C` перед командами больше не нужен.
+2. Новый плагин `bots/plugins/gracefulStop`: SIGTERM/SIGINT → штатный `quit` с пакетом выхода.
+   Добавлен в `loadPlugins_list`.
+3. Фоновый запуск бота задаёт `TERM=dumb`.
+4. `db-backup`: `--lock-tables` вместо `--single-transaction` (таблицы MyISAM), проверка
+   `gzip -t` и маркера `Dump completed`.
+
+### Какие процессы перезапускать
+- login/char/map — **не перезапускать**.
+- bot01 — **один перезапуск** (шаг 4), чтобы загрузить `gracefulStop`.
+
+### Шаги (от `ro-lab`, в checkout из задания №1, **без** `LC_ALL=C`)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa
+export LAB_ROOT=/opt/ro-bot-lab
+locale | head -3                      # для отчёта: текущая локаль
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive
+git rev-parse HEAD
+
+# 1. Статика и проверка без LC_ALL=C
+python3 scripts/check.py
+scripts/lab doctor
+
+# 2. Бэкап
+scripts/lab db-backup
+
+# 3. Отметка времени перед перезапуском
+date -u +%FT%TZ
+
+# 4. Перезапуск только бота
+scripts/lab stop bot01
+grep -n 'gracefulStop' $LAB_ROOT/logs/bot01/console.log | tail -3   # у старого бота плагина не было: ожидается пусто
+scripts/lab start bot01
+sleep 60
+grep -nE 'still recognizes|gracefulStop|TERM' $LAB_ROOT/logs/bot01/console.log | tail -10
+
+# 5. Проверка корректного выхода: второй перезапуск подряд
+scripts/lab stop bot01
+grep -n '\[gracefulStop\]' $LAB_ROOT/logs/bot01/console.log | tail -2
+scripts/lab start bot01
+sleep 60
+grep -n 'still recognizes' $LAB_ROOT/logs/bot01/console.log | tail -3
+
+# 6. Наблюдение 30 минут после шага 5, затем
+grep -E '\[lowHpGuard\]' $LAB_ROOT/logs/bot01/console.log | tail -20
+grep -cE 'Teleporting due to insufficient HP' $LAB_ROOT/logs/bot01/console.log
+grep -iE 'You have died|died' $LAB_ROOT/logs/bot01/console.log | tail -5
+scripts/lab status
+```
+Для шага 6 по каждому срабатыванию защиты важно увидеть, начинал ли бот бой с новой целью
+между `новые цели не выбираю` и `защита снята`. Если удобнее, пришлите фрагмент лога
+вокруг одного такого периода (±40 строк).
+
+### Ожидаемый результат (не проверен)
+| Шаг | Ожидание |
+|---|---|
+| 1 | `doctor` без `LC_ALL=C`: `BOT01_USER/PASS: формат допустим`, `doctor: ошибок нет` |
+| 2 | два архива, строка `gzip и маркер завершения OK` для каждого |
+| 4 | бот входит; нет предупреждений про `TERM` |
+| 5 | при stop в логе `[gracefulStop] получен SIGTERM: выхожу из игры`; после start **нет** `still recognizes your last connection` |
+| 6 | пары `новые цели не выбираю` → `защита снята`; между ними нет атаки новых целей; телепортов 0 |
+
+Если HP за 30 минут не опускался ниже 40%, напишите «не наблюдалось».
+
+### Риски
+- БД: схема и данные не меняются. Во время `db-backup` таблицы на секунды блокируются
+  на запись, map-server может задержать сохранение персонажа.
+- Если `gracefulStop` не сработает, `stop` ждёт 60 с и сообщает об ошибке. Тогда
+  `scripts/lab stop bot01 --force`, и пришлите вывод.
+
+### Откат
+- Код: `git checkout --detach 56bdba090258ac96e6ff9c1b9578ce0b5c914d5e`, затем `scripts/lab stop bot01` и `scripts/lab start bot01`.
+- Бот по-старому: `BOT01_CONTROL_DIR=$LAB_ROOT/backups/bot01-control-before-56bdba0` в env и `scripts/lab start bot01`.
+
+### Что прислать
+Вывод шагов 1–6 (без паролей) по формату отчёта, в файле `docs/qa/HERMES-<sha7>.md`.

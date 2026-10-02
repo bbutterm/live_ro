@@ -23,24 +23,32 @@
 
 ## Компоненты репозитория
 
+Отчёт Hermes по `56bdba0`: `docs/qa/HERMES-56bdba0.md` (итог: **PARTIAL PASS**).
+
 | Компонент | Код | Локально | Hermes / VPS |
 |---|---|---|---|
-| `check.py`: пины, PACKETVER, поиск секретов | ✅ e4914c1 | ✅ в т.ч. негативные случаи | ⏳ |
-| `lab deploy/activate/rollback` (release) | ✅ e4914c1 | ✅ песочница, сборка-заглушка | — не нужно на текущем VPS |
-| Сборка через `lab build` | ✅ e4914c1 | — не запускалась | — |
-| `servers.txt`: `addTableFolders ...;kRO;translated/kRO_english` | ✅ этап existing | ✅ check.py | ✅ локальная правка Hermes; версия из Git ⏳ |
-| Режим existing: `doctor/status/stop/start` без пересоздания стека | ✅ этап existing | ✅ песочница: фейковые серверы, запущенные вручную, найдены; `deploy/db-init/activate` запрещены; root отклонён | ⏳ |
-| Реквизиты БД из существующего `inter_conf.txt`, отдельная лог-БД | ✅ этап existing | ✅ разбор; подключение не проверено (нет MariaDB) | ⏳ |
-| `db-backup` обеих БД | ✅ этап existing | — нет MariaDB | ⏳ |
-| Проверка логинов/паролей ≤ 23 ASCII | ✅ этап existing | ✅ | ⏳ |
-| Runtime-файлы принадлежат `ro-lab` (запрет root, проверка владельца) | ✅ этап existing | ✅ | ⏳ |
-| Запуск bot01 из профиля Git в tmux | ✅ этап existing | ✅ с фейковым `openkore.pl` | ⏳ |
-| Fallback выживания (`lowHpGuard`, телепорт выключен, зелья) | ✅ этап existing | ✅ синтаксис и логика на заглушках; в игре нет | ⏳ |
+| `check.py`: пины, PACKETVER, поиск секретов | ✅ e4914c1 | ✅ | ✅ 56bdba0 |
+| `lab prepare` в существующем `/opt/ro-bot-lab` | ✅ 56bdba0 | ✅ | ✅ 56bdba0: создано только недостающее, существующие файлы не изменены |
+| `lab doctor` | ✅ 56bdba0 | ✅ | ❌ 56bdba0: в локали VPS отклонял `BOT01_USER/PASS`; OK только с `LC_ALL=C`. Исправлено в следующем commit ⏳ |
+| Проверка логинов/паролей ≤ 23 ASCII | ✅ исправлено после 56bdba0 | ✅ ru_RU/en_US/C UTF-8 | ⏳ |
+| `lab status`: находит запущенные вручную процессы | ✅ 56bdba0 | ✅ | ✅ 56bdba0 |
+| Реквизиты БД из `inter_conf.txt`, обе БД | ✅ 56bdba0 | ✅ разбор | ✅ 56bdba0: доступ к `ro_bot_lab` и `ro_bot_lab_logs` |
+| `lab db-backup` | ✅ 56bdba0 | — нет MariaDB | ✅ 56bdba0: два архива, `gzip -t` OK; восстановление не проверялось. Консистентность MyISAM исправлена (`--lock-tables`) в следующем commit ⏳ |
+| `lab stop/start bot01` (серверы не трогались) | ✅ 56bdba0 | ✅ | ✅ 56bdba0 с `LC_ALL=C`; login/char/map не перезапускались |
+| Корректный выход бота из игры при stop (`gracefulStop`) | ✅ после 56bdba0 | ✅ на заглушках | ⏳ (в 56bdba0 был `The server still recognizes your last connection`) |
+| `TERM` для фонового запуска бота | ✅ после 56bdba0 | ✅ | ⏳ (в 56bdba0 предупреждения `$ENV{"TERM"}`) |
+| `servers.txt` addTableFolders | ✅ 56bdba0 | ✅ | ✅ 56bdba0: вход по профилю из Git |
+| Профиль из Git: вход, бой, опыт, лут | ✅ 56bdba0 | — | ✅ 56bdba0 |
+| Телепорт выключен | ✅ 56bdba0 | ✅ | ✅ 56bdba0: нет `Teleporting due to insufficient HP` |
+| `lowHpGuard`: включение при HP < 40% | ✅ 56bdba0 | ✅ заглушки | ✅ 56bdba0: `[lowHpGuard] HP 7% < 40%` |
+| `lowHpGuard`: запрет новых целей, восстановление до 90%, снятие защиты | ✅ 56bdba0 | ✅ заглушки | ⏳ не подтверждено |
+| Режим release (`deploy/activate/rollback`, сборка) | ✅ e4914c1 | ✅ песочница | — не нужен на текущем VPS |
 | AI-координатор `brain/` | — | — | — |
-
-«Этап existing» — commit, который указан в последнем задании в `docs/HANDOFF.md`.
 
 ## Известные проблемы
 - Бот продолжал бой при низком HP и пытался телепортироваться без навыка/предмета.
-  Исправление в коде есть, на VPS ещё не проверено.
-- Режим `BOT_RUNNER=background` (`Console::Simple` без терминала) не проверялся.
+  На VPS подтверждено: телепорта нет, защита включается. Полный цикл восстановления не подтверждён.
+- HP опускался до 7%: защита включается поздно или бот получает много урона в одном бою.
+  Смотрим по итогам длительного наблюдения.
+- Восстановление БД из бэкапа не проверялось.
+- `BOT_RUNNER=background` на VPS работал (56bdba0), но без `TERM` сыпал предупреждениями. Исправлено, ⏳.

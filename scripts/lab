@@ -81,7 +81,12 @@ need_var() {
 }
 
 # Логины/пароли rAthena: буфер 24 байта -> не длиннее 23 ASCII-символов.
-cred_ok()    { [[ "${!1:-}" =~ ^[!-~]{1,23}$ ]]; }
+# Локаль C: иначе в UTF-8 локалях диапазоны и классы в regex bash ведут себя иначе
+# (Hermes: в его локали ^[!-~]{1,23}$ не совпадал даже с "bot01").
+cred_ok() {
+  local LC_ALL=C val="${!1:-}"
+  [[ "$val" =~ ^[[:graph:]]{1,23}$ ]]
+}
 check_cred() {
   local val="${!1:-}"
   cred_ok "$1" || die "$1: нужно 1-23 печатных ASCII-символа без пробелов (сейчас длина ${#val})"
@@ -470,10 +475,12 @@ cmd_db_backup() {
   for db in $(printf '%s\n' "$DB_NAME" "$LOG_DB_NAME" | sort -u); do
     out="$LAB_ROOT/backups/${db}-${ts}.sql.gz"
     if ! ( umask 077; set -o pipefail
-           "$dump" --defaults-extra-file=<(mycnf) --single-transaction --routines "$db" | gzip > "$out" ); then
+           "$dump" --defaults-extra-file=<(mycnf) --lock-tables --routines "$db" | gzip > "$out" ); then
       rm -f "$out"; die "дамп $db не удался"
     fi
-    info "бэкап: $out ($(stat -c %s "$out") байт)"
+    gzip -t "$out" || die "$out: архив повреждён"
+    zcat "$out" | tail -n 1 | grep -q 'Dump completed' || die "$out: дамп не завершён (нет 'Dump completed')"
+    info "бэкап: $out ($(stat -c %s "$out") байт, gzip и маркер завершения OK)"
   done
 }
 
@@ -553,7 +560,8 @@ start_bot() {
     tmux display-message -p -t "$sess" '#{pane_pid}' > "$PIDS/$bot.pid"
     info "$bot запущен в tmux ($sess, pid $(<"$PIDS/$bot.pid")): tmux attach -t $sess; лог $log"
   else
-    start_proc "$bot" "$od" "$log" "${cmd[@]}" --interface=Console::Simple
+    # Без терминала OpenKore читает $ENV{TERM} и сыплет предупреждениями, если его нет.
+    start_proc "$bot" "$od" "$log" env TERM=dumb "${cmd[@]}" --interface=Console::Simple
   fi
 }
 
