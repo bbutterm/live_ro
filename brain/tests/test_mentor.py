@@ -300,6 +300,10 @@ class MentorTest(unittest.TestCase):
         self.b.hear("Arkady", grad[0])
         self.assertIsNone(self.b.m.role)
         self.assertEqual(self.b.events("mentor_done")[0]["peer"], "Arkady")
+        for r in (self.a, self.b):                                     # данные событий не ломают recent_events/промпт
+            self.assertTrue(r.mem.recent_events(50))
+            r.mind.routine.st = {}                                     # распорядок тут не важен
+            r.mind.build_prompt("тест", {})
         self.a.mind.world.pump()
         g = [e for e in self.a.bus.read() if e["kind"] == "mentor_graduated"]
         self.assertEqual(g[0]["importance"], 4)
