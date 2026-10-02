@@ -116,9 +116,9 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 | `rumors.py` | `rumors` | 120 |  | — |
 | `society.py` | `society` | 130 |  | другие жители |
 | `aims.py` | `aims` | 150 |  | — |
-| `guild.py` | `guild` | 160 |  | мир, другие жители |
-| `explore.py` | `explorer` | 110 |  | routine |
-| `boss.py` | `boss` | 115 |  | мир, party, crew, explorer |
+| `guild.py` | `guild` | 160 |  | мир, другие жители; `guild.enabled` (умолч. false) |
+| `explore.py` | `explorer` | 110 |  | routine; `explore.enabled` (класс — false, `goals.json` — true) |
+| `boss.py` | `boss` | 115 |  | мир, party, crew, explorer; `boss.enabled` (умолч. false) |
 | `strangers.py` | `strangers` | 140 |  | — |
 | `world_bus.py` | `world` | 180 |  | — |
 | `rivalry.py` | `rivalry` | 190 |  | другие жители |
@@ -126,13 +126,24 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 | `episodes.py` | `episodes` | 210 |  | другие жители |
 | `tradition.py` | `tradition` | 170 |  | мир |
 | `collection.py` | `collection` | 220 |  | — |
+| `places.py` | `places` | 215 |  | — |
 | `gossip.py` | `gossip` | 125 |  | другие жители |
 | `habits.py` | `habits` | 205 |  | — |
 | `healer.py` | `healer` | 135 |  | мир |
 | `orders.py` | `orders` | 25 |  | другие жители, economy |
+| `market.py` | `market_day` | 15 |  | мир, calendar, economy |
+| `refine.py` | `refine` | 105 |  | мир; `refine.enabled` (умолч. false) |
+| `gaze.py` | `gaze` | 75 |  | мир, другие жители, social |
 | `dream.py` | `dream` | 145 |  | — |
 | `savings.py` | `savings` | 147 |  | dream |
 | `memoir.py` | `memoir` | 230 |  | — |
+| `mentor.py` | `mentor` | 95 |  | мир, другие жители |
+| `bestiary.py` | `bestiary` | 225 |  | — |
+| `spar.py` | `spar` | 195 |  | другие жители; `spar.enabled` (умолч. false) |
+| `achieve.py` | `achieve` | 227 |  | — |
+| `herbal.py` | `herbal` | 103 |  | мир, routine; `herbal.enabled` (умолч. false) |
+| `arrows.py` | `arrows` | 104 |  | мир, routine |
+| `trek.py` | `trek` | 112 |  | мир, routine, explorer, party, crew; `trek.enabled` (умолч. false) |
 | `director.py` | `director` | 230 |  | мир |
 
 **Чистые функции и данные** (не модули реестра): `atlas.py` (атлас мира `world/atlas.json`), `prices.py` (цены
@@ -144,8 +155,12 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 реестра), `census.py` (`census`, ORG-088), `resources.py` (`resources`, ORG-047).
 
 Тело: плагины `brainBridge` (мост), `combatProfile` (бой по классу), `economy` (склад/сделки/лавка),
-`survival` (экстренное выживание), `lowHpGuard`, `gracefulStop`.
-Оповещения владельцу: `scripts/lab alerts`. Выключить модуль: `BRAIN_DISABLE=party,economy,routine`.
+`survival` (экстренное выживание), `lowHpGuard`, `gracefulStop`, `jobChange` (этапы квестов, Kafra-сохранение, поездки
+травника и похода), `pets` (питомец), `refine` (заточка), `spar` (спарринг); `autoCreate` — только новому жителю
+(добавляет `scripts/lab roster`/`new-resident`).
+Оповещения владельцу: `scripts/lab alerts`. Выключить модуль: `BRAIN_DISABLE=party,economy,routine` (имя — `FEATURE`
+класса: `activity`, `calendar`, `explore`, `market_day`, …); что создастся — `scripts/lab modules [BOT]`; порядок
+включения на VPS — [`docs/ROLLOUT.md`](../docs/ROLLOUT.md).
 
 ## Социальная жизнь
 `social.py` — правила без LLM (тик 1 с), настройки `goals.json → social`, переопределения — `social` в персоне,
@@ -203,7 +218,7 @@ Vera: propose  ─шёпот [meet:id:map:x:y]─►  Arkady: offer → accept (
 - **Помнит** в `$LAB_ROOT/state/bot01/memory.sqlite` (вне Git): события, воспоминания с важностью,
   отношения к игрокам, текущую цель и настроение. Память переживает перезапуск.
 - **Думает редко:**
-  - по плану раз в `BRAIN_DECIDE_INTERVAL` (300 с);
+  - по плану раз в `BRAIN_DECIDE_INTERVAL` (по умолчанию 1800 с);
   - после смерти или нового уровня (не чаще `BRAIN_EVENT_MIN_GAP`);
   - когда ему пишут в личку или называют по имени в чате (не чаще `BRAIN_CHAT_MIN_GAP`).
 

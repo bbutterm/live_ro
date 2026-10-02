@@ -23,7 +23,8 @@
 
 ## Компоненты репозитория
 
-Отчёты Hermes: `docs/qa/HERMES-56bdba0.md` (PARTIAL PASS), `docs/qa/HERMES-9b8157a.md` (PARTIAL PASS), `docs/qa/HERMES-LIVE-JEV.md` (живой диалог, база c6df504 + 4feb7a8).
+Отчёты Hermes: `docs/qa/HERMES-56bdba0.md` (PARTIAL PASS), `docs/qa/HERMES-9b8157a.md` (PARTIAL PASS), `docs/qa/HERMES-LIVE-JEV.md` (живой диалог, база c6df504 + 4feb7a8), `docs/qa/HERMES-cbeb2a9.md` (задание №9,
+короткая проверка; последний отчёт — по заданиям №10–16 отчётов нет).
 
 | Компонент | Код | Локально | Hermes / VPS |
 |---|---|---|---|
@@ -52,8 +53,8 @@
 | Лимиты: резерв JEV, деньги по usage.cost, размер промпта | ✅ `claude/brain-v2` | ✅ тесты | ⏳ №7 |
 | Исполняемый план встречи (propose → accept → движение → присутствие → память) | ✅ `claude/brain-v2` b1fc7e8 | ✅ два настоящих мозга + фейковый мир, 3/3 прогонов | ⏳ №8 |
 | Сохранение плана и сверка с игрой после перезапуска мозга | ✅ | ✅ тесты: точка есть / точка потеряна | ⏳ №8 |
-| Глобальные цели и распорядок дня (4-5 ч охоты, отдых в городе) | ✅ `claude/brain-routine` | ✅ сутки на поддельных часах, 9 тестов | ⏳ №9 |
-| Боевые профили всех профессий (combatProfile) | ✅ `claude/brain-routine` | ✅ Perl-тест 29 проверок на заглушках | ⏳ №9 |
+| Глобальные цели и распорядок дня (4-5 ч охоты, отдых в городе) | ✅ `claude/brain-routine` | ✅ сутки на поддельных часах, 9 тестов | ✅ частично cbeb2a9: `routine rest` → оба в Пронтере у точки, `routine hunt` → Arkady охотится на prt_fild08, бюджет пережил перезапуск мозга; полные сутки не проверялись |
+| Боевые профили всех профессий (combatProfile) | ✅ `claude/brain-routine` | ✅ Perl-тест 29 проверок на заглушках | ✅ cbeb2a9: Swordsman и Acolyte применены по изученным навыкам; лечение в группе не доказано (`party: null`) |
 | Экономика: продажа лута и покупка зелий (Tool Dealer prt_in 126,76) | ✅ `claude/brain-routine` | — (только конфиг OpenKore) | ⏳ №10 |
 | Склад Kafra (карты и руда не продаются, а на склад) — плагин economy | ✅ `claude/brain-routine` | ✅ Perl-тест на заглушках | ⏳ №11 |
 | Взаимопомощь: просьба зелий/зени у жителя, передача сделкой, проверка по инвентарю | ✅ | ✅ 11 тестов мозга + Perl-тест сделки (30 проверок) | ⏳ №11 |
@@ -86,7 +87,7 @@
 | Два бота (bot01 Arkady, bot02 Vera), мозг на каждого | ✅ | ✅ песочница | ✅ LIVE-JEV: существующие аккаунты, оба мозга подключены |
 | Общение ботов-жителей с лимитами | ✅ | ✅ тесты | ✅ LIVE-JEV: автономные реплики Arkady ↔ Vera, получение в console.log обоих |
 
-## Мозг: модули в ветке claude/brain-routine (на 2026-10-02: b62eaef + ветка agent/census)
+## Мозг: модули реестра (сверено с `modules.py` и `goals.json` 2026-10-02)
 
 Только то, что есть в коде и покрыто локальными тестами (`cd brain && python3 -m unittest discover -s tests`).
 **В игре эти модули не проверялись**, пока в колонке «Hermes / VPS» выше или в `docs/qa/` нет фактического отчёта.
@@ -99,7 +100,8 @@ survival > plan > economy > party > routine), `plans.py` (план встреч�
 
 Модули реестра `brain/live_brain/modules.py` — в порядке создания. Выключатель: `BRAIN_DISABLE=<имя>[,<имя>…]` в env
 и/или `"<раздел>": {"enabled": …}` в `brain/world/goals.json`. «Нужно» — без этого модуль не создаётся (например,
-«другие жители»: при одном боте в `LAB_BOTS` социальные модули молчат).
+«другие жители»: при одном боте в `LAB_BOTS` социальные модули молчат). Что создастся при данных env и `goals.json` —
+`scripts/lab modules [BOT]`; порядок включения на VPS — [`docs/ROLLOUT.md`](ROLLOUT.md).
 
 | Файл | Назначение | Выключатель | По умолчанию | Нужно |
 |---|---|---|---|---|
@@ -128,13 +130,24 @@ survival > plan > economy > party > routine), `plans.py` (план встреч�
 | `episodes.py` | «помнишь?»: эпизоды пары из памяти, тема `remember` (ORG-055) | `BRAIN_DISABLE=episodes`; `episodes.enabled` (умолч. true) | вкл. | другие жители |
 | `tradition.py` | вечерний круг у фонтана, сила традиции в шине (ORG-058) | `BRAIN_DISABLE=tradition`; `tradition.enabled` (умолч. true) | вкл. | мир |
 | `collection.py` | альбом карт и трофеи по `kill`/`loot`, тема `card` (ORG-074) | `BRAIN_DISABLE=collection`; `collection.enabled` (умолч. true) | вкл. | — |
+| `places.py` | имена мест: словарь `place_names.json`, свои имена по фактам, консенсус в шине, коды карт в речи → имена (ORG-084) | `BRAIN_DISABLE=places`; `places.enabled` (умолч. true) | вкл. | — |
 | `gossip.py` | сплетни о жителях и репутация, история пары, остывание (ORG-056, W5, W6) | `BRAIN_DISABLE=gossip`; `gossip.enabled` (умолч. true) | вкл. | другие жители |
 | `habits.py` | привычки и скука по занятиям 7 суток, причуда (ORG-068) | `BRAIN_DISABLE=habits`; `habits.enabled` (умолч. true) | вкл. | — |
 | `healer.py` | лекарь у собора: пост, лечение по просьбе `[heal:ask:]`, Blessing/Inc AGI (ORG-069) | `BRAIN_DISABLE=healer`; `healer.enabled` (умолч. true) | вкл. | мир |
 | `orders.py` | заказы между жителями через шину, доставка сделкой рынка (ORG-070) | `BRAIN_DISABLE=orders`; `orders.enabled` (умолч. true) | вкл. | другие жители, economy |
+| `market.py` | рыночный день (суббота мира): пороги рынка мягче, сбор у площади, лавка чаще (ORG-071) | `BRAIN_DISABLE=market_day`; `market_day.enabled` (умолч. true) | вкл. | мир, calendar, economy |
+| `refine.py` | заточка своего оружия ур. 1–2 у Hollgrehenn до безопасного предела, плагин `refine` (ORG-072) | `BRAIN_DISABLE=refine`; `refine.enabled` (умолч. false) | **выкл.** | мир |
+| `gaze.py` | взгляд на собеседника-жителя: `look_at` → `lookp` (ORG-067) | `BRAIN_DISABLE=gaze`; `gaze.enabled` (умолч. true) | вкл. | мир, другие жители, social |
 | `dream.py` | мечта на месяцы, этапы по фактам, бонус в целях недели (ORG-081) | `BRAIN_DISABLE=dream`; `dream.enabled` (умолч. true) | вкл. | — |
 | `savings.py` | копилка мечты; банк rAthena — флаг `savings.bank` (ORG-073) | `BRAIN_DISABLE=savings`; `savings.enabled` (умолч. true) | вкл. | dream |
 | `memoir.py` | мемуары: раз в неделю `state/<bot>/memoir.md` по фактам памяти (ORG-082) | `BRAIN_DISABLE=memoir`; `memoir.enabled` (умолч. true) | вкл. | — |
+| `mentor.py` | наставник новичку (< 20 ур. или недавно родился): советы, зелья, выпуск (ORG-057); без новичка спит | `BRAIN_DISABLE=mentor`; `mentor.enabled` (умолч. true) | вкл. | мир, другие жители |
+| `bestiary.py` | бестиарий: счёт видов, «первый среди жителей» в шине (ORG-077) | `BRAIN_DISABLE=bestiary`; `bestiary.enabled` (умолч. true) | вкл. | — |
+| `spar.py` | спарринг жителей на арене PvP Yoyo по согласию, плагин `spar` (ORG-061) | `BRAIN_DISABLE=spar`; `spar.enabled` (умолч. false) | **выкл.** | другие жители |
+| `achieve.py` | достижения сервера по пакетам 0A23/0A24; награда — `achieve.claim_rewards` (умолч. false) (ORG-080) | `BRAIN_DISABLE=achieve`; `achieve.enabled` (умолч. true) | вкл. | — |
+| `herbal.py` | травник: поездка к Old Pharmacist в Альберту, травы не продаются (ORG-076); нужен житель в `herbal.residents` или `persona.herbalist` | `BRAIN_DISABLE=herbal`; `herbal.enabled` (умолч. false) | **выкл.** | мир, routine |
+| `arrows.py` | Arrow Crafting для ветки Archer (ORG-075); без лучника спит, квест — `arrows.quest_auto` (умолч. false) | `BRAIN_DISABLE=arrows`; `arrows.enabled` (умолч. true) | вкл. (спит) | мир, routine |
+| `trek.py` | дальний поход группой в город другого региона, привалы с Kafra-сохранением (ORG-078) | `BRAIN_DISABLE=trek`; `trek.enabled` (умолч. false) | **выкл.** | мир, routine, explore, party, crew |
 | `director.py` | рассказчик мира без LLM: день осторожности, «помочь», повод в тишину (ORG-086) | `BRAIN_DISABLE=director`; `director.enabled` (умолч. true) | вкл. | мир |
 
 Выключено по умолчанию и почему (всё — решение владельца после проверки в игре):
@@ -147,6 +160,12 @@ survival > plan > economy > party > routine), `plans.py` (план встреч�
 | авто-смена профессии | `goals.json` `progression.auto_job_change: false` | сценарии выведены из скриптов rAthena, в игре не проходились; цель видна в отчёте и промпте, сменить может оператор (docs/PROGRESSION.md) |
 | стартовая точка в Пронтере | `server/conf/optional/char_start_point.txt` не подключён, `progression.json` `start.override.enabled: false` | изменение сервера; без него новичок появляется в iz_int, выход в izlude есть по данным (NB-1), в игре не проверен (docs/POPULATION.md §6) |
 | освоение новых мест охоты | `goals.json` `routine.auto_hunt_maps: false` | включать, когда нужные карты включены на сервере (`scripts/lab doctor`); без флага новые места только записываются и советуются |
+| заточка у кузнеца (ORG-072) | `goals.json` `refine.enabled: false` | Refine UI на живом сервере не проверен; тратит зени, снимает и надевает оружие (docs/ECONOMY.md) |
+| спарринг на арене (ORG-061) | `goals.json` `spar.enabled: false` | бой на PvP-карте, плата 500 z, в игре не проверено (docs/SOCIETY.md) |
+| травник (ORG-076) | `goals.json` `herbal.enabled: false`, `herbal.residents: []` | дорога в Альберту (11 переходов) не проверена; травника среди жителей нет (docs/ECONOMY.md) |
+| дальний поход (ORG-078) | `goals.json` `trek.enabled: false` | дальние карты и Kafra-сохранение на привалах, в игре не проверено (docs/EXPLORE.md) |
+| награды достижений (ORG-080) | `goals.json` `achieve.claim_rewards: false` | решение владельца; сами достижения модуль читает (docs/SOCIETY.md) |
+| квест Arrow Crafting (ORG-075) | `goals.json` `arrows.quest_auto: false` | лучника нет, пути до `moc_ruins` в таблицах OpenKore нет (docs/ECONOMY.md) |
 | лавка Merchant (ORG-034) | код включён (`routine.vend_in_town: true`) | спит: среди жителей нет Merchant (`scripts/lab census`) |
 
 Экспедиции (`explore.py`) по умолчанию класса выключены, но включены в `goals.json` (`explore.enabled: true`).
