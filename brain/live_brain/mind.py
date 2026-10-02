@@ -21,6 +21,7 @@ from .activity import Activities
 from .bonds import Bonds
 from .pets import Pets
 from .crew import TAG as CREW_TAG, Crew
+from .guild import TAG as GUILD_TAG, Guild               # guild: гильдия жителей (ORG-052)
 from .aims import Aims                                  # events: недельные цели (ORG-038)
 from .career import Career
 from .economy import TAG as ECON_TAG, Economy
@@ -150,6 +151,8 @@ class Mind:
         self.society = (Society(self, world) if self.ctx.peers and feat("society")    # society:
                         and ((world or {}).get("society") or {}).get("enabled", True) else None)  # society:
         self.aims = Aims(self) if feat("aims") else None                              # events:
+        self.guild = (Guild(self, world) if world and self.ctx.peers and feat("guild")    # guild: ORG-052,
+                      and (world.get("guild") or {}).get("enabled") else None)          # guild: выкл. по умолчанию
         bus_path = world_bus.lab_path(decisions_path) if world_bus_db is None else None  # events:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
             world_bus_db = world_bus.WorldBus(bus_path, persona["name"])              # events:
@@ -284,6 +287,15 @@ class Mind:
                 and CREW_TAG.search(str(event.get("text", "")))):
             await self.crew.on_tag(str(event["from"]), str(event["text"]))
             return
+        if (self.guild and kind == "chat_private" and event.get("from") in self.ctx.peers     # guild: протокол
+                and GUILD_TAG.search(str(event.get("text", "")))):                             # guild:
+            await self.guild.on_tag(str(event["from"]), str(event["text"]))                    # guild:
+            return                                                                             # guild:
+        if kind in ("guild_create_result", "guild_invite_result", "guild_invite", "guild_joined_auto",  # guild:
+                    "chat_guild"):                                                             # guild: пакеты
+            if self.guild:                                                                     # guild:
+                await self.guild.on_event(kind, event)                                         # guild:
+            return                                                                             # guild: не в gate/LLM
         if (self.party and kind == "chat_private" and event.get("from") in self.ctx.peers
                 and PARTY_TAG.search(str(event.get("text", "")))):
             await self.party.on_tag(str(event["from"]), str(event["text"]))    # сигнал группы
@@ -566,6 +578,8 @@ class Mind:
             await self.society.tick()                          # society:
         if self.aims:                                          # events:
             self.aims.tick()                                   # events: недельные цели
+        if self.guild:                                         # guild: ORG-052
+            await self.guild.tick()                            # guild:
         if self.world:                                         # events:
             self.world.tick()                                  # events: публикация в шину мира и новости жителей
         await self.read_inbox()
@@ -783,6 +797,7 @@ class Mind:
             "другие_жители": {p: {"кто": self.who(p), "отношение": self.mem.relation(p)}
                               for p in sorted(self.ctx.peers)},
             "в_ссоре": self.society.summary() if self.society else None,                # society:
+            "гильдия": self.guild.summary() if self.guild else None,                     # guild:
         }
         speaker = context.get("from") if isinstance(context, dict) else None
         if speaker:

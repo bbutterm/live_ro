@@ -61,5 +61,16 @@
     "together_minutes": 30,
     "night_hours": [1, 7],
     "night_factor": 3
+  },
+
+  "guild": {
+    "_comment": "ORG-052, brain/live_brain/guild.py, docs/GUILD.md. ВЫКЛЮЧЕНО, пока не проверено в игре. emperium_check — как на сервере (rAthena guild_emperium_check: yes); false — только если владелец включил server/conf/optional/guild_no_emperium.txt. founder — имя основателя (иначе самый общительный онлайн), name — имя гильдии (латиница/цифры/пробел, до 23).",
+    "enabled": false,
+    "emperium_check": true,
+    "min_members": 3,
+    "min_affinity": 2,
+    "founder": null,
+    "name": null,
+    "min_level": 1
   }
 }

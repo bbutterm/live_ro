@@ -50,6 +50,13 @@
 #                            pc_cant_act: chatID): перед действием, двигающим тело, и когда AI начинает
 #                            route/move/attack/... — chat leave (chatFirst/chatGuard). Событие party_refused
 #                            {name, code} — житель отказался вступить в группу (пакет party_invite_result).
+#   guild_create {name} / guild_invite {to} / guild_say {text} / guild_expect {name}  # guild: (ORG-052)
+#                         -> guild create <name> / guild request <to> (только жителю, видимому) / g <текст> /
+#                            без команды: ждать приглашения гильдии <name> $EXPECT_GUILD_SEC с и принять его в хуке
+#                            (guildAutoDeny 1 отказал бы через 3 с). В state: guild {name, master, members, online},
+#                            emperium (число Emperium 714 в рюкзаке). События guild_create_result {code},
+#                            guild_invite_result {code}, guild_invite {guild} (чужое), guild_joined_auto {guild},
+#                            chat_guild {from, text}.
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -71,6 +78,7 @@ use Time::HiRes qw(time);
 use Plugins;
 use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID %ai_v
                %friends @friendsID $currentChatRoom %chatRooms);   # society: чат-комната
+use Globals qw(%guild $charID);                                     # guild: состав гильдии (ORG-052)
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -103,6 +111,10 @@ my $hooks = Plugins::addHooks(
 	['packet_sysMsg',      sub { onWorldMsg('sys', $_[1]{Msg}) }],           # ORG-039: 009A system_chat (announce)
 	['packet_localBroadcast', sub { onWorldMsg('broadcast', $_[1]{Msg}) }],  # ORG-039: 01C3/040C local_broadcast
 	['packet/party_invite_result', \&onPartyInviteResult],                   # society: отказ в группе (ORG-027)
+	['packet/guild_request',       \&onGuildRequest],                        # guild: 016A приглашение в гильдию
+	['packet/guild_create_result', sub { event('guild_create_result', code => ($_[1]{type} // -1) + 0) }],   # guild: 0167
+	['packet/guild_invite_result', sub { event('guild_invite_result', code => ($_[1]{type} // -1) + 0) }],   # guild: 0169
+	['packet_guildMsg',            \&onGuildMsg],                            # guild: 017F чат гильдии
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -205,6 +217,7 @@ sub sendState {
 		(defined &survival::status ? (survival => survival::status()) : ()),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 		chat_room => chatTitle(),                                                 # society: комната, где я сейчас
+		guild     => guildState(), emperium => emperiumCount(),                   # guild: ORG-052
 	});
 }
 
@@ -419,6 +432,54 @@ sub onPartyInviteResult {
 	event('party_refused', name => $name, code => $args->{type} + 0) if length $name;
 }
 
+# guild: гильдия (ORG-052). Состав — из %guild OpenKore: при PACKETVER 20180620 сервер шлёт 0A84 (мастер — только
+# master_char_id) и 0AA5 (без имён; OpenKore дозапрашивает имена по charID) — мастер ищется по charID.
+our $EXPECT_GUILD_SEC = 300;
+my %guildExpect;                                                       # имя гильдии -> до какого времени ждём
+sub inGuild { return $char && $char->{guild} && defined $char->{guild}{name} && length $char->{guild}{name}; }
+sub guildState {
+	return undef unless inGuild();
+	my ($master, @m) = (defined $guild{master} && length $guild{master} ? "$guild{master}" : undef);
+	for my $u (@{$guild{member} || []}) {
+		next unless $u;
+		my $isMe = defined $charID && defined $u->{charID} && $u->{charID} eq $charID;
+		my $name = defined $u->{name} && length $u->{name} ? "$u->{name}" : ($isMe ? "$char->{name}" : undef);
+		next unless defined $name;
+		$master //= $name if defined $guild{master_char_id} && defined $u->{charID} && $u->{charID} eq $guild{master_char_id};
+		push @m, {name => $name, online => ($u->{online} ? JSON::PP::true : JSON::PP::false), lv => ($u->{lv} // 0) + 0};
+		last if @m >= 40;
+	}
+	return {name => "$char->{guild}{name}", master => $master, members => \@m, online => scalar(grep { $_->{online} } @m)};
+}
+sub emperiumCount {
+	my $inv = $char && ref $char ne 'HASH' && $char->can('inventory') ? $char->inventory : $char && $char->{inventory};
+	return 0 unless $inv;
+	my $n = 0;
+	$n += $_->{amount} for grep { ($_->{nameID} // 0) == 714 } @$inv;
+	return $n + 0;
+}
+sub onGuildRequest {
+	my (undef, $args) = @_;
+	my $name = defined &I18N::bytesToString ? I18N::bytesToString($args->{name}) : "$args->{name}";
+	$name =~ s/\0.*//s;
+	my $now = time;
+	delete $guildExpect{$_} for grep { $guildExpect{$_} < $now } keys %guildExpect;
+	if (length $name && $guildExpect{$name}) {
+		message "[brainBridge] приглашение в гильдию жителей $name — принимаю\n", 'system';
+		Commands::run('guild join 1');
+		delete $guildExpect{$name};
+		event('guild_joined_auto', guild => $name);
+	} else {
+		event('guild_invite', guild => $name);                       # чужая — решает guildAutoDeny
+	}
+}
+sub onGuildMsg {
+	my (undef, $args) = @_;
+	my $from = defined $args->{MsgUser} ? "$args->{MsgUser}" : '';
+	return if $char && $from eq $char->{name};
+	event('chat_guild', from => $from, text => cleanText($args->{Msg}));
+}
+
 # Перед движением: если бот посажен командой sit (флаг sitAuto_forcedBySitCommand) или сидит — stand,
 # иначе OpenKore не пойдёт к lockMap/за целью (флаг снимает только cmdStand).
 sub standFirst {
@@ -560,6 +621,27 @@ sub actionToCommand {
 		$limit = 2 if $limit < 2;                                             # society:
 		$limit = 20 if $limit > 20;                                           # society:
 		return (1, qq{chat create "$t" $limit 1});                            # society: сидя тоже можно
+	} elsif ($kind eq 'guild_create' || $kind eq 'guild_expect') {        # guild: имя по правилам rAthena
+		my $name = join(' ', split ' ', ($a->{name} // ''));
+		return (0, 'имя гильдии: 1..23 латинских букв, цифр, пробелов') unless $name =~ /^[A-Za-z0-9 ]{1,23}$/;
+		return (0, 'уже в гильдии') if inGuild();
+		if ($kind eq 'guild_expect') {
+			$guildExpect{$name} = time + $EXPECT_GUILD_SEC;
+			return (1, {note => "жду приглашения гильдии $name"});
+		}
+		return (1, "guild create $name");
+	} elsif ($kind eq 'guild_invite') {                                   # guild: только жителю, видимому
+		my $to = cleanText($a->{to});
+		return (0, 'неверный адресат') unless $to =~ /^[^"\s]{1,23}$/;
+		return (0, 'не житель') unless grep { $_ eq $to } residents();
+		return (0, 'не в гильдии') unless inGuild();
+		return (0, "$to не виден рядом") unless $playersList && grep { defined $_->{name} && $_->{name} eq $to } @{$playersList->getItems() || []};
+		return (1, "guild request $to");
+	} elsif ($kind eq 'guild_say') {                                      # guild: чат гильдии
+		my $t = cleanText($a->{text});
+		return (0, 'пустой текст') unless length $t;
+		return (0, 'не в гильдии') unless inGuild();
+		return (1, "g $t");
 	} elsif ($kind eq 'friend_request') {
 		my $to = cleanText($a->{to});
 		return (0, 'неверный адресат') unless $to =~ /^[^"\s]{1,23}$/;

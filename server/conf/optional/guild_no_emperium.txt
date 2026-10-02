@@ -1,0 +1,28 @@
+// live_ro (ORG-052, гильдия жителей): гильдию можно основать без Emperium.
+// НЕ ВКЛЮЧЕНО. Это изменение правил сервера, включает владелец (docs/GUILD.md, «Emperium и решение владельца»).
+//
+// Зачем. rAthena проверяет Emperium (item 714) при создании гильдии командой клиента (пакет 0165, OpenKore
+// «guild create <имя>»): src/map/guild.cpp guild_create — при battle_config.guild_emperium_check и без 714 в
+// рюкзаке ответ 0167 type 3 «нужен Emperium»; при успехе guild_created тратит один Emperium. По умолчанию
+// conf/battle/guild.conf: guild_emperium_check: yes. Достать Emperium жителю трудно: в renewal его продаёт
+// только Guild Clerk (prt_in 212,169, npc/re/merchants/Emperium_Seller.txt) за 1 000 000 зени, пн–сб 18:00–23:59
+// по часам сервера, 100 штук в сутки; дроп — MVP (Baphomet, Golden Thief Bug) и редкие монстры (Shining Plant
+// 0.05 %, Angeling 0.2 %, Ghostring 0.15 %, Orc Zombie 0.01 %) — db/re/mob_db.yml.
+//
+// Что делает. Только снимает требование Emperium: имя гильдии (до 23 символов, буквы из char_name_letters),
+// уникальность имени, запрет основать, уже состоя в гильдии, и карты с mapflag guildlock проверяются как раньше.
+// Это то же, что делает GM-команда @guild (src/map/atcommand.cpp ACMD_FUNC(guild) на время вызова ставит
+// guild_emperium_check = 0), но для обычной команды клиента — то есть для любого игрока сервера, не только жителей.
+// БД не меняет; существующих гильдий не трогает.
+//
+// Как включить (одно из двух, затем перезапуск map-server):
+//  - рендер conf/import (release или RENDER_SERVER_CONF=1): скопировать строку ниже в новый файл
+//    server/conf/import-tmpl/battle_conf.txt (scripts/lib/render.py рендерит все *.txt шаблонов), commit,
+//    доставка, scripts/lab start;
+//  - existing (conf/import не рендерится): дописать строку в $RATHENA/conf/import/battle_conf.txt вручную.
+// Затем в brain/world/goals.json: "guild": {"enabled": true, "emperium_check": false, ...} — мозг перестанет ждать
+// Emperium (иначе основатель ждёт 714 в рюкзаке).
+// Как выключить: удалить строку, перезапустить map-server; в goals.json вернуть "emperium_check": true.
+// rAthena читает conf/import/battle_conf.txt последним (conf/battle_athena.conf:64) — значение отсюда побеждает
+// conf/battle/guild.conf.
+guild_emperium_check: no
