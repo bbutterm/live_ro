@@ -35,6 +35,7 @@ from .rumors import TAG as INFO_TAG, Rumors             # events: слухи v2 
 from .routine import Routine, diary_only            # ops: ORG-049 фильтр ответа на повод diary
 from .safety import SafetyPolicy
 from .social import TAG as SOCIAL_TAG, Social   # social: общение без LLM
+from .society import Society                    # society: эмоции, чат-комнаты, ссоры (ORG-022/026/027)
 from . import world_bus                                 # events: шина событий мира (ORG-045)
 
 log = logging.getLogger("mind")
@@ -144,6 +145,8 @@ class Mind:
         self.social = (Social(self, world) if world and (world.get("social") or {}).get("enabled", True)
                        and self.ctx.peers and feat("social") else None)
         self.rumors = Rumors(self)                                                    # events:
+        self.society = (Society(self, world) if self.ctx.peers and feat("society")    # society:
+                        and ((world or {}).get("society") or {}).get("enabled", True) else None)  # society:
         self.aims = Aims(self) if feat("aims") else None                              # events:
         bus_path = world_bus.lab_path(decisions_path) if world_bus_db is None else None  # events:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
@@ -548,6 +551,8 @@ class Mind:
             if module:
                 await module.tick()
         await self.rumors.tick()                               # events: проверка слухов опытом, пересказ при встрече
+        if self.society:                                       # society: эмоции, вывески, ссоры по фактам памяти
+            await self.society.tick()                          # society:
         if self.aims:                                          # events:
             self.aims.tick()                                   # events: недельные цели
         if self.world:                                         # events:
@@ -766,6 +771,7 @@ class Mind:
                         "состав": self.state.get("party_members")} if self.party else None),
             "другие_жители": {p: {"кто": self.who(p), "отношение": self.mem.relation(p)}
                               for p in sorted(self.ctx.peers)},
+            "в_ссоре": self.society.summary() if self.society else None,                # society:
         }
         speaker = context.get("from") if isinstance(context, dict) else None
         if speaker:

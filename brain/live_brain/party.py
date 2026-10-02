@@ -69,12 +69,16 @@ class Party:
         return names[i:i + GROUP_SIZE]
 
     def mates(self):
-        """Жители моей группы, кроме меня; с испорченными отношениями (affinity <= HOSTILE) — не зовём."""
+        """Жители моей группы, кроме меня; с испорченными отношениями (affinity <= HOSTILE) — не зовём.
+        society: в ссоре (society.py, ORG-027: affinity <= -2 после конфликта, до примирения) — тоже не зовём."""
         out = set()
+        society = getattr(self.mind, "society", None)                                    # society:
         for name in self.group():
             if name == self.me:
                 continue
             rel = self.mind.mem.relation(name) or {}
+            if society and society.quarrel(name):                                         # society:
+                continue                                                                  # society:
             if rel.get("affinity", 0) > HOSTILE:
                 out.add(name)
         return out

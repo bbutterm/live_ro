@@ -11,7 +11,9 @@
 - передача (give) только жителю, предмет — ID или zeny, количество 1..MAX_GIVE; лавка
   (shop_open/shop_close) и передача — только от исполнителей правил, не от модели;
 - эмоция (emote) — только от исполнителей правил (social.py), номер из EMOTES, не больше
-  EMOTE_LIMIT за 10 минут.
+  EMOTE_LIMIT за 10 минут;
+- чат-комната (chat_room) — только от исполнителей правил (society.py): открыть — в городе, заголовок
+  ≤ 36 символов/байт без '#', не чаще CHAT_ROOM_GAP; закрыть — всегда (society:).
 """
 import re
 import time
@@ -23,6 +25,9 @@ PLAN_ACTIONS = ("friend_request", "job_change", "sleep", "service", "meet_point"
                 "emote")
 PLAN_ACTIONS += ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_check", "mail_take")   # market: торговля и почта (economy.py)
 PLAN_ACTIONS += ("pet_setup", "pet_tame", "pet_hatch")   # pets: питомец (pets.py, ORG-051)
+PLAN_ACTIONS += ("chat_room",)   # society: чат-комната-вывеска (society.py, ORG-026)
+CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
+CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
 MAX_PRICE = 100_000_000          # market: цена лота между жителями
 MAIL_PER_DAY = 5                 # market: писем в сутки от одного жителя (rAthena mail_daily_count 100 — наш лимит строже)
 # Безопасные эмоции (номер -> команда OpenKore «e <команда>», tables/emotions.txt); тот же список в brainBridge.pl.
@@ -69,6 +74,8 @@ class SafetyPolicy:
         self.paused_at = None
         self.texts = {}              # (кому, текст) -> время: не повторять одно и то же (AUT-095)
         self.emoted = []             # время эмоций: не больше EMOTE_LIMIT за WINDOW
+        self.chat_maps = set(extra_point_maps)   # society: чат-комната — только в городе отдыха
+        self.room_opened = 0.0                   # society: когда открывал комнату
 
     def _recent(self, items, now):
         return [x for x in items if now - (x[0] if isinstance(x, tuple) else x) < WINDOW]
@@ -84,6 +91,8 @@ class SafetyPolicy:
         if not isinstance(action, dict) or action.get("action") not in allowed:
             return None, "неизвестное действие"
         kind = action["action"]
+        if kind == "chat_room":                                   # society: закрыть можно всегда
+            return self.check_chat_room(action, state, now)       # society:
         if kind in ("clear_point", "stand", "shop_close"):
             return {"action": kind}, None                     # вернуть к охоте / встать можно всегда
         if state.get("dead"):
@@ -91,14 +100,15 @@ class SafetyPolicy:
         if kind in ("sit", "shop_open"):
             return {"action": kind}, None
         if kind == "emote":
-            eid = action.get("id")
+            eid = action.get("emotion", action.get("id"))   # society: номер эмоции (id — устаревшее имя поля)
             if isinstance(eid, bool) or not isinstance(eid, int) or eid not in EMOTES:
                 return None, "эмоция не из списка EMOTES"
             self.emoted = self._recent(self.emoted, now)
             if len(self.emoted) >= EMOTE_LIMIT:
                 return None, f"лимит эмоций {EMOTE_LIMIT}/10 мин"
             self.emoted.append(now)
-            return {"action": "emote", "id": eid}, None
+            # society: поле id сообщения затирает bridge.send_action (номер действия для ack) — мост читает emotion
+            return {"action": "emote", "id": eid, "emotion": eid}, None
         if kind == "friend_request":
             if action.get("to") not in self.peers:
                 return None, "дружба — только с жителями"
@@ -229,6 +239,33 @@ class SafetyPolicy:
         if not ints(action.get("egg"), 9000, 9999):
             return None, "неверное яйцо"
         return {"action": kind, "egg": action["egg"]}, None
+
+    def check_chat_room(self, action, state, now):                                             # society:
+        """society: чат-комната — op close всегда; op open только живому, в городе, без лавки, заголовок
+        1..36 символов и ≤ 36 байт UTF-8 без '#' и '"', лимит 2..20, не чаще CHAT_ROOM_GAP."""
+        op = action.get("op")
+        if op == "close":
+            return {"action": "chat_room", "op": "close"}, None
+        if op != "open":
+            return None, "чат-комната: op open или close"
+        if state.get("dead"):
+            return None, "персонаж мёртв"
+        if state.get("map") not in self.chat_maps:
+            return None, "чат-комната только в городе"
+        if (state.get("vend") or {}).get("open"):
+            return None, "открыта лавка"
+        title = " ".join(str(action.get("title", "")).split())
+        if not title or "#" in title or '"' in title or not title.isprintable():
+            return None, "заголовок пустой или с запрещёнными символами"
+        if len(title) > CHAT_TITLE_MAX or len(title.encode("utf-8")) > CHAT_TITLE_MAX:
+            return None, f"заголовок длиннее {CHAT_TITLE_MAX} символов/байт"
+        limit = action.get("limit", 5)
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 2 <= limit <= 20:
+            return None, "лимит комнаты 2..20"
+        if now - self.room_opened < CHAT_ROOM_GAP:
+            return None, f"чат-комнату не чаще раза в {CHAT_ROOM_GAP // 60} мин"
+        self.room_opened = now
+        return {"action": "chat_room", "op": "open", "title": title, "limit": limit}, None
 
     def check_market(self, kind, action, state, now):                                             # market:
         """market: торговля с жителем (offer_*) и почта RODEX (mail_*) — только жителям, числа в пределах."""

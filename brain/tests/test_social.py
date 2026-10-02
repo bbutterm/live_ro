@@ -237,7 +237,7 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(len(first), 1)
         self.assertTrue(first[0]["text"].endswith("[chat:hello:1]"))
         self.assertEqual(self.v.actions("whisper"), [])   # Vera ждёт, не начинает одновременно
-        self.assertIn({"action": "emote", "id": 12}, self.a.out)   # приветствие с эмоцией
+        self.assertIn({"action": "emote", "id": 12, "emotion": 12}, self.a.out)   # приветствие с эмоцией
         log = self.converse()
         steps = [int(TAG.search(w["text"]).group(2)) for w in log]
         self.assertEqual(steps, [1, 2, 3, 4])             # 2 обмена и тишина
@@ -323,7 +323,7 @@ class SocialTest(unittest.TestCase):
 
     def test_emote_safety(self):
         ok, why = self.a.safety.check({"action": "emote", "id": 12}, self.a.state, protocol=True)
-        self.assertEqual(ok, {"action": "emote", "id": 12})
+        self.assertEqual(ok, {"action": "emote", "id": 12, "emotion": 12})   # society: emotion — для моста
         self.assertIsNotNone(self.a.safety.check({"action": "emote", "id": 12}, self.a.state)[1])   # не модели
         self.assertIsNotNone(self.a.safety.check({"action": "emote", "id": 6}, self.a.state, protocol=True)[1])
         self.assertIsNotNone(self.a.safety.check({"action": "emote", "id": "12"}, self.a.state, protocol=True)[1])

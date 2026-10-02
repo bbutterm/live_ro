@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import world_bus
 from .economy import CHRONICLE_LINES, metrics_from_rows
+from .society import CHRONICLE_LINES as SOCIETY_LINES   # society: ссоры, примирения, вывески
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -35,6 +36,7 @@ LINES = {
     "pet_hatched": lambda d: f"завёл(а) питомца: {d.get('name')}",
     "pet_gone": lambda d: "питомца больше нет рядом",
     **CHRONICLE_LINES,                                    # ORG-037: сделки и письма жителей
+    **SOCIETY_LINES,                                      # society: ORG-026/027
 }
 
 
