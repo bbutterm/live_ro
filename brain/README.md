@@ -45,6 +45,21 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 с жителями. Приглашение в группу жителя принимает правило. Лечение партнёра (Vera, `AL_HEAL`)
 делает OpenKore по `partySkill` в профиле, без LLM.
 
+## Исполняемые планы: встреча
+`plans.py` превращает разговор в действие. Модель выбирает цель (`propose_meeting`, `accept_meeting`,
+`decline_meeting`, `cancel_plan`), исполняет и проверяет — правило без LLM (тик 1 с):
+```
+Vera: propose  ─шёпот [meet:id:map:x:y]─►  Arkady: offer → accept (модель или правило через 45 с)
+                ◄─шёпот [meet:id:ok]──────
+оба: meet_point (OpenKore lockMap_x/y) → дошёл (≤4 клетки) → партнёр рядом (≤8) → completed
+                ◄─шёпот [meet:id:done]──►  clear_point → обратно к охоте
+```
+- Статусы: `planned` → `executing` → `completed` | `failed`; план и история — в SQLite (`plans`).
+- Память различает «предложил», «согласился», «дошёл», «встретился» (важность 4), «не состоялась».
+- После перезапуска мозга план, созданный до старта, сверяется с игрой (срок, выставлена ли
+  точка, позиция); точка выставляется заново, только если её в OpenKore нет.
+- Оператор: `scripts/lab plan bot02 meet Arkady`, `plan BOT cancel`, `plan BOT show`.
+
 ## Доставка и контекст
 - `ack` — команда исполнена в OpenKore. `delivery` — ответ сервера: шёпот доставлен или нет
   (не в сети / игнор / не принимает), общий чат подтверждён эхом; без ответа 15 с — `timeout`.
@@ -95,7 +110,7 @@ tail -n 20 $LAB_ROOT/state/bot01/decisions.jsonl
 
 ## Тесты
 ```sh
-cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits
+cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans
 ```
 Сквозной тест без сети: фейковый OpenRouter, настоящий процесс мозга, фейковый плагин.
 Проверяет решение, исполнение, память после перезапуска, работу без ключа, `--check` и то,

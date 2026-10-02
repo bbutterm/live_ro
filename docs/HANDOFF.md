@@ -686,3 +686,93 @@ for b in bot01 bot02; do python3 -c "import sqlite3,time;d=sqlite3.connect('$LAB
 
 ### Что прислать
 Вывод шагов 0–5 в `docs/qa/HERMES-<sha7>.md`.
+
+---
+
+## Задание №8: реальная встреча Arkady и Vera — решение → движение → встреча → память → перезапуск
+
+**Ветка:** `claude/brain-v2` (включает задание №7)
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+Без пассивного наблюдения: у каждого шага есть предел времени. login/char/map не трогать.
+Шаг провален — остановиться и прислать вывод.
+
+### Что изменилось
+- Исполнитель плана встречи (правила, без LLM на тик): предложение и ответ — шёпотом с меткой
+  `[meet:<id>:<map>:<x>:<y>]` / `[meet:<id>:ok]`. Точка — позиция предлагающего. Движение — OpenKore
+  (`lockMap_x/y`, держаться в радиусе 2, отбиваться). «Дошёл» и «встретился» проверяются по позиции и списку
+  игроков рядом из игры. План и его история — в `state/<bot>/memory.sqlite` (таблица `plans`).
+- `scripts/lab plan BOT meet ИМЯ|cancel|show`.
+
+### Полезные однострочники
+```sh
+export LAB_ROOT=/opt/ro-bot-lab; cd /opt/ro-bot-lab/src/live_ro-qa
+pos() { python3 -c "import sqlite3,json;d=sqlite3.connect('$LAB_ROOT/state/$1/memory.sqlite');s=json.loads(d.execute(\"select value from kv where key='last_state'\").fetchone()[0]);print('$1',s.get('map'),s.get('x'),s.get('y'),'точка',s.get('lock_x'),s.get('lock_y'))"; }
+mem() { python3 -c "import sqlite3;d=sqlite3.connect('$LAB_ROOT/state/$1/memory.sqlite');[print('$1',r[0]) for r in d.execute(\"select text from memories where text like '%встрет%' or text like '%Встреча%' order by id desc limit 6\")]"; }
+```
+
+### Шаг 0 — код и перезапуск (3 мин)
+```sh
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans)  # OK, 39
+# если Vera следует за Arkady после №7: в её консоли `follow stop`
+scripts/lab stop live all && scripts/lab start live all && sleep 60 && scripts/lab status
+pos bot01; pos bot02        # обе на prt_fild08; записать расстояние
+```
+
+### Шаг 1 — решение и согласие (1 мин)
+```sh
+scripts/lab plan bot02 meet Arkady
+sleep 60
+scripts/lab plan bot02 show | head -2
+scripts/lab plan bot01 show | head -2
+grep -nE 'meet:|сервер подтвердил' $LAB_ROOT/logs/bot02/console.log | tail -3
+grep -nE 'meet:|conf lockMap_x' $LAB_ROOT/logs/bot01/console.log | tail -4
+```
+Ожидание: у Vera план `planned/awaiting_answer` → `executing`; у Arkady `executing/moving` (принято моделью
+или правилом через 45 с); в консоли Vera — шёпот с `[meet:...]` и `сервер подтвердил`, у Arkady — `[meet:...:ok]` и `conf lockMap_x`.
+
+### Шаг 2 — движение и встреча (до 9 мин)
+```sh
+for i in $(seq 1 18); do pos bot01; pos bot02; s1=$(scripts/lab plan bot01 show | head -1); s2=$(scripts/lab plan bot02 show | head -1)
+  echo "$s1" | grep -q '"status": "completed"' && echo "$s2" | grep -q '"status": "completed"' && break; sleep 30; done
+scripts/lab plan bot01 show | head -1; scripts/lab plan bot02 show | head -1
+mem bot01; mem bot02
+```
+Ожидание: координаты Arkady приближаются к точке Vera; оба плана `completed` с `result: встреча, расстояние N`;
+в памяти у обоих «Я встретился с ...» (отдельно от «предложил»/«согласился»); после встречи точка снята (`точка None None`)
+и охота продолжается. `failed` — прислать `history` плана целиком.
+
+### Шаг 3 — перезапуск посреди плана (до 9 мин)
+```sh
+scripts/lab plan bot02 meet Arkady; sleep 70
+scripts/lab plan bot01 show | head -1                 # ожидается executing/moving или waiting
+scripts/lab stop brain bot01; sleep 10; scripts/lab start brain bot01; sleep 15
+grep '"event": "reconciled"' $LAB_ROOT/state/bot01/decisions.jsonl | tail -1
+# дождаться завершения как в шаге 2 (тот же цикл)
+```
+Ожидание: `reconciled` с `point_set: true` (точка в OpenKore осталась, команда не повторялась) и затем `completed`
+у обоих. Если в шаге 3 план уже успел завершиться до перезапуска — повторить с `sleep 30` вместо 70.
+
+### Шаг 4 — память после перезапуска (1 мин)
+```sh
+scripts/lab stop brain all && scripts/lab start brain all && sleep 5
+grep 'память:' $LAB_ROOT/logs/bot01/brain.log | tail -1; mem bot01; scripts/lab plan bot01 show | head -3
+```
+Ожидание: две встречи в памяти и в `plans` со статусом `completed`; число воспоминаний не уменьшилось.
+
+### Не является доказательством
+Реплика «давай встретимся», `ack` команды или `delivery` шёпота. Доказательство — `completed` у обоих планов,
+позиции из `pos` у точки и запись «Я встретился» в памяти обоих.
+
+### Риски
+- Во время плана бот держится у точки (радиус 2), а не охотится по всему полю; после встречи/провала точка снимается.
+- Если точка оказалась у монстров — бой; HP-правила и lowHpGuard работают как раньше.
+- Денег: LLM только при решении принять/ответить, лимиты прежние; исполнитель плана LLM не вызывает.
+
+### Откат
+`scripts/lab plan bot01 cancel; scripts/lab plan bot02 cancel` (снимает точку), затем
+`scripts/lab stop live all`, `git checkout --detach 206a7a1a4f4bb678445c06471f21c050721e211a`, `scripts/lab start live all`.
+
+### Что прислать
+Вывод шагов 0–4 и `history` обоих планов в `docs/qa/HERMES-<sha7>.md`.
