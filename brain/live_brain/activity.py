@@ -13,11 +13,13 @@
     end_hunt — routine.to_town(); change_map — другая карта по опыту (maps.choose без текущей);
     keep_hunting — ничего; check_rumor — карта слуха на сессию (rumors.to_check, ORG-032; итог — rumors.check);
     explore — экспедиция на новую карту (explore.py, ORG-054);
-    gathering — вечерний круг у фонтана (tradition.py, ORG-058): social.visit к точке, вес × (0.5 + сила традиции).
+    gathering — вечерний круг у фонтана (tradition.py, ORG-058): social.visit к точке, вес × (0.5 + сила традиции);
+    healer_post — лекарь у собора (healer.py, ORG-069): social.visit к посту, стоять смену; условие healer_role.
 Факт завершения (proof) за proof_minutes — иначе занятие «не удалось» (activity_failed), а не «сделано»:
     moved — позиция сменилась; peer_near — житель рядом; supply_better — вес меньше или зелий больше;
     on_hunt_map — на карте охоты; in_town — на карте города; map_changed — карта охоты другая;
-    explore_arrived — дошёл до цели экспедиции; gathered — у точки круга и рядом житель (ORG-058).
+    explore_arrived — дошёл до цели экспедиции; gathered — у точки круга и рядом житель (ORG-058);
+    at_post — лекарь у поста (ORG-069).
 Цепочки предусловий (ORG-018, GOAP-лайт; activities.json chains): если занятие с лучшей оценкой недоступно из-за
     requires (light — рюкзак не тяжёлый, potions_min, zeny_min, hp_ok, peer_visible…), а занятия текущего режима
     с provides этого условия есть — короткая цепочка (вместе с целью не больше chains.max_steps): исправители по
@@ -114,6 +116,9 @@ class Activities:
             elif key == "gathering_time":                   # tradition: ORG-058 вечернее окно круга у фонтана
                 tradition = getattr(self.mind, "tradition", None)          # tradition:
                 ok = bool(tradition and tradition.window_open(self.clock()))  # tradition:
+            elif key == "healer_role":                      # healer: ORG-069 я лекарь, в городе поста, SP хватает
+                healer = getattr(self.mind, "healer", None)                    # healer:
+                ok = bool(healer and healer.can_post(state))                   # healer:
             elif key == "rumor_to_check":                   # events: ORG-032 есть слух, который стоит проверить
                 rumors = getattr(self.mind, "rumors", None)     # events:
                 ok = bool(rumors and rumors.to_check(state))    # events:
@@ -255,6 +260,10 @@ class Activities:
                 p = tradition.point                                 # tradition:
                 if await social.visit(p["map"], p["x"], p["y"], p.get("label", "к фонтану")):   # tradition:
                     social.next_walk = self.clock() + tradition.cfg["minutes"] * 60          # tradition: стоять в круге
+        elif name == "healer_post":                             # healer: ORG-069 к собору, стоять смену
+            healer = getattr(self.mind, "healer", None)             # healer:
+            if healer:                                              # healer:
+                await healer.start_post()                           # healer:
         elif name == "check_rumor":                             # events: ORG-032 проверить слух на сессию
             rumors = getattr(self.mind, "rumors", None)             # events:
             rec = rumors.to_check(state) if rumors else None        # events:
@@ -438,6 +447,9 @@ class Activities:
         elif proof == "gathered":                            # tradition: я у точки и рядом хоть один житель
             tradition = getattr(self.mind, "tradition", None)
             ok = bool(tradition and tradition.gathered(state)) or None
+        elif proof == "at_post":                             # healer: ORG-069 я у поста лекаря
+            healer = getattr(self.mind, "healer", None)
+            ok = bool(healer and healer.at_post(state)) or None
         elif proof == "map_changed":
             ok = (state.get("map") in self.mind.persona["hunt_maps"] and state.get("map") != b.get("map")) or None
         if ok:

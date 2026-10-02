@@ -37,6 +37,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
            140 strangers · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
            210 episodes
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
+Новые после таблицы: healer (ORG-069) — метка [heal:] 65, события support/chat_* 25, тик 135.  # healer:
 """
 import inspect
 import re
@@ -63,6 +64,7 @@ from .society import Society
 from .strangers import Strangers
 from .tradition import Tradition
 from .collection import Collection
+from .healer import Healer           # healer: ORG-069 лекарь у собора
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -93,6 +95,7 @@ MODULES = (
     Episodes,
     Tradition,
     Collection,        # после social: регистрирует тему card
+    Healer,            # healer: ORG-069 (тик 135, метка [heal:] 65, события support/чат 25)
 )
 
 

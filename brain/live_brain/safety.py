@@ -16,6 +16,8 @@
   ≤ 36 символов/байт без '#', не чаще CHAT_ROOM_GAP; закрыть — всегда (society:).
 - гильдия (guild_create/guild_invite/guild_say/guild_expect) — только от исполнителей правил (guild.py):
   имя по правилам rAthena, приглашение — только жителю (guild:).
+- навык на игрока (skill_on_player) — только от исполнителей правил (healer.py): только поддержка из
+  SUPPORT_CASTS, живому, SP ≥ CAST_MIN_SP %, не больше CAST_LIMIT за 10 минут (healer:).
 """
 import re
 import time
@@ -32,6 +34,10 @@ PLAN_ACTIONS += ("chat_room",)   # society: чат-комната-вывеска
 PLAN_ACTIONS += ("guild_create", "guild_invite", "guild_say", "guild_expect")   # guild: гильдия (guild.py, ORG-052)
 GUILD_NAME = re.compile(r"^[A-Za-z0-9 ]{1,23}$")   # guild: rAthena NAME_LENGTH 24, char_name_letters upstream
 PLAN_ACTIONS += ("explore",)     # explore: экспедиция на карту атласа (explore.py, ORG-054)
+PLAN_ACTIONS += ("skill_on_player",)   # healer: лечение и благословение игрока (healer.py, ORG-069)
+SUPPORT_CASTS = ("AL_HEAL", "AL_BLESSING", "AL_INCAGI")   # healer: тот же список — %CAST в brainBridge.pl
+CAST_LIMIT = 40                  # healer: кастов на игроков за 10 мин (каст раз в 5 с — с запасом на очередь)
+CAST_MIN_SP = 10                 # healer: при меньшем SP % не кастовать вовсе (лекарь сам держит порог выше)
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
 MAX_PRICE = 100_000_000          # market: цена лота между жителями
@@ -158,6 +164,8 @@ class SafetyPolicy:
             return {"action": "party_say", "text": text}, None
         if kind in ("guild_create", "guild_invite", "guild_say", "guild_expect"):                    # guild:
             return self.check_guild(kind, action, state)                                             # guild:
+        if kind == "skill_on_player":                                                                 # healer:
+            return self.check_cast(action, state, now)                                               # healer:
         if kind == "explore":                                                                         # explore:
             return self.check_explore(action, state)                                                 # explore:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
@@ -238,6 +246,23 @@ class SafetyPolicy:
         if not protocol and kind in ("say", "whisper"):
             self.texts[(str(clean.get("to", "")) if kind == "whisper" else "", clean["text"].lower())] = now
         return clean, None
+
+    def check_cast(self, action, state, now):                                                  # healer:
+        """healer: навык на игрока (ORG-069) — только поддержка из SUPPORT_CASTS, имя игрока ≤ 23 без '"',
+        не я, SP не ниже CAST_MIN_SP %, не больше CAST_LIMIT за WINDOW. Видимость и дальность проверяет мост."""
+        skill, to = action.get("skill"), " ".join(str(action.get("to", "")).split())
+        if skill not in SUPPORT_CASTS:
+            return None, "навык не из списка поддержки"
+        if not to or len(to) > 23 or '"' in to or to == state.get("name"):
+            return None, "неверная цель"
+        sp = state.get("sp_pct")
+        if sp is not None and sp < CAST_MIN_SP:
+            return None, f"SP {sp}% < {CAST_MIN_SP}%"
+        self.casts = self._recent(getattr(self, "casts", []), now)
+        if len(self.casts) >= CAST_LIMIT:
+            return None, f"лимит кастов {CAST_LIMIT}/10 мин"
+        self.casts.append(now)
+        return {"action": "skill_on_player", "skill": skill, "to": to}, None
 
     def check_explore(self, action, state):                                                     # explore:
         """explore: экспедиция (ORG-054) — карта из атласа, не pvp/gvg, не полигон новичков/перестроенный izlude

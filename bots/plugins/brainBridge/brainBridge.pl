@@ -59,6 +59,11 @@
 #                            emperium (число Emperium 714 в рюкзаке). События guild_create_result {code},
 #                            guild_invite_result {code}, guild_invite {guild} (чужое), guild_joined_auto {guild},
 #                            chat_guild {from, text}.
+#   skill_on_player {skill, to} -> [chat leave;] sp <id> <номер игрока>  # healer: лекарь (ORG-069): только навыки
+#                            поддержки %CAST (Heal, Blessing, Increase AGI), выученные; цель видна, жива, не дальше
+#                            $CAST_RANGE клеток, не я. rAthena не даёт кастовать в чат-комнате и сидя (clif.cpp
+#                            clif_parse_skill_toid: chatID, pc_issit) — chat leave здесь, встать — Task::UseSkill.
+#                            В state — support_skills {AL_HEAL: ур., ...}: выученные навыки из %CAST.
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -120,6 +125,8 @@ my $hooks = Plugins::addHooks(
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
+our %CAST = (AL_HEAL => 28, AL_INCAGI => 29, AL_BLESSING => 34);   # healer: навыки на игрока — только поддержка (ORG-069)
+our $CAST_RANGE = 9;                                              # healer: Range 9 у всех трёх (db/pre-re/skill_db.yml)
 
 sub onUnload {
 	Plugins::delHooks($hooks);
@@ -220,7 +227,30 @@ sub sendState {
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 		chat_room => chatTitle(),                                                 # society: комната, где я сейчас
 		guild     => guildState(), emperium => emperiumCount(),                   # guild: ORG-052
+		support_skills => supportSkills(),                                        # healer: ORG-069
 	});
+}
+
+sub supportSkills {                                                           # healer: выученные навыки поддержки
+	my $sk = ($char && $char->{skills}) || {};
+	return {map { $_ => $sk->{$_}{lv} + 0 } grep { $sk->{$_} && $sk->{$_}{lv} } sort keys %CAST};
+}
+
+sub castTarget {                                                              # healer: игрок для skill_on_player
+	my ($to) = @_;
+	return (undef, 'неверный адресат') unless defined $to && $to =~ /^[^"]{1,23}$/;
+	return (undef, 'на себя — не этим действием') if $char->{name} eq $to;
+	my @all = $playersList ? @{$playersList->getItems() || []} : ();
+	my ($p) = grep { defined $_->{name} && $_->{name} eq $to } @all;
+	return (undef, "$to не виден рядом") unless $p;
+	return (undef, "$to мёртв") if $p->{dead};
+	my ($me, $at) = ($char->{pos_to} || {}, $p->{pos_to} || {});
+	return (undef, "не знаю, где $to") unless defined $me->{x} && defined $at->{x};
+	my $d = abs($me->{x} - $at->{x}) > abs($me->{y} - $at->{y}) ? abs($me->{x} - $at->{x}) : abs($me->{y} - $at->{y});
+	return (undef, "$to дальше $CAST_RANGE клеток") if $d > $CAST_RANGE;
+	my $idx = $playersList->can('find') ? $playersList->find($p) : $p->{binID};
+	return (undef, "$to: нет номера в списке игроков") unless defined $idx && $idx >= 0;
+	return ($idx, undef);
 }
 
 sub identity {
@@ -408,7 +438,7 @@ our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav
 # society: чат-комната (ORG-026). Действия, которые двигают тело (или нужны без комнаты: лавка), — перед ними
 # chat leave; AI OpenKore о комнате не знает и упрётся в отказ сервера — chatGuard закрывает и тогда.
 my %MOVES = map { $_ => 1 } qw(follow meet_point hunt unstuck service give offer_sell offer_buy job_change
-                               sleep shop_open explore);   # explore: экспедиция двигает тело
+                               sleep shop_open explore skill_on_player);   # explore: экспедиция двигает тело; healer: каст
 my %CHAT_BUSY = map { $_ => 1 } qw(route move attack follow sellAuto buyAuto storageAuto take items_take
                                    NPC deal skill_use);
 sub inChat { return defined $currentChatRoom && $currentChatRoom ne ''; }
@@ -671,6 +701,14 @@ sub actionToCommand {
 		my ($ok, $desc) = $kind eq 'pet_tame' ? pets::startTame($a)
 		                : $kind eq 'pet_hatch' ? pets::startHatch($a) : pets::setup($a);
 		return $ok ? (1, {note => $desc}) : (0, $desc);
+	} elsif ($kind eq 'skill_on_player') {                                 # healer: Heal/Blessing/AGI на игрока (ORG-069)
+		my $skill = $a->{skill} // '';                                        # healer:
+		return (0, 'навык не из списка поддержки') unless exists $CAST{$skill};   # healer:
+		return (0, 'персонаж мёртв') if $char->{dead};                        # healer:
+		return (0, "навык $skill не выучен") unless supportSkills()->{$skill};   # healer:
+		my ($idx, $why) = castTarget(cleanText($a->{to}));                    # healer:
+		return (0, $why) unless defined $idx;                                 # healer:
+		return (1, "sp $CAST{$skill} $idx");                                  # healer: уровень — максимальный выученный
 	} elsif ($kind eq 'sleep') {
 		my $sec = $a->{seconds} // '';
 		return (0, 'неверная длительность сна') unless $sec =~ /^\d+$/ && $sec >= 600 && $sec <= 43200;
