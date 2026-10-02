@@ -35,7 +35,8 @@ usage() {
 Одна команда для жизни:
   up                    запустить мозги, ботов и сторожа (поднимает упавших каждые 30 с)
   down                  остановить сторожа, ботов и мозги (серверы не трогает)
-  report                сводка по каждому боту: где, чем занят, итоги суток, расходы
+  report                сводка по каждому боту: где, чем занят, итоги суток, расходы, ресурсы
+  resources             RSS/CPU тел и мозгов по /proc, SQLite и журналы, сколько ещё жителей влезет (ORG-047)
 Только чтение:
   doctor                проверка окружения, конфигов, БД (только SELECT), процессов
   status                процессы, порты, режим и активная версия
@@ -59,6 +60,7 @@ usage() {
                         для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
 Боты: LAB_BOTS в env-файле (по умолчанию "bot01"). LAB_MAX_ONLINE=N — сторож и up держат онлайн не больше N
                         бодрствующих жителей (ORG-044, сон по brain/personas/*.json); пусто — все из LAB_BOTS.
+                        Сверх лимита сторож просит мозг уснуть раньше; уснувший освобождает процесс тела.
   db-backup             дамп основной и лог-БД в backups/
 Население (ORG-040..043, docs/POPULATION.md):
   roster [check]        реестр жителей brain/world/roster.json против профилей и персон (только чтение)
@@ -795,16 +797,87 @@ may_start_bot() { # may_start_bot BOT ALLOWED... — можно ли подня�
   local bot="$1"; shift
   [[ -z "${LAB_MAX_ONLINE:-}" ]] && return 0
   [[ " $* " == *" $bot "* ]] || return 1
+  asleep_until "$bot" >/dev/null && return 1      # ops: ORG-044 спит по флагу мозга — не будим
   (( $(online_count) < LAB_MAX_ONLINE ))
 }
+
+# ops: ORG-044 мягкая смена. Онлайн (процессов тел) больше LAB_MAX_ONLINE — бодрствующих не убиваем, а просим
+# мозг уснуть раньше (команда sleep в run/brain/BOT.inbox — тот же канал, что scripts/lab plan; мозг уходит в
+# город и засыпает штатно, relog). Уснувший житель (флаг run/brain/BOT.asleep с часом пробуждения пишет мозг)
+# освобождает процесс тела: штатная остановка SIGTERM (gracefulStop), не kill -9; до пробуждения тело не
+# поднимается. Порядок: сначала спящие по хронотипу, потом «сверх лимита»; бодрствующие из смены не трогаются.
+SHIFT_ASK_GAP=1800                        # повторная просьба тому же жителю — не раньше чем через 30 мин
+SHIFT_NAP_H=${LAB_SHIFT_NAP_HOURS:-2}     # на сколько часов уснуть раньше (своя ночь ближе — до её конца)
+SHIFT_FREE_MIN=600                        # освобождать процесс, если до пробуждения больше 10 мин
+
+asleep_until() { # asleep_until BOT -> час пробуждения (unix) из флага мозга, если он в будущем
+  local f="$LAB_ROOT/run/brain/$1.asleep" t=""
+  [[ -f "$f" ]] || return 1
+  read -r t < "$f" || true
+  [[ "$t" =~ ^[0-9]+$ ]] && (( t > $(date +%s) )) && echo "$t"
+}
+
+shift_states() { # строки "botNN awake|asleep|limit" (scripts/lib/roster.py shift)
+  local pr; pr=$(profile_root)
+  python3 "$pr/scripts/lib/roster.py" --repo "$pr" shift --max "$LAB_MAX_ONLINE" --bots "$(lab_bots | tr '\n' ' ')"
+}
+
+ask_sleep() { # ask_sleep BOT ONLINE — просьба мозгу уснуть раньше, не чаще SHIFT_ASK_GAP
+  local b="$1" mark="$LAB_ROOT/run/supervisor/$1.bedtime" now; now=$(date +%s)
+  if [[ -f "$mark" ]] && (( now - $(<"$mark") < SHIFT_ASK_GAP )); then return 0; fi
+  if [[ -z "$(running_pid "brain-$b")" ]]; then
+    sup_log "$b: онлайн $2 > LAB_MAX_ONLINE=$LAB_MAX_ONLINE, но мозг не запущен — просить некого"; return 0
+  fi
+  [[ "$SHIFT_NAP_H" =~ ^[0-9]+([.][0-9]+)?$ ]] || SHIFT_NAP_H=2
+  echo "$now" > "$mark"
+  ( umask 077; mkdir -p "$LAB_ROOT/run/brain"
+    printf '{"cmd": "sleep", "hours": %s, "ts": %s, "by": "supervisor"}\n' "$SHIFT_NAP_H" "$now" >> "$LAB_ROOT/run/brain/$b.inbox" )
+  sup_log "$b: онлайн $2 > LAB_MAX_ONLINE=$LAB_MAX_ONLINE — прошу мозг уснуть раньше (на $SHIFT_NAP_H ч)"
+}
+
+shift_balance() { # один проход сторожа при LAB_MAX_ONLINE
+  [[ -n "${LAB_MAX_ONLINE:-}" ]] || return 0
+  local b st wake states n over now; local -a cand; now=$(date +%s)
+  for b in $(lab_bots); do                          # 1) уснувшие освобождают процесс
+    wake=$(asleep_until "$b") || continue
+    if [[ -z "$(running_pid "$b")" ]] || (( wake - now <= SHIFT_FREE_MIN )); then continue; fi
+    sup_log "$b: спит до $(date -d "@$wake" +%H:%M 2>/dev/null || echo "$wake") — освобождаю процесс тела (SIGTERM)"
+    ( stop_bot "$b" 0 ) >> "$LAB_ROOT/logs/supervisor.log" 2>&1 || sup_log "$b: остановка тела не удалась (см. выше)"
+  done
+  n=$(online_count); over=$(( n - LAB_MAX_ONLINE ))
+  (( over > 0 )) || return 0
+  states=$(shift_states) || { sup_log "диспетчер смен не ответил — мягкая смена пропущена"; return 0; }
+  for st in asleep limit; do                        # 2) лишние: спящие по хронотипу, затем сверх лимита
+    mapfile -t cand < <(awk -v s="$st" '$2 == s {print $1}' <<<"$states")
+    for b in "${cand[@]}"; do
+      (( over > 0 )) || return 0
+      [[ -n "$(running_pid "$b")" ]] || continue
+      over=$((over - 1))
+      asleep_until "$b" >/dev/null && continue      # уже спит, скоро проснётся — не просить
+      ask_sleep "$b" "$n"
+    done
+  done
+}
+
+# ops: ORG-047 замер ресурсов по /proc (brain/live_brain/resources.py); сторож пишет историю раз в 10 мин.
+RES_EVERY=${LAB_RES_EVERY:-600}
+resources_py() { # resources_py [--sample]
+  local pr; pr=$(profile_root)
+  # shellcheck disable=SC2046
+  ( cd "$pr/brain" && python3 -m live_brain.resources --lab-root "$LAB_ROOT" --bots $(lab_bots) "$@" )
+}
+cmd_resources() { load_env; resources_py; }
 
 cmd_supervise() {
   load_env
   ( umask 077; mkdir -p "$LAB_ROOT/run/supervisor" )
   sup_log "сторож запущен: боты $(lab_bots | tr '\n' ' ')${LAB_MAX_ONLINE:+, онлайн не больше $LAB_MAX_ONLINE}"
   trap 'sup_log "сторож остановлен"; exit 0' TERM INT
-  local b warned=0 allowed
+  local b warned=0 allowed res_at=$(( -RES_EVERY ))
   while true; do
+    if (( SECONDS - res_at >= RES_EVERY )); then    # ops: ORG-047 история RSS/CPU для report
+      res_at=$SECONDS; resources_py --sample >/dev/null 2>&1 || sup_log "замер ресурсов не удался"
+    fi
     if port_open "${PORT[map]}"; then
       warned=0
       allowed=$(shift_bots | tr '\n' ' ')
@@ -812,6 +885,7 @@ cmd_supervise() {
         [[ -n "$(running_pid "brain-$b")" ]] || sup_restart "brain-$b" start_brain "$b"
         if [[ -z "$(running_pid "$b")" ]] && may_start_bot "$b" "$allowed"; then sup_restart "$b" start_bot "$b"; fi
       done
+      shift_balance                                 # ops: ORG-044 мягкая смена
     elif (( ! warned )); then
       sup_log "map-server не отвечает на порту ${PORT[map]} — боты не перезапускаются, жду сервер"
       warned=1
@@ -855,6 +929,7 @@ cmd_report() {
   if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then
     echo "== оповещения (нужно внимание владельца; все: scripts/lab alerts)"; tail -n 5 "$LAB_ROOT/run/alerts.log"
   fi
+  resources_py || true                              # ops: ORG-047
 }
 
 # Команда оператора мозгу: строка JSON в run/brain/<bot>.inbox (мозг читает раз в секунду).
@@ -1110,6 +1185,7 @@ main() {
     up) cmd_up ;;
     down) cmd_down ;;
     report) cmd_report ;;
+    resources) cmd_resources ;;                     # ops: ORG-047
     chronicle) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain.chronicle --lab-root "$LAB_ROOT" \
                  --bots $(lab_bots) ${1:+--day "$1"} ) ;;
     alerts) load_env; if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then tail -n "${1:-30}" "$LAB_ROOT/run/alerts.log"; else info "оповещений нет"; fi ;;

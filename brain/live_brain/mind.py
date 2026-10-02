@@ -32,7 +32,7 @@ from .party import TAG as PARTY_TAG, Party
 from .plans import TAG, PlanExecutor, PlanStore
 from .postmortem import Postmortem
 from .rumors import TAG as INFO_TAG, Rumors             # events: слухи v2 (ORG-031), метка [info:<вид>:<карта>[:hops:автор]]
-from .routine import Routine
+from .routine import Routine, diary_only            # ops: ORG-049 фильтр ответа на повод diary
 from .safety import SafetyPolicy
 from .social import TAG as SOCIAL_TAG, Social   # social: общение без LLM
 from . import world_bus                                 # events: шина событий мира (ORG-045)
@@ -595,6 +595,8 @@ class Mind:
                 why = await self.plans.cancel("operator")
             elif cmd.get("cmd") in ("rest", "hunt") and self.routine:
                 why = await self.routine.force(cmd["cmd"])
+            elif cmd.get("cmd") == "sleep" and self.routine:      # ops: ORG-044 сторож просит уснуть раньше
+                why = self.routine.request_sleep(cmd.get("hours"))
             elif cmd.get("cmd") == "ask" and self.economy:
                 why = await self.economy.ask(str(cmd.get("item", "")), cmd.get("amount"), force=True)
             else:
@@ -680,6 +682,10 @@ class Mind:
                                  "dropped": decision.get("actions")})
             log.info("ответ модели устарел (%s) — действия не исполняю", stale)
             decision = dict(decision, actions=[], goal=None)
+        if kind == "diary":                           # ops: ORG-049 — только запись дневника по фактам дня
+            decision, rejected = diary_only(decision, (context or {}).get("facts", ""))
+            if rejected:                              # ops:
+                self.write_decision({"type": "diary_rejected", "reason": reason, "rejected": rejected})
         await self.apply(decision, reason, latency, usage)
 
     def build_prompt(self, reason, context):
