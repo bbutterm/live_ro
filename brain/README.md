@@ -20,9 +20,13 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
   - смерть и новый уровень — в память и повод для LLM;
   - бой и лут — только журнал.
 
-  `JevGate` — место под маленькую локальную модель (оценка событий, выбор ограниченной цели,
-  решение «нужен ли LLM»). Контракт описан в `gate.py`. **Не установлена и не запускается**:
-  `BRAIN_GATE=jev` сейчас откатывается на `rules`.
+  `JevGate` (`BRAIN_GATE=jev`, `JEV_*`) — быстрая внешняя модель по OpenAI-совместимому API.
+  Для лички, обращений, смерти и уровня за секунды решает важность, нужен ли DeepSeek и короткую
+  реплику (только say/whisper). Сбой, таймаут или лимит `JEV_DAILY_LIMIT` — решают правила.
+  Локально ничего не устанавливается.
+- **Несколько ботов:** `LAB_BOTS`, характер `brain/personas/<bot>.json` на каждого. Мозги знают
+  друг друга как жителей: не больше `BRAIN_PEER_REPLIES_PER_HOUR` ответов другому боту в час, повод
+  заговорить раз в `BRAIN_PEER_SMALLTALK` секунд (только при включённом LLM).
 - **SafetyPolicy** (`safety.py`) — критическая безопасность на правилах; через неё проходит любое
   действие, и от правил, и от модели:
   - мёртвому персонажу никаких действий;
@@ -66,7 +70,8 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 ## Команды
 ```sh
 scripts/lab brain-check     # один короткий платный запрос; при BRAIN_LLM=off — CHECK SKIP без запроса
-scripts/lab start live      # мозг, затем bot01 (с плагином brainBridge)
+scripts/lab start live [BOT|all]   # мозг, затем бот (с плагином brainBridge)
+scripts/lab brain-check-jev  # один запрос к JEV (только при BRAIN_GATE=jev)
 scripts/lab start brain     # только мозг (бот уже запущен с этим commit)
 scripts/lab stop brain      # только мозг; бот продолжает играть сам
 scripts/lab status

@@ -392,6 +392,8 @@ scripts/lab stop brain && scripts/lab start brain && sleep 3 && grep 'памят
 
 ## Задание №5: первый результат без LLM — событие из игры → правило → команда в игре
 
+**Входит в задание №6 как этап A.** Отдельно не выполнять.
+
 **Ветка:** `claude/brain-coordinator`
 **Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
 Включает gracefulStop v2 (задание №3) и мозг из задания №4. **Платных вызовов нет.**
@@ -468,3 +470,131 @@ tail -n 2 $LAB_ROOT/state/bot01/decisions.jsonl
 
 ### Что прислать
 Вывод шагов 1–5 (без ключа), в `docs/qa/HERMES-<sha7>.md`.
+
+---
+
+## Задание №6: DeepSeek + JEV + два бота (Arkady и Mirela) и их общение
+
+**Ветка:** `claude/brain-coordinator`
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+Владелец согласовал включение DeepSeek через OpenRouter и JEV. Лимиты ниже — потолок расходов.
+
+Этапы идут по порядку. **Этап провален — остановиться и прислать вывод**, дальше не идти.
+login/char/map **не перезапускать** ни на одном этапе.
+
+### Что изменилось (относительно задания №5)
+- JEV — быстрый gate (`BRAIN_GATE=jev`, OpenAI-совместимый API `JEV_*`). Для лички, обращений,
+  смерти и уровня решает за секунды: ответить короткой фразой (say/whisper), позвать DeepSeek или
+  промолчать. Сбой JEV — решают правила.
+- DeepSeek через OpenRouter (`BRAIN_LLM=openrouter`) — продуманные решения и разговоры.
+- Два бота: bot01 = Arkady, bot02 = **Mirela** (персонаж создаётся с этим именем). У каждого свой
+  мозг (`brain-bot01`, `brain-bot02`) и своя память `state/<bot>/memory.sqlite`.
+- Общение жителей: личка между ботами, не больше 6 ответов другому боту в час, повод заговорить —
+  раз в 30 минут. Всё проходит SafetyPolicy (лимиты чата).
+- `scripts/lab db-add-account bot02`: создаёт игровой аккаунт (нужен бэкап за 24 ч).
+
+### Этап A — код и первый результат без платных вызовов
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa
+export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive
+git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules)    # ожидается OK (22 теста)
+grep -E '^(BRAIN_LLM|BRAIN_GATE)=' $LAB_ROOT/secrets/live_ro.env          # должно быть off / rules (или нет строк)
+scripts/lab stop bot01
+scripts/lab start live bot01
+sleep 90
+grep -nE '\[brainBridge\]' $LAB_ROOT/logs/bot01/console.log | tail -5
+tail -n 4 $LAB_ROOT/state/bot01/decisions.jsonl
+```
+Ожидание: `[brainBridge] решение мозга -> c Arkady снова на поле...`, в decisions — `"source": "rule"` и
+`ack ok`. Приветствие было меньше 6 ч назад — тогда с любого аккаунта написать Arkady `!status`.
+
+### Этап B — второй бот Mirela
+В `$LAB_ROOT/secrets/live_ro.env` (права 600) добавить/исправить:
+```
+LAB_BOTS=bot01 bot02
+BOT02_USER=<логин, 1-23 ASCII>
+BOT02_PASS=<пароль, 1-23 ASCII>
+BOT02_SEX=F
+BOT02_RUNNER=tmux
+```
+```sh
+scripts/lab db-backup
+scripts/lab db-add-account bot02          # ожидается "аккаунт bot02 создан: account_id N"
+scripts/lab start live bot02
+tmux attach -t live_ro_bot02
+```
+В консоли OpenKore создать персонажа **с именем `Mirela`** (слот 0, параметры по умолчанию),
+дождаться входа на карту. Выйти из tmux: `Ctrl-b d`. Если имя занято — остановиться и сообщить.
+```sh
+scripts/lab doctor | grep -E 'bot0[12]:'    # ожидается: bot02: Mirela slot 0 ...
+scripts/lab status
+```
+
+### Этап C — DeepSeek (платно, с лимитом)
+В env:
+```
+BRAIN_LLM=openrouter
+OPENROUTER_MODEL=deepseek/deepseek-chat     # сверить точное имя в каталоге openrouter.ai/models
+BRAIN_DAILY_LIMIT=150                       # на каждого бота: всего ≤ 300 запросов в сутки
+BRAIN_DECIDE_INTERVAL=300
+```
+```sh
+scripts/lab brain-check bot01         # ожидается CHECK OK ... приветствие Arkady
+scripts/lab stop brain all && scripts/lab start brain all
+```
+
+### Этап D — JEV
+В env (значения JEV даёт владелец; ключ только здесь):
+```
+BRAIN_GATE=jev
+JEV_API_BASE=<базовый URL, к нему добавляется /chat/completions>
+JEV_API_KEY=<ключ>
+JEV_MODEL=<имя модели>
+JEV_DAILY_LIMIT=2000
+```
+```sh
+scripts/lab brain-check-jev bot01     # ожидается CHECK OK (JEV ...) {...}
+```
+Если `CHECK FAIL` с HTTP 404/400 или ответ не в формате chat/completions — API JEV не OpenAI-совместимый:
+вернуть `BRAIN_GATE=rules`, прислать текст ошибки и ссылку на документацию JEV, этап E выполнять без JEV.
+```sh
+scripts/lab stop brain all && scripts/lab start brain all
+scripts/lab status
+```
+
+### Этап E — наблюдение 20 минут: жизнь и общение
+```sh
+export LAB_ROOT=/opt/ro-bot-lab
+for b in bot01 bot02; do echo "== $b"; tail -n 15 $LAB_ROOT/logs/$b/brain.log; done
+for b in bot01 bot02; do echo "== $b"; grep -E '"type": "(decision|jev|ack)"' $LAB_ROOT/state/$b/decisions.jsonl | tail -n 8; done
+grep -hE '\(From: (Arkady|Mirela)\)|\(To: (Arkady|Mirela)\)' $LAB_ROOT/logs/bot0*/console.log | tail -n 10
+for b in bot01 bot02; do python3 -c "import sqlite3,time;d=sqlite3.connect('$LAB_ROOT/state/$b/memory.sqlite');print('$b',d.execute('select provider,count(*),sum(ok) from llm_calls where ts>?',(time.time()-86400,)).fetchall())"; done
+```
+
+### Ожидаемый результат (не проверен)
+| Этап | Ожидание |
+|---|---|
+| A | первый результат без LLM: правило → команда в игре, `ack ok` |
+| B | Mirela создана, входит на `prt_fild08`, `doctor` показывает её |
+| C | `CHECK OK` от DeepSeek |
+| D | `CHECK OK (JEV ...)`, в brain.log `gate rules+jev(...)` |
+| E | в decisions.jsonl обоих ботов есть `source: llm` и/или `jev` с `whisper` друг другу и `ack ok`; в console.log строки `(From: Mirela)` у Arkady и `(From: Arkady)` у Mirela; вызовов DeepSeek ≤ лимита |
+
+Доказательство общения: шёпот одного бота (`ack ok` + `(To: X)` в его console.log) **и** получение другим
+(`(From: Y)` в его console.log + событие и решение в его decisions.jsonl). Только строки `decision` — не доказательство.
+
+### Риски
+- Расходы: DeepSeek ≤ 150 запросов в сутки на бота, JEV ≤ 2000. Дополнительно поставьте лимит ключа в кабинете OpenRouter.
+- БД игры: только новый аккаунт bot02 (этап B), после бэкапа. Персонаж создаёт сам сервер при входе.
+- Чат: Arkady и Mirela пишут в общий чат при входе и по решению модели (не больше 3 сообщений за 10 минут на бота).
+
+### Откат
+- Выключить платные вызовы: `BRAIN_LLM=off`, `BRAIN_GATE=rules`, затем `scripts/lab stop brain all && scripts/lab start brain all`.
+- Убрать второго бота: `scripts/lab stop live bot02`, `LAB_BOTS=bot01`. Аккаунт остаётся в БД (удалять только по решению владельца).
+- Код: `git checkout --detach d24e12841f2d286b46c69c710b3e22cec391d9db`, `scripts/lab stop all` (кроме серверов: `stop live all`), `scripts/lab start bot01`.
+
+### Что прислать
+Вывод этапов A–E (без ключей и паролей) в `docs/qa/HERMES-<sha7>.md`; на каком этапе остановились, если остановились.
