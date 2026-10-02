@@ -1676,6 +1676,157 @@ humanize(text, names)            # летопись: «погиб на prt_fild0
 
 ---
 
+### Т-27 · ORG-071 · Рыночный день
+
+**Цель.** Раз в неделю (суббота календаря мира, `calendar.json` → `weekdays.6` «рыночный день») жители в городе
+сходятся к рыночной площади Пронтеры, выставляют лишнее и торгуют между собой заметно активнее; заказы публикуются
+чаще; в летописи — «рыночный день: N сделок». Новых протоколов сделки нет: работают ORG-033 (`[offer:]`), лавка ORG-034,
+вывески ORG-026 и заказы ORG-070 — меняются только их пороги и точка прогулки на один день.
+
+**Файлы.** `brain/live_brain/market.py` (новый модуль `MarketDay`), `brain/live_brain/modules.py` (одна строка и
+импорт, `# market:`), `brain/live_brain/chronicle.py` (строки летописи, `# market:`), `brain/world/goals.json` (раздел
+`market_day`), `brain/tests/test_market.py`, `docs/ECONOMY.md`, `docs/ORGANIC_BACKLOG.md`.
+`economy.py`, `orders.py`, `society.py`, `social.py`, `mind.py` не правятся.
+
+**Интерфейсы.**
+```python
+class MarketDay:   # ATTR market_day, FEATURE market_day, CONFIG market_day, ENABLED True,
+                   # REQUIRES (world, calendar, economy), ARGS world, TICK_ORDER 15 (после routine, до economy)
+    def is_market(self, now=None) -> bool   # день недели мира в cfg.weekdays (по умолчанию [6])
+    def tick(self)                          # пороги дня, сбор на площадь, лавка Merchant, итог прошлого дня
+    def deals(self, start, end) -> dict     # {"deals", "sold", "bought", "vend"} по фактам памяти
+CHRONICLE_LINES = {"market_day_summary": ..., "market_day_open": ...}
+```
+- **Точка.** `market` = `prontera 155,180` («к рыночной площади у фонтана»): все клетки ±2 проходимы
+  (`db/re/map_cache.dat`), до ближайшего NPC ≥ 5 клеток (лавке и комнате мешает NPC ближе
+  `min_npc_vendchat_distance: 3`, `conf/battle/player.conf:191`), до варпа (`prt03`/`prt06`) ≥ 20 клеток. При создании
+  модуль добавляет точку в копию `social.cfg.points` (вес по умолчанию 0 — в обычный день туда не ходят, кроме как к
+  другу).
+- **Пороги дня** (меняются в начале рыночного дня, в обычный день возвращаются к исходным, снятым при создании):
+  `economy.market.offer_gap_minutes × 0.5`, `trades_per_day + 4`, `shop_hours → 2`, `economy.prices.cfg.valuable_lot ×
+  0.5` (выставляют и менее ценное «лишнее»), `orders.cfg.post_gap_hours × 0.5`, `society.cfg.room_sign_chance → 0.9`
+  (вывеска «Продаю/Куплю» вместо «Отдыхаю»), вес точки `market` в `social.cfg.point_weights` → 6.
+- **Сбор.** В рыночный день, когда житель в режиме `town` дошёл до отдыха, один раз за день — `social.walk_now()`;
+  точку выбирает обычная прогулка (вес 6 против 1–2 у остальных), запись `market_day_open`
+  «Сегодня рыночный день — иду на площадь». Прогулки дальше идут как обычно, площадь чаще всех.
+- **Лавка.** Merchant с `vend.can` (MC_VENDING и тележка), лавка не открыта, тело у точки `market` (≤ 3 клетки) —
+  один раз за день сбросить `econ_shop_ts`: `economy.maybe_shop` в том же такте откроет лавку прямо на площади.
+- **Итог.** Первый такт следующего дня после рыночного: `market_day_summary {date, deals, sold, bought, vend, zeny}`
+  по событиям памяти `trade_sold`/`trade_bought`/`vend_sold` за тот день (часовой пояс мира), важность 2;
+  летопись: «рыночный день: N сделок (продал X, купил Y, из лавки Zz)». Сделок 0 — запись всё равно (факт тишины).
+- Выключатель: `BRAIN_DISABLE=market_day` или `goals.json market_day.enabled=false`; без календаря модуль не создаётся.
+
+**Тесты.** Суббота — пороги ×0.5/+4, вывеска 0.9, вес площади 6; воскресенье — пороги исходные; сбор один раз за день;
+лавка Merchant у площади (сброс `econ_shop_ts`, `offer_shop` в том же такте) и не у площади — нет; итог дня по
+фактам памяти (сделки субботы, но не пятницы) и строка летописи; точка площади проходима и далеко от NPC/варпов
+(по `map_cache.dat`, если есть upstream); выключатель; таблица `test_mind_order` (новый тик 15).
+
+**Готово.** Тесты зелёные; `docs/ECONOMY.md`; статус ORG-071 «код, в игре не проверено».
+
+---
+
+### Т-28 · ORG-072 · Заточка у кузнеца — ритуал без риска
+
+**Уточнение по скриптам (идея ORG-072 устарела).** Vestri (`npc/re/merchants/refine.txt:25`) точит только +10 и выше
+(`refinenew`: «I only refine items that are Level 10 or higher»), для обычной заточки он не нужен. Обычный кузнец
+Пронтеры — **Hollgrehenn** `prt_in,63,60` (`npc/merchants/refine.txt:526`). При `feature.refineui: on`
+(`conf/battle/feature.conf:85`; PACKETVER 20180620 ≥ 20161012 — `battle.cpp:9087`) он после `mes`/`close2` открывает
+**Refine UI** (`refineui()`), а не текстовое меню: выбор предмета и руды идёт пакетами 0AA1/0AA3, сервер присылает
+список руды с шансом (0AA2, `clif_refineui_info`: `chance = Rate / 100`). OpenKore это умеет: команда
+`refineui select|refine|cancel` (`Commands.pm:8136`), но **надетый предмет не выбирает** («Cannot select equipped»,
+`Commands.pm:8166`) — оружие нужно снять (`uneq`) и потом надеть (`eq`). Итог заточки — пакет 0188 `item_upgrade`
+(`Receive.pm:7393`): OpenKore сам меняет `upgrade` предмета в инвентаре. Безопасный предел renewal
+(`db/re/refine.yml`, `Rate: 10000`; совпадает с `.@safe` в `refinemain`, `refine.txt:692-752`): оружие ур. 1 — **+7**
+(не +4), ур. 2 — +6, ур. 3 — +5, ур. 4 — +4, броня — +4. Цена попытки: Phracon 50z (оружие ур. 1), Emveretarcon 200z
+(ур. 2), Oridecon 5000/20000z (ур. 3/4). Руда — у **Vurewell** `prt_in,56,68` (`refine.txt:970`, `phramain`:
+Phracon 200z, Emveretarcon 1000z, ввод количества до 500). Dietrich `prt_in,63,69` в renewal — два NPC в одной клетке
+(`refine.txt:1084` и `re/merchants/refine.txt:646`, marketshop), поэтому не используется.
+
+**Цель.** Житель с лишними зени иногда идёт к Hollgrehenn и точит **своё** оружие ур. 1–2 только до безопасного
+уровня — без риска поломки. Ритуал: волнение в речи перед заточкой, итог — только по факту сервера
+(`upgrade` предмета вырос, в следующем state предмет `+N`). Риск выше предела — не делается (идея «жадный рискует»
+отложена: поломку проверить можно только в игре). **По умолчанию выключено** (`goals.json refine.enabled: false`):
+путь через Refine UI не проверен на живом сервере.
+
+**Файлы.** `bots/plugins/refine/refine.pl` (новый плагин-исполнитель), `bots/tests/refine.t`,
+`bots/plugins/brainBridge/brainBridge.pl` (действие `refine`, поле state `refine`, `# refine:`),
+`brain/live_brain/refine.py` (модуль `Refine`), `brain/live_brain/safety.py` (`refine` в PLAN_ACTIONS, проверка,
+`# refine:`), `brain/live_brain/modules.py`, `brain/live_brain/chronicle.py`, `scripts/gen_refine.py` →
+`brain/world/refine.json` (уровни оружия из `db/re/item_db_equip.yml`, пределы из `db/re/refine.yml`, NPC и цены
+со ссылками на строки), `brain/world/goals.json` (раздел `refine`), профили ботов (загрузка плагина),
+`brain/tests/test_refine.py`, `docs/ECONOMY.md`, `docs/ORGANIC_BACKLOG.md`.
+
+**Действие моста** `refine {id, item, inv, target, ore, buy, smith:{map,x,y}, shop:{map,x,y}}` (только от правил):
+шаги плагина — (1) `buy > 0`: дойти до Vurewell, `talknpc 56 68 c r~/^Phracon/ c d<buy> n` (или Emveretarcon), ждать
+роста руды; (2) дойти до Hollgrehenn, `talknpc 63 60`, ждать `$refineUI` (пакет 0AA0); (3) надет — `uneq <inv>`;
+(4) `refineui select <inv>`, ждать список руды; (5) только если у руды `chance == 100` — `refineui refine <inv> <ore> 0`,
+ждать `upgrade + 1` (хук `packet/item_upgrade`); повтор до `target`; шанс < 100 — стоп «дальше риск»; (6) `refineui
+cancel`, `eq <inv>`. Итог — событие `refine_result {id, ok, item, from, to, reason}`; тайм-ауты шагов, смерть,
+пропажа предмета — провал. Safety: предмет и руда — целые ID, руда только 1010/1011, `target` 1..10, `buy` 0..20.
+Мост: не мёртв, нет сделки/лавки, плагин загружен, шаг не идёт.
+
+**Мозг** (`Refine`: ATTR refine, CONFIG refine, ENABLED False, REQUIRES world, ARGS world, TICK_ORDER 105, событие
+`refine_result` own): раз в `check_minutes` (30) — режим `town`, дошёл, карта Пронтеры, нет плана/сделки/этапа квеста/
+экспедиции/лавки, арбитр отдаёт тело (`may_move("plan")`), с прошлой попытки ≥ `gap_days` (3), шанс `chance` (0.3).
+Оружие из state (`refine.weapon {id, inv, upgrade, equipped}`), уровень из `refine.json`; предел — безопасный;
+шагов `min(предел − upgrade, max_steps 3)`; стоимость = шаги × плата + докупка руды; после неё остаётся ≥
+`economy.keep_zeny` + копилка мечты и стоимость ≤ `spare_share` (0.25) излишка — иначе не идёт. Речь (`say`,
+одна реплика): перед — волнение («Ну, с богом… Несу Knife к Hollgrehenn. Только до +7, без риска.»), после
+подтверждения — радость («Knife теперь +7! Руки до сих пор дрожат.») с эмоцией. Доказательство: `refine_result ok`
+**и** в state `refine.weapon.upgrade ≥ to` для того же предмета за 60 с; иначе `refine_unverified`. Память/летопись:
+`refine_done {item, name, from, to, zeny}` (3), `refine_failed {reason}` (1); шина мира `refine_done` (2).
+
+**Тесты.** Perl: запуск и отказы, покупка руды по последовательности, открытие UI, снятие оружия, выбор, refine
+только при шансе 100, стоп при шансе < 100, рост `upgrade` по хуку, `eq` обратно, итог, тайм-аут. Python: генератор
+детерминирован (Knife — ур. 1, предел 7), выбор шагов и стоимость, отказ без лишних зени/вне города/при сделке,
+ритуал (реплики), подтверждение по state и `refine_unverified`, safety, выключено по умолчанию.
+
+**Готово.** Тесты зелёные; `docs/ECONOMY.md`; статус ORG-072 «код, выкл., в игре не проверено».
+
+---
+
+### Т-29 · ORG-067 · Взгляд на собеседника
+
+**Цель.** Во время разговора и встречи жители поворачиваются друг к другу, а не стоят спиной. Без спама: не чаще
+раза в 20 с, к одному собеседнику — раз в минуту, только в городе.
+
+**Файлы.** `brain/live_brain/gaze.py` (модуль `Gaze`), `brain/live_brain/modules.py`, `brain/live_brain/safety.py`
+(`look_at`, `# look:`), `bots/plugins/brainBridge/brainBridge.pl` (действие `look_at`, направление тела игроков в
+`players`, `# look:`), `bots/tests/brain_bridge.t`, `brain/world/goals.json` (раздел `gaze`), `brain/tests/test_gaze.py`,
+`docs/SOCIETY.md`, `docs/ORGANIC_BACKLOG.md`.
+
+**OpenKore/rAthena.** `lookp <player #>` (`Commands.pm:409`, `cmdLookPlayer` → `lookAtPosition` → пакет смены
+направления); номер — индекс `@playersID`, тот же, что у `sp` (`castTarget`). Сервер (`clif_parse_ChangeDir`,
+`clif.cpp:11609`) меняет направление без проверок `pc_cant_act` (можно сидя и в чат-комнате) и рассылает его
+соседям (`clif_changed_dir`, AREA_WOS) — у наблюдателя OpenKore обновляет `look.body` актёра (`actor_look_at`,
+`Receive.pm:8443`). Это и есть доказательство: мост кладёт `dir` (0–7) в `players` state.
+
+**Интерфейсы.**
+```python
+class Gaze:   # ATTR gaze, FEATURE gaze, CONFIG gaze, ENABLED True, REQUIRES (world, peers, social), ARGS world,
+              # TICK_ORDER 75 (после social), ECHO [("social", r"\[chat:", "on_chat", 20)]
+    def tick(self)             # новые social_said (peer) и meeting_confirmed (partner) из памяти -> look_at
+    def on_chat(self, sender)  # пришла реплика жителя [chat:] -> повернуться к нему
+def direction(src, dst) -> int # как Misc::lookAtPosition: round((360 - deg(atan2(dx, dy))) / 45) % 8
+def faces(player, me) -> bool  # player.dir смотрит на меня
+```
+- Повернуться: собеседник виден в `state.players` ≤ `near` (9) клеток, я в городе (карта распорядка), жив, не иду
+  (`activity` не route/move/attack), к этому жителю — не чаще `peer_gap_seconds` (60), всего — не чаще `gap_seconds` (20).
+  Действие `{"action": "look_at", "name": peer}` (protocol=True).
+- Подтверждение: в следующих state житель видит `dir` собеседника, направленный на себя (`faces`) — счётчик
+  `gaze.seen` в kv; свои повороты — `gaze.sent`. Решения — в `decisions.jsonl` (`type: gaze`), без памяти (не шум).
+- Safety: `look_at` только от правил; имя ≤ 23 без `"`; карта — город (`chat_maps`); не чаще `LOOK_GAP` 20 с.
+- Мост: игрок по имени в `$playersList` (не я), не дальше 14 клеток → `lookp <#>`; иначе отказ с причиной.
+
+**Тесты.** Python: поворот к собеседнику после `social_said`, к партнёру встречи, на входящую `[chat:]`; лимиты 20/60 с;
+вне города и в пути — нет; невидимый — нет; `direction` совпадает с формулой OpenKore на 8 румбах; `faces` и счётчик
+`seen`; safety (частота, город, имя). Perl (`brain_bridge.t`): `lookp` с номером по имени, невидимый/далёкий/я —
+отказ, `dir` в `players`.
+
+**Готово.** Тесты зелёные; `docs/SOCIETY.md`; статус ORG-067 «код, в игре не проверено».
+
+---
+
 ## 3. Слабые места текущей системы, мешающие органичности
 
 Строки — по ветке `agent/ideas` (`272d425`).
