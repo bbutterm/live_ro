@@ -326,7 +326,8 @@ class Economy:
             return "не знаю своих запасов"
         if self.have(item) - amount < int(rule.get("keep", 0)):
             return "самому мало"
-        if item == "z" and self.have(item) - amount < int(rule.get("keep", 0)) + self.reserve():   # dreams: копилка
+        if (item == "z" and self.affinity(sender) < 3                       # review3: другу в беде — и из копилки
+                and self.have(item) - amount < int(rule.get("keep", 0)) + self.reserve()):          # dreams: копилка
             return "коплю на мечту"                                                                # dreams: ORG-073
         return None
 

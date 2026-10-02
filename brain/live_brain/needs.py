@@ -41,6 +41,9 @@ WEIGHTS = {   # мотив -> (черта, базовый вес): вес = ба
 }
 
 
+BOOST_RANGE = (0.6, 2.0)   # общий предел поправок мотива: шесть множителей вместе давали до ×4.9 (ревизия №3)
+
+
 class Needs:
     def __init__(self, mind, clock=None):
         self.mind = mind
@@ -97,12 +100,14 @@ class Needs:
         cal = getattr(self.mind, "calendar", None)                  # calendar: день недели и праздник (ORG-059)
         director = getattr(self.mind, "director", None)             # director: повод/затишье режиссёра (ORG-086)
         dream = getattr(self.mind, "dream", None)                   # dreams: мотив этапа мечты (ORG-081)
-        return {k: round(v * self.weight(k) * (aims.boost(k) if aims else 1.0)
-                         * (dream.boost(k) if dream else 1.0)                    # dreams:
-                         * (rivalry.boost(k) if rivalry else 1.0)                # rivalry:
-                         * (cal.factor(k, self.clock()) if cal else 1.0)         # calendar:
-                         * (director.boost(k) if director else 1.0), 2)          # director:
-                for k, v in self.values().items()}
+        def mult(k):   # произведение поправок мира (цели, мечта, соперник, календарь, режиссёр) — в пределах BOOST_RANGE
+            m = ((aims.boost(k) if aims else 1.0)
+                 * (dream.boost(k) if dream else 1.0)                    # dreams:
+                 * (rivalry.boost(k) if rivalry else 1.0)                # rivalry:
+                 * (cal.factor(k, self.clock()) if cal else 1.0)         # calendar:
+                 * (director.boost(k) if director else 1.0))             # director:
+            return min(BOOST_RANGE[1], max(BOOST_RANGE[0], m))
+        return {k: round(v * self.weight(k) * mult(k), 2) for k, v in self.values().items()}
 
     def top(self, n=3):
         w = self.weighted()

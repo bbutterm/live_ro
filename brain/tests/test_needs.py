@@ -53,6 +53,17 @@ class NeedsTest(unittest.TestCase):
         self.assertAlmostEqual(boosted["social"], round(plain["social"] * 1.5, 2), delta=0.011)
         self.assertEqual(boosted["safety"], plain["safety"])
 
+    def test_world_boosts_capped(self):
+        """Поправки мира перемножаются, но вместе не больше BOOST_RANGE (ревизия №3: было до ×4.9)."""
+        from live_brain.needs import BOOST_RANGE
+        plain = self.n.weighted()
+        big = SimpleNamespace(boost=lambda need: 1.5, factor=lambda need, now: 1.5)
+        self.mind.aims = self.mind.dream = self.mind.rivalry = self.mind.director = big
+        self.mind.calendar = big
+        capped = self.n.weighted()
+        for k in plain:
+            self.assertLessEqual(capped[k], round(plain[k] * BOOST_RANGE[1], 2) + 0.011)
+
     def test_characters_differ(self):
         arkady = Needs(SimpleNamespace(mem=self.mem, persona=persona("bot01"), routine=None,
                                        ctx=SimpleNamespace(last={}), state={}))
