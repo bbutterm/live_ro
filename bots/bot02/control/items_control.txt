@@ -1756,3 +1756,97 @@ Spearman Scroll 10 0 0 0
 25150 0 0 0 0 0 # Hugging_Alice_Pilow
 26100 0 0 0 0 0 # Paradise_Foxtail_Staff_II
 26101 0 0 0 0 0 # Paradise_Foxtail_Staff_III
+
+##### ПИТОМЦЫ (live_ro, ORG-051; scripts/gen_pets.py --items-control) #####
+# Яйца, Pet Incubator, Pet Food — не продавать; предмет приручения — держать 2, лишнее продать.
+# Ниже правила «all 0 0 1», поэтому действует это.
+537 0 0 0 # Pet Food
+619 2 0 1 # Unripe Apple
+620 2 0 1 # Orange Juice
+621 2 0 1 # Bitter Herb
+622 2 0 1 # Rainbow Carrot
+623 2 0 1 # Earthworm the Dude
+624 2 0 1 # Rotten Fish
+625 2 0 1 # Rusty Iron
+626 2 0 1 # Monster Juice
+627 2 0 1 # Sweet Milk
+628 2 0 1 # Well-Dried Bone
+629 2 0 1 # Singing Flower
+630 2 0 1 # Dew Laden Moss
+631 2 0 1 # Deadly Noxious Herb
+632 2 0 1 # Fatty Chubby Earthworm
+633 2 0 1 # Sweet Potato
+634 2 0 1 # Tropical Banana
+635 2 0 1 # Orc Trophy
+636 2 0 1 # No Recipient
+637 2 0 1 # Old Broom
+638 2 0 1 # Silver Knife of Chastity
+639 2 0 1 # Armlet of Obedience
+640 2 0 1 # Shining Stone
+641 2 0 1 # Contract in Shadow
+642 2 0 1 # Book of the Devil
+643 0 0 0 # Pet Incubator
+659 2 0 1 # Her Heart
+9001 0 0 0 # Poring Egg
+9002 0 0 0 # Drops Egg
+9003 0 0 0 # Poporing Egg
+9004 0 0 0 # Lunatic Egg
+9005 0 0 0 # Picky Egg
+9006 0 0 0 # Chonchon Egg
+9007 0 0 0 # Steel Chonchon Egg
+9008 0 0 0 # Hunter Fly Egg
+9009 0 0 0 # Savage Babe Egg
+9010 0 0 0 # Baby Desert Wolf Egg
+9011 0 0 0 # Rocker Egg
+9012 0 0 0 # Spore Egg
+9013 0 0 0 # Poison Spore Egg
+9014 0 0 0 # Peco Peco Egg
+9015 0 0 0 # Smokie Egg
+9016 0 0 0 # Yoyo Egg
+9017 0 0 0 # Orc Warrior Egg
+9018 0 0 0 # Munak Egg
+9019 0 0 0 # Dokebi Egg
+9020 0 0 0 # Sohee Egg
+9021 0 0 0 # Isis Egg
+9022 0 0 0 # Green Petite Egg
+9023 0 0 0 # Deviruchi Egg
+9024 0 0 0 # Bapho Jr. Egg
+9025 0 0 0 # Bongun Egg
+9028 0 0 0 # Hard Rice Cake
+9029 0 0 0 # Christmas Goblin's Egg
+9030 0 0 0 # Green Maiden Egg
+9032 0 0 0 # Knife Goblin Egg
+9033 0 0 0 # Flail Goblin Egg
+9034 0 0 0 # Hammer Goblin Egg
+9039 0 0 0 # Bacsojin Egg
+9040 0 0 0 # Civil Servant Egg
+9041 0 0 0 # Leaf Cat Egg
+9043 0 0 0 # Marionette Egg
+9044 0 0 0 # Shinobi Egg
+9045 0 0 0 # Whisper Egg
+9046 0 0 0 # Goblin Leader Egg
+9047 0 0 0 # Wicked Nymph Egg
+9048 0 0 0 # Miyabi Ningyo Egg
+9051 0 0 0 # Stone Shooter Egg
+9053 0 0 0 # Golem Egg
+9061 0 0 0 # Marin Egg
+9062 0 0 0 # Novice Poring Egg
+12225 2 0 1 # Sweet Candy Cane
+12340 2 0 1 # Chewy Rice Powder
+12357 2 0 1 # Shiny Wing Gown
+12358 2 0 1 # Fan Of Wind
+12359 2 0 1 # Very Soft Plant
+12361 2 0 1 # Delicious Shaved Ice
+12362 2 0 1 # Kuloren
+12363 2 0 1 # Fit Pipe
+12364 2 0 1 # Staff Of Leader
+12365 2 0 1 # Charming Lotus
+12366 2 0 1 # Girl's Doll
+12369 2 0 1 # Oilpalm Coconut
+12371 2 0 1 # Magical Lithography
+12395 2 0 1 # Tantan Noodle
+12789 2 0 1 # Juicy Fruit
+12846 2 0 1 # Little Unripe Apple
+14569 2 0 1 # Knife Goblin Ring
+14570 2 0 1 # Flail Goblin Ring
+14571 2 0 1 # Hammer Goblin Ring

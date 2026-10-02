@@ -47,6 +47,8 @@ PUBLISH = {
     "aim_new": ("aim_new", 1),
     "aim_done": ("aim_done", 3),
     "aim_result": ("aim_result", 3),
+    "pet_tamed": ("pet_tamed", 3),            # pets: ORG-051
+    "pet_hatched": ("pet_hatched", 4),        # pets:
 }
 
 SCHEMA = """
@@ -232,6 +234,8 @@ class Feed:
 
 
 TEXTS = {
+    "pet_tamed": lambda d: f"приручил {d.get('name')}",                       # pets:
+    "pet_hatched": lambda d: f"завёл питомца: {d.get('name')}",              # pets:
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
     "death_report": lambda d: f"погиб на {d.get('map')}" + (f" (бил {d.get('cause')})" if d.get("cause") else ""),
     "job_changed": lambda d: f"сменил профессию: {d.get('from')} → {d.get('to')}",

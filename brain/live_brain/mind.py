@@ -19,6 +19,7 @@ import time
 from . import llm
 from .activity import Activities
 from .bonds import Bonds
+from .pets import Pets
 from .aims import Aims                                  # events: недельные цели (ORG-038)
 from .career import Career
 from .economy import TAG as ECON_TAG, Economy
@@ -137,6 +138,8 @@ class Mind:
                 self.learn_hunt_map(m, save=False)
         self.activities = Activities(self) if self.routine and settings.feature("activity") else None
         self.bonds = Bonds(self) if self.ctx.peers and settings.feature("bonds") else None
+        self.pets = (Pets(self, (world or {}).get("pets")) if world and feat("pets")              # pets: ORG-051
+                     and ((world or {}).get("pets") or {}).get("enabled", True) else None)
         # social: городской распорядок, разговоры жителей, реакции (social.py)
         self.social = (Social(self, world) if world and (world.get("social") or {}).get("enabled", True)
                        and self.ctx.peers and feat("social") else None)
@@ -291,6 +294,10 @@ class Mind:
             return
         if self.party and kind == "danger":
             await self.party.on_danger(event)
+        if kind in ("pet_tame_result", "pet_hatched", "pet_fed"):              # pets: ORG-051
+            if self.pets:
+                self.pets.on_event(event)
+            return
         if kind == "job_change_result":
             if self.career:
                 self.career.on_result(event)
@@ -537,7 +544,7 @@ class Mind:
         await self.safety_tick()
         await self.plans.tick()
         for module in (self.routine, self.economy, self.party, self.career, self.activities, self.bonds,
-                       self.social):
+                       self.social, self.pets):
             if module:
                 await module.tick()
         await self.rumors.tick()                               # events: проверка слухов опытом, пересказ при встрече

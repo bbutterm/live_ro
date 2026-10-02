@@ -776,6 +776,27 @@ buyAuto Red Potion {
 	# [checkSelfCondition]
 }
 
+# live_ro (ORG-051): корм питомца у Pet Groomer Пронтеры (rAthena npc/re/merchants/pet_groomer.txt:
+# prontera,218,211; меню «Buy Pet Food.» = r0, затем callshop). Выключен: включает плагин pets, пока есть питомец
+# с кормом Pet Food (buyAuto_N_disabled 0). npc_steps в игре не проверены.
+buyAuto Pet Food {
+	npc prontera 218 211
+	npc_steps c r0 n
+	isMarket 0
+	standpoint
+	distance 5
+	price
+	minAmount 2
+	maxAmount 8
+	batchSize
+	onlyIdentified
+	zeny > 5000
+	minDistance
+	maxDistance
+	dcOnEmpty 0
+	disabled 1
+}
+
 # live_ro: продавать лут, когда рюкзак заполнен на itemsMaxWeight_sellOrStore (48%).
 sellAuto 1
 sellAuto_npc prt_in 126 76

@@ -22,6 +22,7 @@ ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
 PLAN_ACTIONS = ("friend_request", "job_change", "sleep", "service", "meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close",
                 "emote")
 PLAN_ACTIONS += ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_check", "mail_take")   # market: торговля и почта (economy.py)
+PLAN_ACTIONS += ("pet_setup", "pet_tame", "pet_hatch")   # pets: питомец (pets.py, ORG-051)
 MAX_PRICE = 100_000_000          # market: цена лота между жителями
 MAIL_PER_DAY = 5                 # market: писем в сутки от одного жителя (rAthena mail_daily_count 100 — наш лимит строже)
 # Безопасные эмоции (номер -> команда OpenKore «e <команда>», tables/emotions.txt); тот же список в brainBridge.pl.
@@ -134,6 +135,8 @@ class SafetyPolicy:
             return {"action": "give", "to": to, "item": item, "amount": amount}, None
         if kind in ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_check", "mail_take"):   # market:
             return self.check_market(kind, action, state, now)                                       # market:
+        if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
+            return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":
             if action.get("map") not in self.hunt_maps:
                 return None, "карта охоты не из списка hunt_maps"
@@ -210,6 +213,22 @@ class SafetyPolicy:
         if not protocol and kind in ("say", "whisper"):
             self.texts[(str(clean.get("to", "")) if kind == "whisper" else "", clean["text"].lower())] = now
         return clean, None
+
+    def check_pet(self, kind, action):  # pets: ID — целые из pets.json, списки короткие; мёртвому — отказ выше
+        ints = lambda v, lo, hi: isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+        if kind == "pet_setup":
+            items, mobs = action.get("items") or [], action.get("mobs") or []
+            if not (isinstance(items, list) and isinstance(mobs, list) and len(items) <= 20 and len(mobs) <= 20
+                    and all(ints(i, 100, 99999) for i in items) and all(ints(m, 1000, 99999) for m in mobs)):
+                return None, "неверные списки питомца"
+            return {"action": kind, "food_on": bool(action.get("food_on")), "items": items, "mobs": mobs}, None
+        if kind == "pet_tame":
+            if not (ints(action.get("item"), 100, 99999) and ints(action.get("mob"), 1000, 99999)):
+                return None, "неверный предмет или монстр"
+            return {"action": kind, "item": action["item"], "mob": action["mob"]}, None
+        if not ints(action.get("egg"), 9000, 9999):
+            return None, "неверное яйцо"
+        return {"action": kind, "egg": action["egg"]}, None
 
     def check_market(self, kind, action, state, now):                                             # market:
         """market: торговля с жителем (offer_*) и почта RODEX (mail_*) — только жителям, числа в пределах."""

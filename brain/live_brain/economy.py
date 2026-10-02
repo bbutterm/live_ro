@@ -422,6 +422,9 @@ class Economy:
                         want[str(m["id"])] = max(want.get(str(m["id"]), 0), int(m["need"]) - int(m.get("have") or 0))
             except (KeyError, TypeError, ValueError):
                 pass
+        pets = getattr(self.mind, "pets", None)                     # pets: предмет приручения любимца, инкубатор
+        for item, n in (pets.wants() if pets else {}).items():
+            want[item] = max(want.get(item, 0), n)
         return want
 
     def for_sale(self, state=None):

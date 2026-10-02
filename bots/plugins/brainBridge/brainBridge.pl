@@ -32,6 +32,7 @@
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
 #   friend_request {to}   -> friend request <to> (только жителю; видимому); запрос жителя принимается в хуке
+#   pet_tame {item,mob} / pet_hatch {egg} / pet_setup {food_on,items,mobs} -> плагин pets: питомец (ORG-051)
 #   job_change {path,stage,steps,success} -> плагин jobChange: этап квеста смены профессии (шаги из progression.json)
 #   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
 #   service {}            -> autostorage (если есть что сдать на склад) или autosell — продать/сдать/докупить
@@ -189,6 +190,7 @@ sub sendState {
 		activity  => (AI::action() || 'idle'),
 		players   => nearbyPlayers(),
 		(defined &jobChange::status ? (job_change => jobChange::status()) : ()),
+		(defined &pets::status ? (pet => pets::status()) : ()),                  # pets: питомец (ORG-051)
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
 		(defined &economy::buyStatus ? (buy => economy::buyStatus()) : ()),   # market: жду продавца
@@ -509,6 +511,11 @@ sub actionToCommand {
 	} elsif ($kind eq 'job_change') {
 		return (0, 'плагин jobChange не загружен') unless defined &jobChange::start;
 		my ($ok, $desc) = jobChange::start($a);
+		return $ok ? (1, {note => $desc}) : (0, $desc);
+	} elsif ($kind eq 'pet_tame' || $kind eq 'pet_hatch' || $kind eq 'pet_setup') {   # pets: (ORG-051)
+		return (0, 'плагин pets не загружен') unless defined &pets::startTame;
+		my ($ok, $desc) = $kind eq 'pet_tame' ? pets::startTame($a)
+		                : $kind eq 'pet_hatch' ? pets::startHatch($a) : pets::setup($a);
 		return $ok ? (1, {note => $desc}) : (0, $desc);
 	} elsif ($kind eq 'sleep') {
 		my $sec = $a->{seconds} // '';

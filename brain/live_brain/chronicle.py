@@ -31,6 +31,9 @@ LINES = {
     "routine_blocked": lambda d: "застрял в тупике — нужен владелец",
     "recover_blocked": lambda d: "не может восстановиться (вес/зелья)",
     "diary": lambda d: d.get("text"),
+    "pet_tamed": lambda d: f"приручил(а) {d.get('name')} — яйцо питомца",
+    "pet_hatched": lambda d: f"завёл(а) питомца: {d.get('name')}",
+    "pet_gone": lambda d: "питомца больше нет рядом",
     **CHRONICLE_LINES,                                    # ORG-037: сделки и письма жителей
 }
 
