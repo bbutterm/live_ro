@@ -32,6 +32,10 @@ usage() {
 Использование: scripts/lab <команда> [аргументы]
 Переменные: LAB_ROOT (/opt/ro-bot-lab), LAB_ENV ($LAB_ROOT/secrets/live_ro.env)
 
+Одна команда для жизни:
+  up                    запустить мозги, ботов и сторожа (поднимает упавших каждые 30 с)
+  down                  остановить сторожа, ботов и мозги (серверы не трогает)
+  report                сводка по каждому боту: где, чем занят, итоги суток, расходы
 Только чтение:
   doctor                проверка окружения, конфигов, БД (только SELECT), процессов
   status                процессы, порты, режим и активная версия
@@ -232,6 +236,9 @@ find_procs() {
         cwd=$(proc_cwd "$p")
         # cwd чужого процесса недоступен: тогда для отчёта достаточно совпадения имени.
         [[ -z "$cwd" || -z "$want_dir" || "$cwd" == "$want_dir" ]] || continue
+        echo "$p $(proc_user "$p")" ;;
+      supervisor)
+        [[ "$args" == *"/scripts/lab supervise"* ]] || continue
         echo "$p $(proc_user "$p")" ;;
       brain-*)
         [[ "$(basename -- "$argv0")" == python* && "$args" == *"-m live_brain"* \
@@ -688,6 +695,81 @@ cmd_brain_check() { # cmd_brain_check --check|--check-jev [BOT]
   ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot "$bot" --lab-root "$LAB_ROOT" "$flag" )
 }
 
+# ---------- сторож: самостоятельная жизнь без оператора ----------
+
+SUP_CHECK=${LAB_SUP_CHECK:-30}   # проверка раз в 30 с (LAB_SUP_CHECK — для тестов)
+SUP_WINDOW=1800       # окно подсчёта перезапусков
+SUP_MAX=5             # больше перезапусков в окне — не перезапускать, ждать окно
+
+sup_log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LAB_ROOT/logs/supervisor.log"; }
+
+sup_restart() { # sup_restart NAME CMD... — перезапуск с ограничением частоты
+  local name="$1"; shift
+  local f="$LAB_ROOT/run/supervisor/$name.restarts" now; now=$(date +%s)
+  local recent=0 t
+  if [[ -f "$f" ]]; then
+    while read -r t; do (( now - t < SUP_WINDOW )) && recent=$((recent + 1)); done < "$f"
+  fi
+  if (( recent >= SUP_MAX )); then
+    sup_log "$name: упал $recent раз за $((SUP_WINDOW / 60)) мин — не перезапускаю до конца окна"
+    return
+  fi
+  echo "$now" >> "$f"
+  sup_log "$name: не запущен — перезапускаю ($((recent + 1))/$SUP_MAX за окно)"
+  ( "$@" ) >> "$LAB_ROOT/logs/supervisor.log" 2>&1 || sup_log "$name: перезапуск не удался (см. выше)"
+}
+
+cmd_supervise() {
+  load_env
+  ( umask 077; mkdir -p "$LAB_ROOT/run/supervisor" )
+  sup_log "сторож запущен: боты $(lab_bots | tr '\n' ' ')"
+  trap 'sup_log "сторож остановлен"; exit 0' TERM INT
+  local b warned=0
+  while true; do
+    if port_open "${PORT[map]}"; then
+      warned=0
+      for b in $(lab_bots); do
+        [[ -n "$(running_pid "brain-$b")" ]] || sup_restart "brain-$b" start_brain "$b"
+        [[ -n "$(running_pid "$b")" ]] || sup_restart "$b" start_bot "$b"
+      done
+    elif (( ! warned )); then
+      sup_log "map-server не отвечает на порту ${PORT[map]} — боты не перезапускаются, жду сервер"
+      warned=1
+    fi
+    sleep "$SUP_CHECK" & wait $!
+  done
+}
+
+cmd_up() {
+  load_env
+  mkdir -p "$PIDS" "$LAB_ROOT/logs"
+  port_open "${PORT[map]}" || die "map-server не отвечает на порту ${PORT[map]}: сначала scripts/lab start (серверы)"
+  local b
+  for b in $(lab_bots); do start_brain "$b"; start_bot "$b"; done
+  start_proc supervisor "$REPO" "$LAB_ROOT/logs/supervisor.out" \
+    env "LAB_ROOT=$LAB_ROOT" "LAB_ENV=$LAB_ENV" bash "$REPO/scripts/lab" supervise
+  info "жители запущены, сторож следит за ними (лог $LAB_ROOT/logs/supervisor.log). Сводка: scripts/lab report"
+}
+
+cmd_down() {
+  if [[ -f "$LAB_ENV" ]]; then load_env; fi
+  stop_proc supervisor 0
+  cmd_stop live all
+  info "жители остановлены; серверы работают (остановка серверов: scripts/lab stop server)"
+}
+
+cmd_report() {
+  load_env
+  local pr b; pr=$(profile_root)
+  cmd_status_body
+  for b in $(lab_bots); do
+    ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot "$b" --lab-root "$LAB_ROOT" --report ) || true
+  done
+  if [[ -f "$LAB_ROOT/logs/supervisor.log" ]]; then
+    echo "== сторож (последние события)"; tail -n 5 "$LAB_ROOT/logs/supervisor.log"
+  fi
+}
+
 # Команда оператора мозгу: строка JSON в run/brain/<bot>.inbox (мозг читает раз в секунду).
 cmd_plan() {
   local bot="${1:-}" sub="${2:-}" who="${3:-}"
@@ -805,7 +887,7 @@ cmd_stop() {
 
 cmd_status_body() {
   local s line pid owner extra port
-  local procs=("${SERVERS[@]}") b
+  local procs=("${SERVERS[@]}" supervisor) b
   for b in $(lab_bots); do procs+=("$b" "brain-$b"); done
   for s in "${procs[@]}"; do
     line=$(first_proc "$s")
@@ -856,6 +938,10 @@ main() {
     brain-check-jev) cmd_brain_check --check-jev "${1:-}" ;;
     db-add-account) cmd_db_add_account "$@" ;;
     plan) cmd_plan "$@" ;;
+    up) cmd_up ;;
+    down) cmd_down ;;
+    report) cmd_report ;;
+    supervise) cmd_supervise ;;
     routine)
       case "${2:-}" in
         rest|hunt) cmd_plan "$1" "$2" ;;

@@ -853,3 +853,70 @@ grep -nE 'conf lockMap prt_fild08|stand' $LAB_ROOT/logs/bot01/console.log | tail
 
 ### Что прислать
 Вывод шагов 0–5 в `docs/qa/HERMES-<sha7>.md`.
+
+---
+
+## Задание №10: «запустили — живут сами» (быстрая проверка)
+
+**Ветка:** `claude/brain-routine` (включает №7–9)
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+Без пассивного наблюдения дольше указанного. login/char/map не перезапускать.
+
+### Что изменилось
+- `scripts/lab up | down | report`: одна команда запуска; сторож раз в 30 с поднимает упавший мозг/бот
+  (не больше 5 раз за 30 мин на процесс, дальше — запись в `logs/supervisor.log` и ожидание).
+- Экономика (оба профиля): продажа лута у Tool Dealer `prt_in 126,76` при рюкзаке ≥ 48%, зелья не продаются;
+  докупка Red Potion 10–40 шт. при зени > 3000.
+- Правила жизни без LLM: застрял (5 мин без движения и боя) → `ai clear` + шаг; 3 смерти за 30 мин → отдых
+  и карта полегче; дневник дня; житель рядом → воспоминание.
+
+### Шаг 0 — код и запуск одной командой (3 мин)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine)  # OK, 51
+scripts/lab stop live all
+scripts/lab up && sleep 90 && scripts/lab report
+```
+Ожидание: `report` показывает обоих жителей (класс, уровень, карта, HP/SP, зени, вес, распорядок), строку сторожа.
+
+### Шаг 1 — сторож (2 мин)
+```sh
+kill -9 $(cat $LAB_ROOT/run/pids/bot02.pid); sleep 45
+scripts/lab status | grep -E 'bot02|supervisor'; tail -n 3 $LAB_ROOT/logs/supervisor.log
+```
+Ожидание: `bot02: не запущен — перезапускаю (1/5 за окно)`, bot02 снова запущен и входит в игру.
+
+### Шаг 2 — экономика (до 10 мин, по возможности)
+```sh
+grep -nE 'sellAuto|Selling|buyAuto|Buying|Calculating auto-sell' $LAB_ROOT/logs/bot0*/console.log | tail -6
+scripts/lab report | grep -E '^== '
+```
+Ожидание: при весе ≥ 48% бот идёт в `prt_in` к 126,76 и продаёт лут; при < 10 Red Potion и зени > 3000 — покупает.
+Если за 10 минут вес не дошёл до 48% — «не наблюдалось» и текущий вес из `report`.
+
+### Шаг 3 — сводка и дневник (1 мин)
+```sh
+scripts/lab report
+grep -h '"event": "routine_' $LAB_ROOT/state/bot0*/decisions.jsonl | tail -4
+```
+Дневник появится после полуночи (UTC+3) — проверить в следующем отчёте строкой `помнит: Дневник ...`.
+
+### Шаг 4 — down (1 мин)
+```sh
+scripts/lab down && scripts/lab status
+```
+Ожидание: жители и сторож остановлены, login/char/map работают.
+После проверки: `scripts/lab up` — оставить жить.
+
+### Риски
+- Сторож перезапускает и бота, остановленного вручную через `stop bot01`. Чтобы остановить надолго — `scripts/lab down`.
+- Продажа: `all 0 0 1` продаёт любой неэкипированный лут (кроме перечисленных зелий/крыльев с минимумом).
+- Автозапуск после перезагрузки VPS — строка `@reboot` в README; ставить только с разрешения владельца.
+
+### Откат
+`scripts/lab down`, `git checkout --detach cbeb2a9df4801abd0dc5c5865b913ff63333766b`, `scripts/lab start live all`.
+
+### Что прислать
+Вывод шагов 0–4 в `docs/qa/HERMES-<sha7>.md`.

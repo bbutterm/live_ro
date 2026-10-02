@@ -35,6 +35,7 @@ def parse_args(argv):
     p.add_argument("--plans", action="store_true", help="показать последние планы из памяти и выйти")
     p.add_argument("--world", help="глобальные цели и распорядок (по умолчанию brain/world/goals.json)")
     p.add_argument("--routine", action="store_true", help="показать распорядок из памяти и выйти")
+    p.add_argument("--report", action="store_true", help="сводка жизни бота из памяти (только чтение) и выход")
     a = p.parse_args(argv)
     a.persona = a.persona or str(here / "personas" / f"{a.bot}.json")
     a.world = a.world or str(here / "world" / "goals.json")
@@ -82,6 +83,40 @@ def check_jev(settings, persona, memory):
         return 1
     memory.log_llm_call(True, latency=latency, usage=usage, provider="jev")
     print(f"CHECK OK (JEV {settings.jev.model}) за {latency:.1f} с: {d}")
+    return 0
+
+
+def report(args, memory, state_dir):
+    """Сводка для оператора: кто, где, чем занят, что было за сутки, сколько стоило. Только чтение."""
+    now = time.time()
+    day = now - 86400
+    st = memory.get("last_state") or {}
+    rt = memory.get("routine") or {}
+    count = lambda kind: memory.db.execute("SELECT COUNT(*) FROM events WHERE kind = ? AND ts >= ?",
+                                           (kind, day)).fetchone()[0]
+    calls = memory.db.execute("SELECT provider, COUNT(*), COALESCE(SUM(cost), 0) FROM llm_calls "
+                              "WHERE ts >= ? GROUP BY provider", (day,)).fetchall()
+    try:
+        plan = memory.db.execute("SELECT partner, status, phase, result FROM plans ORDER BY created DESC "
+                                 "LIMIT 1").fetchone()
+    except Exception:
+        plan = None
+    decisions = state_dir / "decisions.jsonl"
+    last_decision = time.strftime("%H:%M:%S", time.localtime(decisions.stat().st_mtime)) if decisions.exists() else "—"
+    mode = {"hunt": "охота", "town": "отдых в городе"}.get(rt.get("mode"), "—")
+    print(f"== {args.bot}: {st.get('name', '?')} — {st.get('job', '?')} {st.get('lv', '?')}/{st.get('job_lv', '?')}, "
+          f"{st.get('map', '?')} ({st.get('x', '?')},{st.get('y', '?')}), HP {st.get('hp_pct', '?')}% SP {st.get('sp_pct', '?')}%, "
+          f"зени {st.get('zeny', '?')}, вес {st.get('weight_pct', '?')}%")
+    if rt:
+        print(f"   распорядок: {mode}; охота сегодня {int(rt.get('hunted', 0) / 60)} из {int(rt.get('budget', 0) / 60)} мин")
+    print(f"   за сутки: побед {count('kill')}, смертей {count('died')}, уровней {count('level_up')}, "
+          f"встреч {count('meeting_confirmed')}, застреваний {count('routine_stuck')}")
+    if plan:
+        print(f"   последний план: встреча с {plan[0]} — {plan[1]} {plan[2] or ''} {plan[3] or ''}".rstrip())
+    print("   вызовы моделей за сутки: " + (", ".join(f"{p} {n} (${c:.4f})" for p, n, c in calls) or "нет")
+          + f"; последнее решение {last_decision}")
+    for m in memory.db.execute("SELECT text FROM memories ORDER BY id DESC LIMIT 3"):
+        print(f"   помнит: {m[0]}")
     return 0
 
 
@@ -146,6 +181,8 @@ def main(argv=None):
             return check(settings, persona, memory)
         if args.check_jev:
             return check_jev(settings, persona, memory)
+        if args.report:
+            return report(args, memory, state_dir)
         if args.routine:
             print(json.dumps(memory.get("routine"), ensure_ascii=False, default=str))
             return 0
