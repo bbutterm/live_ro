@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "ORG-059: календарь мира (brain/live_brain/world_calendar.py, docs/WORLD_EVENTS.md).",
+    "weekdays — день недели 1..7 (1 = понедельник) по часовому поясу мира (goals.json timezone_offset_hours): name и множители мотивов needs.",
+    "Множитель мотива дня = произведение множителей дня недели и праздников, в пределах 0.7..1.5 (needs.weighted рядом с aims.boost).",
+    "holidays — праздники по дате MM-DD каждый год; seasons — сезон по месяцу; world_born — день рождения мира (YYYY-MM-DD) или null.",
+    "Дни рождения жителей — поле born в brain/world/roster.json (UTC, YYYY-MM-DD); born: null — дня рождения нет."
+  ],
+  "weekdays": {
+    "1": {"name": "день начинаний", "needs": {"progress": 1.1}},
+    "3": {"name": "день странствий", "needs": {"curiosity": 1.15}},
+    "6": {"name": "рыночный день", "needs": {"wealth": 1.2, "social": 1.2}},
+    "7": {"name": "день отдыха", "needs": {"progress": 0.85, "rest": 1.2, "social": 1.1}}
+  },
+  "seasons": [
+    {"months": [12, 1, 2], "id": "winter", "name": "зима"},
+    {"months": [3, 4, 5], "id": "spring", "name": "весна"},
+    {"months": [6, 7, 8], "id": "summer", "name": "лето"},
+    {"months": [9, 10, 11], "id": "autumn", "name": "осень"}
+  ],
+  "holidays": [
+    {"date": "01-01", "id": "new_year", "name": "Новый год", "needs": {"social": 1.3, "progress": 0.85}},
+    {"date": "03-21", "id": "spring", "name": "Праздник весны", "needs": {"curiosity": 1.2, "social": 1.2}},
+    {"date": "06-21", "id": "midsummer", "name": "Летнее солнцестояние", "needs": {"social": 1.3, "rest": 1.1}},
+    {"date": "09-23", "id": "harvest", "name": "Праздник урожая", "needs": {"social": 1.3, "wealth": 1.1}},
+    {"date": "10-31", "id": "lanterns", "name": "Ночь фонарей", "needs": {"social": 1.2, "curiosity": 1.1}},
+    {"date": "12-21", "id": "long_night", "name": "Долгая ночь", "needs": {"rest": 1.2, "social": 1.2}}
+  ],
+  "world_born": null
+}

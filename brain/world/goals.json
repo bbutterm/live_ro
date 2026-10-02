@@ -28,6 +28,11 @@
     "auto_job_change": false
   },
 
+  "calendar": {
+    "_comment": "ORG-059 календарь мира (brain/live_brain/world_calendar.py, brain/world/calendar.json, docs/WORLD_EVENTS.md): день недели и праздники — множители мотивов, темы holiday/birthday, заголовок дня в летописи. Выключить — enabled: false или BRAIN_DISABLE=calendar.",
+    "enabled": true
+  },
+
   "economy": {
     "_comment": "Взаимопомощь в городе (brain/live_brain/economy.py). share — чем делятся: просят, когда меньше need_below; просят ask; отдающему остаётся не меньше keep. Продажа лута, закупка и склад — в bots/<bot>/control/config.txt.",
     "share": {

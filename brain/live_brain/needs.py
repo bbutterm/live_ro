@@ -93,7 +93,10 @@ class Needs:
 
     def weighted(self):
         aims = getattr(self.mind, "aims", None)                     # ORG-038: невыполненные цели недели усиливают мотив
-        return {k: round(v * self.weight(k) * (aims.boost(k) if aims else 1.0), 2) for k, v in self.values().items()}
+        cal = getattr(self.mind, "calendar", None)                  # calendar: день недели и праздник (ORG-059)
+        return {k: round(v * self.weight(k) * (aims.boost(k) if aims else 1.0)
+                         * (cal.factor(k, self.clock()) if cal else 1.0), 2)    # calendar:
+                for k, v in self.values().items()}
 
     def top(self, n=3):
         w = self.weighted()

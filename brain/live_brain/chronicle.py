@@ -19,6 +19,7 @@ from . import world_bus
 from .economy import CHRONICLE_LINES, metrics_from_rows
 from .society import CHRONICLE_LINES as SOCIETY_LINES   # society: ссоры, примирения, вывески
 from .guild import CHRONICLE_LINES as GUILD_LINES       # guild: основание и вступление (ORG-052)
+from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -65,6 +66,9 @@ def chronicle(lab_root, bots, day=None, tz_hours=3):
     day = day or datetime.now(tz).strftime("%Y-%m-%d")
     start, end, tz = day_bounds(day, tz_hours)
     out = [f"# Хроника мира за {day} (UTC{tz_hours:+d})", ""]
+    head = world_calendar.header_for(day, tz_hours)                       # calendar: «суббота, рыночный день; …»
+    if head:                                                              # calendar:
+        out[1:1] = [f"День мира: {head}", ""]                             # calendar:
     timeline = []
     for bot in bots:
         db = Path(lab_root) / "state" / bot / "memory.sqlite"

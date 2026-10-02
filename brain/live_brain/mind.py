@@ -41,6 +41,7 @@ from .social import TAG as SOCIAL_TAG, Social   # social: общение без 
 from .society import Society                    # society: эмоции, чат-комнаты, ссоры (ORG-022/026/027)
 from . import world_bus                                 # events: шина событий мира (ORG-045)
 from .explore import TAG as EXPLORE_TAG, Explorer       # explore: экспедиции (ORG-054)
+from .world_calendar import WorldCalendar               # calendar: календарь мира (ORG-059)
 
 log = logging.getLogger("mind")
 
@@ -133,6 +134,8 @@ class Mind:
         self.life = Lifecycle(self)
         self.maps = MapStats(self)
         self.needs = Needs(self)
+        self.calendar = (WorldCalendar(self, world) if world and settings.feature("calendar")        # calendar: ORG-059
+                         and ((world or {}).get("calendar") or {}).get("enabled", True) else None)  # calendar:
         self.career = Career(self, (world or {}).get("progression")) if world and settings.feature("career") else None
         feat = settings.feature
         self.routine = Routine(self, world) if world and feat("routine") else None
@@ -805,6 +808,7 @@ class Mind:
             "хозяйство": self.economy.summary() if self.economy else None,
             "рынок": self.economy.market_summary() if self.economy else None,   # market: оценка рюкзака, сделка
             "мотивы": dict(self.needs.top(4)),
+            "день_мира": self.calendar.summary() if self.calendar else None,             # calendar:
             "карьера": (self.mem.get("career") or {}).get("text"),
             "занятие": self.activities.summary() if self.activities else None,
             "экспедиция": self.explorer.summary() if self.explorer else None,         # explore:
