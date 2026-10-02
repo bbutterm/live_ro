@@ -98,7 +98,10 @@ class Collection:
     def sellable(self, items):
         """Рюкзак для продажи (economy.for_sale): одна копия каждой карты альбома остаётся, дубликаты — можно."""
         out = dict(items or {})
-        for iid in self.album():
+        # review3: альбом ещё не засеян (первый такт мозга: рынок, такт 20, раньше seed) — карты рюкзака засев
+        # всё равно положит в альбом, их первую копию тоже не продавать
+        seeding = {str(i) for i in out if self.prices.is_card(str(i))} if self.st.get("cursor") is None else set()
+        for iid in set(self.album()) | seeding:
             if iid in out:
                 out[iid] = max(0, int(out[iid] or 0) - 1)
         return out

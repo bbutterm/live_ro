@@ -712,6 +712,15 @@ class Review3JointsTest(BodyMixin, unittest.TestCase):
         self.assertIsNone(orders.can_fill(o, self.mind.state), "дубликат — можно")
 
 
+    def test_album_card_kept_before_seed(self):
+        """Первый такт мозга: рынок (economy, такт 20) раньше коллекции, альбом ещё не засеян — карта рюкзака
+        всё равно считается альбомной (одна копия остаётся), а не уходит первому встречному жителю."""
+        self.state(items={"501": 30, "4001": 1})
+        coll = self.mind.collection
+        self.assertIsNone(coll.st.get("cursor"), "альбом ещё не засеян")
+        self.assertEqual(coll.sellable({"4001": 1, "909": 5}), {"4001": 0, "909": 5})
+        self.assertEqual([lot for lot in self.mind.economy.for_sale(self.mind.state) if lot[0] == "4001"], [])
+
     def test_relation_log_bounded_by_names(self):
         """kv relation_log (W5) не растёт без предела по числу имён: модель даёт отношения к любым игрокам."""
         from live_brain.memory import RELATION_LOG
@@ -722,6 +731,227 @@ class Review3JointsTest(BodyMixin, unittest.TestCase):
         self.assertLessEqual(len(log), 250, "имён в истории отношений — ограниченно")
         self.assertIn("Vera", log, "свежая пара остаётся")
         self.assertLessEqual(max(len(v) for v in log.values()), RELATION_LOG)
+
+
+class TownWorld:
+    """review3: два отзывчивых тела в одном городе (Arkady и Vera) — каждое ведёт свой настоящий Mind, шина мира общая.
+    Мир исполняет команды упрощённо: точка (meet_point) — дойти за WALK с; шёпот жителю — событие chat_private у
+    адресата через 1 с; skill_on_player — цель видна, жива и не дальше 9 клеток -> событие support обоим (Heal +30 % HP);
+    offer_sell + встречный offer_buy — обмен предмета на зени, give_result продавцу и buy_result покупателю."""
+    WALK = 15
+
+    def __init__(self, t0):
+        self.t = t0
+        self.bodies = {}
+        self.inbox = {}                                  # имя -> [сообщения мозгу]
+        self.go = {}                                     # имя -> (когда, x, y)
+        self.trades = {}                                 # (продавец, покупатель, предмет) -> {sell, buy}
+
+    def add(self, name, **kw):
+        s = {"type": "state", "name": name, "map": "prontera", "x": 156, "y": 185, "hp_pct": 100, "sp_pct": 90,
+             "dead": False, "zeny": 40000, "ai": "auto", "weight_pct": 20, "items": {}, "lock_map": "prontera",
+             "lock_x": None, "lock_y": None, "activity": "idle", "players": [], "friends": [], "party": None,
+             "party_members": [], "vend": {"can": 0, "open": 0}, "sitting": False, "chat_room": None, "lv": 40,
+             "job_lv": 20}
+        s.update(kw)
+        self.bodies[name] = s
+        self.inbox[name] = []
+
+    def event(self, name, **kw):
+        self.inbox[name].append(dict(type="event", ts=self.t, **kw))
+
+    def near(self, a, b, cells):
+        sa, sb = self.bodies[a], self.bodies[b]
+        return sa["map"] == sb["map"] and max(abs(sa["x"] - sb["x"]), abs(sa["y"] - sb["y"])) <= cells
+
+    def apply(self, who, a):
+        s = self.bodies[who]
+        kind = a.get("action")
+        other = a.get("to") or a.get("from")
+        if kind in replay.MOVES + ("meet_point", "sleep", "shop_open", "skill_on_player"):
+            s["chat_room"] = None                        # brainBridge: chat leave перед движением и кастом
+        if kind == "meet_point":
+            s.update(lock_map=a["map"], lock_x=a["x"], lock_y=a["y"], sitting=False)
+            self.go[who] = (self.t + self.WALK, a["x"], a["y"])
+        elif kind == "sit":
+            s["sitting"] = True
+        elif kind == "stand":
+            s["sitting"] = False
+        elif kind == "chat_room":
+            s["chat_room"] = a.get("title") if a.get("op") == "open" else None
+        elif kind == "whisper" and other in self.bodies:
+            self.inbox[other].append({"type": "event", "kind": "chat_private", "from": who, "text": a["text"],
+                                      "ts": self.t + 1})
+        elif kind == "skill_on_player" and other in self.bodies:
+            t = self.bodies[other]
+            if self.near(who, other, 9) and not t["dead"] and s["sp_pct"] >= 10:
+                s["sp_pct"] -= 5
+                amount = None
+                if a["skill"] == "AL_HEAL":
+                    amount = min(30, 100 - t["hp_pct"]) * 10 or 1
+                    t["hp_pct"] = min(100, t["hp_pct"] + 30)
+                for n in (who, other):
+                    self.event(n, kind="support", skill=a["skill"], **{"from": who}, to=other, amount=amount)
+        elif kind in ("offer_sell", "offer_buy") and other in self.bodies:
+            seller, buyer = (who, other) if kind == "offer_sell" else (other, who)
+            key = (seller, buyer, str(a["item"]))
+            self.trades.setdefault(key, {})[kind] = dict(a)
+            tr = self.trades[key]
+            if "offer_sell" in tr and "offer_buy" in tr:
+                del self.trades[key]
+                sb, bb = self.bodies[seller], self.bodies[buyer]
+                item, n, price = str(a["item"]), int(tr["offer_sell"]["amount"]), int(tr["offer_sell"]["price"])
+                ok = self.near(seller, buyer, 5) and sb["items"].get(item, 0) >= n and bb["zeny"] >= price
+                if ok:
+                    sb["items"][item] -= n
+                    bb["items"][item] = bb["items"].get(item, 0) + n
+                    sb["zeny"] += price
+                    bb["zeny"] -= price
+                self.event(seller, kind="give_result", to=buyer, item=int(item), amount=n, price=price,
+                           paid=price if ok else 0, ok=ok, reason=None if ok else "далеко")
+                self.event(buyer, kind="buy_result", **{"from": seller}, item=int(item), amount=n, ok=ok)
+
+    def tick(self, t):
+        self.t = t
+        for name, s in self.bodies.items():
+            g = self.go.get(name)
+            if g and t >= g[0]:
+                s.update(x=g[1], y=g[2])
+                del self.go[name]
+            s["activity"] = "route" if name in self.go else "idle"
+            if int(t) % 30 == 0:
+                s["hp_pct"] = min(100, s["hp_pct"] + 1)
+                s["sp_pct"] = min(100, s["sp_pct"] + 1)
+        for name, s in self.bodies.items():
+            s["players"] = [{"name": o, "x": self.bodies[o]["x"], "y": self.bodies[o]["y"], "job": self.bodies[o]["job"],
+                             "lv": self.bodies[o]["lv"], "sex": self.bodies[o].get("sex")}
+                            for o in self.bodies if o != name and self.near(name, o, 14)]
+            if int(t) % 2 == 0:
+                self.inbox[name].append(dict(s, ts=t, items=dict(s["items"])))
+
+
+class TwoResidentsDayTest(unittest.TestCase):
+    """review3: долгий день в городе с модулями раунда 5 на двух настоящих мозгах и общей шине мира: Vera (Acolyte,
+    щедрая) — лекарь у собора, Arkady (ранен) — пациент; Vera заказывает Jellopy (market.wish), Arkady (у него 40)
+    берёт заказ и продаёт сделкой рынка; мечта, копилка, сплетни, привычки, режиссёр, толпа — работают сами.
+    Проверки: replay.invariants у обоих, лекарь лечил только на посту, заказ выполнен одной сделкой (без двойной
+    продажи), промпт и recent_events у обоих строятся, часы модулей — часы реплея, мотивы в разумных пределах."""
+
+    def test_healer_orders_dream_gossip_director(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        t0 = datetime(2025, 3, 4, 10, 0, tzinfo=TZ).timestamp()
+        clock = Clock()
+        clock.t = t0
+        world = TownWorld(t0)
+        pet = {"has": True, "running": False, "items": {}, "eggs": [], "near": {}}     # питомец есть — не заказывают корм
+        world.add("Arkady", job="Swordsman", lv=41, hp_pct=45, items={"501": 30, "909": 40, "4001": 1}, pet=dict(pet))
+        world.add("Vera", job="Acolyte", lv=38, sex="Female", x=160, y=190, items={"501": 30}, pet=dict(pet),
+                  support_skills={"AL_HEAL": 10, "AL_BLESSING": 5, "AL_INCAGI": 3})
+        vera_world = json.loads(json.dumps(WORLD))
+        vera_world.setdefault("economy", {}).setdefault("market", {})["wish"] = ["909"]
+        sent = {"Arkady": [], "Vera": []}
+        minds, mems, buses = {}, {}, {}
+        weighted_max = [0.0]
+        with mock.patch("time.time", clock):
+            for name, bot, w in (("Arkady", "bot01", WORLD), ("Vera", "bot02", vera_world)):
+                mems[name] = Memory(root / f"{name}.sqlite")
+                buses[name] = WorldBus(root / "world.sqlite", name)
+                persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+
+                def make_send(n):
+                    async def send(a):
+                        sent[n].append((clock.t, dict(a), dict(minds[n].state)))
+                        world.apply(n, dict(a))
+                        return len(sent[n])
+                    return send
+
+                minds[name] = Mind(Settings.from_env({}), persona, mems[name], make_send(name), root / f"{name}.jsonl",
+                                   RuleGate(), peers={"Arkady", "Vera"}, world=w, world_bus_db=buses[name])
+            arkady, vera = minds["Arkady"], minds["Vera"]
+            for m in minds.values():
+                for name in ("healer", "orders", "dream", "savings", "gossip", "habits", "director", "memoir"):
+                    self.assertIsNotNone(getattr(m, name), f"модуль {name} включён у {m.persona['name']}")
+                m.routine.rng = m.activities.rng = random.Random(3)
+                for name in ("hunt_early", "explore"):           # день в городе: охота и экспедиции — в других тестах
+                    m.activities.catalog.pop(name, None)
+                m.routine.new_day(t0, keep_mode="town")
+                m.routine.st["rest_until"] = t0 + 6 * 3600
+            marks = {}
+
+            async def day():
+                while clock.t < t0 + 4 * 3600:
+                    world.tick(clock.t)
+                    for name, m in minds.items():
+                        msgs = sorted((x for x in world.inbox[name] if x["ts"] <= clock.t), key=lambda x: x["ts"])
+                        world.inbox[name] = [x for x in world.inbox[name] if x["ts"] > clock.t]
+                        for msg in msgs:
+                            await m.on_message(msg)
+                        await m.step()
+                        if int(clock.t) % 300 == 0:
+                            weighted_max[0] = max([weighted_max[0]] + list(m.needs.weighted().values()))
+                    if "post" not in marks and clock.t >= t0 + 300:
+                        marks["post"] = clock.t                # лекарь встаёт на пост (занятие каталога — тестом)
+                        await vera.activities.start("healer_post", clock.t, vera.state)
+                        vera.activities.next_decide = clock.t + 3600
+                    clock.t += 1
+
+            asyncio.run(day())
+            prompts = {n: m.build_prompt("проверка", {}) for n, m in minds.items()}
+            recent = {n: mems[n].recent_events(50) for n in minds}
+            kinds = {n: [r[0] for r in mems[n].db.execute("SELECT kind FROM events ORDER BY id")] for n in minds}
+            calls = {n: mems[n].db.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0] for n in minds}
+            bus_rows = buses["Arkady"].read(since=0, limit=5000, min_importance=0) if "min_importance" in \
+                WorldBus.read.__code__.co_varnames else buses["Arkady"].read(since=0, limit=5000)
+            bus_all = [dict(zip(("ts", "bot", "kind"), r)) for r in
+                       buses["Arkady"].db.execute("SELECT ts, bot, kind FROM world_events ORDER BY id")]
+            dream = {n: mems[n].get("dream") or {} for n in minds}
+            for m in mems.values():
+                m.close()
+            for b in buses.values():
+                b.close()
+        end = clock.t
+        import os
+        if os.environ.get("REVIEW3_DEBUG"):
+            for n in minds:
+                print("==", n, [(int(t - t0), a["action"], a.get("to"), a.get("map"), a.get("x"), a.get("y"),
+                                 str(a.get("text", ""))[:60]) for t, a, _ in sent[n]][:80])
+                for line in (root / f"{n}.jsonl").read_text().splitlines():
+                    d = json.loads(line)
+                    if d.get("type") in ("healer", "orders", "activity"):
+                        print(n, d)
+        for n in minds:
+            self.assertEqual(replay.invariants(sent[n], llm_calls=calls[n]), [], n)
+            self.assertIsInstance(recent[n], list)
+            self.assertEqual(len(prompts[n]), 2, f"промпт {n} строится")
+            self.assertTrue(dream[n].get("kind"), f"мечта {n} выбрана")
+            self.assertTrue(t0 <= dream[n]["since"] <= end, f"мечта {n}: время реплея")
+        self.assertTrue(all(t0 <= r["ts"] <= end for r in bus_all), "шина мира: время реплея")
+        self.assertLess(weighted_max[0], 5.0, f"мотивы в пределах: {weighted_max[0]}")
+        # лекарь: пост открыт, Heal Arkady — только с поста, вывеска не мешала касту
+        self.assertIn("post", marks)
+        casts = [(t, a, s) for t, a, s in sent["Vera"] if a["action"] == "skill_on_player"]
+        self.assertTrue(casts, "лекарь лечил")
+        post = (237, 310)
+        for t, a, s in casts:
+            self.assertEqual(s.get("map"), "prontera")
+            self.assertLessEqual(max(abs(s["x"] - post[0]), abs(s["y"] - post[1])), 4, f"каст не с поста {t}")
+            self.assertFalse(s.get("dead"))
+        self.assertIn("healer_post_start", kinds["Vera"])
+        self.assertIn("healer_heal", kinds["Vera"])
+        self.assertIn("healer_asked", kinds["Arkady"])
+        # заказ: Vera заказала, Arkady взял и выполнил одной сделкой
+        self.assertIn("order_posted", kinds["Vera"])
+        self.assertIn("order_taken", kinds["Arkady"])
+        self.assertIn("order_done", kinds["Arkady"])
+        self.assertEqual(kinds["Arkady"].count("trade_sold"), 1, "Jellopy продан один раз")
+        self.assertIn("order_closed", kinds["Vera"])
+        self.assertEqual(world.bodies["Arkady"]["items"]["909"] + world.bodies["Vera"]["items"].get("909", 0), 40,
+                         "предметы не размножились")
+        # единственная Poring Card — в альбоме (collection): её не предлагают даже в первом такте до засева альбома
+        self.assertFalse([a for _, a, _ in sent["Arkady"] if ":4001:" in str(a.get("text", ""))
+                          or (a["action"] == "offer_sell" and str(a.get("item")) == "4001")])
 
 
 class ProtocolSurfaceTest(unittest.TestCase):
