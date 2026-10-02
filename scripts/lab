@@ -53,6 +53,7 @@ usage() {
   plan BOT show         последние планы BOT из памяти (только чтение)
   routine BOT rest|hunt досрочно отправить BOT отдыхать в город / на охоту (проверка распорядка)
   routine BOT show      распорядок BOT из памяти (только чтение)
+  chronicle [ДАТА]      хроника мира за сутки: события всех жителей вместе (только чтение памяти)
   alerts [N]            последние оповещения владельцу (тупик, восстановление невозможно, сторож сдался)
   gift BOT ITEM N       BOT сейчас просит у жителя рядом N предметов ITEM (ID, например 501, или z — зени);
                         для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
@@ -989,6 +990,8 @@ main() {
     up) cmd_up ;;
     down) cmd_down ;;
     report) cmd_report ;;
+    chronicle) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain.chronicle --lab-root "$LAB_ROOT" \
+                 --bots $(lab_bots) ${1:+--day "$1"} ) ;;
     alerts) load_env; if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then tail -n "${1:-30}" "$LAB_ROOT/run/alerts.log"; else info "оповещений нет"; fi ;;
     supervise) cmd_supervise ;;
     routine)
