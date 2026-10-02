@@ -202,4 +202,19 @@ $Globals::char->{jobID} = 2;
 tick(); tick();
 ok(lastEvent()->{ok} && lastEvent()->{stage} eq 'first_job', 'профессия Mage — этап пройден');
 
+# ---- review4-след: выход посреди этапа — настройки профиля возвращаются первым тактом без этапа ----
+{
+	%jobChange::run = ();
+	$Globals::config{jobChange_saved} = 'attackAuto=2,lockMap=prt_fild08,route_randomWalk=1';
+	@Commands::ran = ();
+	tick();
+	my @c = @Commands::ran;
+	ok((grep { $_ eq 'conf attackAuto 2' } @c) && (grep { $_ eq 'conf lockMap prt_fild08' } @c),
+	   'после перезапуска посреди этапа — прежние attackAuto и lockMap');
+	ok(!defined $Globals::config{jobChange_saved}, 'копия настроек снята');
+	@Commands::ran = ();
+	tick();
+	ok(!grep({ /^conf / } @Commands::ran), 'второй раз не возвращает');
+}
+
 done_testing();

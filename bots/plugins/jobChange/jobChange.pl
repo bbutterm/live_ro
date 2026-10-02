@@ -72,6 +72,7 @@ sub start {
 	        texts => [], saved => {map { $_ => $config{$_} } @SAVE});
 	conf(lockMap => 'none', lockMap_x => 'none', lockMap_y => 'none', route_randomWalk => 0, autoTalkCont => 1,
 	     attackAuto => 1);
+	keepSaved();                                    # review4-след: копия на случай выхода посреди этапа
 	message "[jobChange] этап $run{path}/$run{stage}: шагов " . scalar(@$steps) . "\n", 'system';
 	return (1, "этап $run{path}/$run{stage}");
 }
@@ -87,6 +88,32 @@ sub conf {
 	}
 }
 
+
+# review4-след: «conf» пишет config.txt. Выход OpenKore посреди этапа (gracefulStop, падение, перезапуск) оставлял бы
+# в профиле lockMap none, route_randomWalk 0, attackAuto 1 — следующая охота не на своей карте. Прежние значения
+# дублируются в config (jobChange_saved) и возвращаются первым тактом без этапа (restoreSaved), если finish до них не дошёл.
+sub keepSaved {
+	my $saved = $run{saved} || {};
+	my @kv;
+	for my $k (sort keys %$saved) {
+		my $v = $saved->{$k};
+		$v = 'none' if !defined $v || $v eq '';
+		next if $v =~ /[\s,=]/;
+		push @kv, "$k=$v";
+	}
+	Commands::run('conf -f jobChange_saved ' . join(',', @kv)) if @kv;
+}
+
+sub restoreSaved {
+	my $line = $config{jobChange_saved};
+	return unless defined $line && $line ne '' && $line ne 'none';
+	my %kv = map { /^([^=]+)=(.*)$/ ? ($1 => $2) : () } split /,/, $line;
+	warning "[jobChange] этап прервался выходом — возвращаю настройки профиля\n";
+	conf(%kv) if %kv;
+	conf(jobChange_saved => 'none');
+	$config{jobChange_saved} = undef;
+}
+
 sub finish {
 	my ($ok, $reason) = @_;
 	return unless %run;
@@ -94,6 +121,7 @@ sub finish {
 	%run = ();
 	Commands::run('talk no') if !$ok && %talk;
 	conf(%{$r{saved}});
+	conf(jobChange_saved => 'none');                         # review4-след: вернули сами
 	if ($ok) { message "[jobChange] этап $r{path}/$r{stage} пройден\n", 'system'; }
 	else     { warning "[jobChange] этап $r{path}/$r{stage} не пройден: $reason\n"; }
 	my $ev = brainBridge->can('event');
@@ -160,6 +188,7 @@ sub arrived {
 }
 
 sub onTick {
+	restoreSaved() unless %run;                    # review4-след: после выхода посреди этапа
 	return unless %run;
 	my $now = time;
 	return if $now - $lastTick < 0.5;

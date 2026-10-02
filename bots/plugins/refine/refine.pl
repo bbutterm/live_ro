@@ -117,6 +117,7 @@ sub start {
 	        saved => {map { $_ => $config{$_} } @SAVE});
 	conf(lockMap => 'none', lockMap_x => 'none', lockMap_y => 'none', route_randomWalk => 0, autoTalkCont => 1,
 	     attackAuto => 1, sitAuto_idle => 0);
+	keepSaved();                                    # review4-след: копия на случай выхода посреди этапа
 	Commands::run('stand') if $char->{sitting};
 	message "[refine] $item->{name}: до +$run{target}, руды докупить $run{buy}\n", 'system';
 	return (1, "заточка $item->{name} до +$run{target}");
@@ -131,6 +132,32 @@ sub conf {
 	}
 }
 
+
+# review4-след: «conf» пишет config.txt. Выход OpenKore посреди этапа (gracefulStop, падение, перезапуск) оставлял бы
+# в профиле lockMap none, route_randomWalk 0, attackAuto 1 — следующая охота не на своей карте. Прежние значения
+# дублируются в config (refine_saved) и возвращаются первым тактом без этапа (restoreSaved), если finish до них не дошёл.
+sub keepSaved {
+	my $saved = $run{saved} || {};
+	my @kv;
+	for my $k (sort keys %$saved) {
+		my $v = $saved->{$k};
+		$v = 'none' if !defined $v || $v eq '';
+		next if $v =~ /[\s,=]/;
+		push @kv, "$k=$v";
+	}
+	Commands::run('conf -f refine_saved ' . join(',', @kv)) if @kv;
+}
+
+sub restoreSaved {
+	my $line = $config{refine_saved};
+	return unless defined $line && $line ne '' && $line ne 'none';
+	my %kv = map { /^([^=]+)=(.*)$/ ? ($1 => $2) : () } split /,/, $line;
+	warning "[refine] этап прервался выходом — возвращаю настройки профиля\n";
+	conf(%kv) if %kv;
+	conf(refine_saved => 'none');
+	$config{refine_saved} = undef;
+}
+
 sub finish {
 	my ($ok, $reason) = @_;
 	return unless %run;
@@ -140,6 +167,7 @@ sub finish {
 	my $item = itemAt($r{inv});
 	Commands::run("eq $r{inv}") if $r{was_equipped} && $item && !$item->{equipped};
 	conf(%{$r{saved}});
+	conf(refine_saved => 'none');                         # review4-след: вернули сами
 	my $to = $item ? ($item->{upgrade} // 0) + 0 : undef;
 	if ($ok) { message "[refine] готово: +$r{from} -> +" . ($to // '?') . " ($reason)\n", 'system'; }
 	else     { warning "[refine] не вышло: $reason\n"; }
@@ -158,6 +186,7 @@ sub phase {
 # ---------- шаги ----------
 
 sub onTick {
+	restoreSaved() unless %run;                    # review4-след: после выхода посреди этапа
 	return unless %run;
 	my $now = time;
 	return if $now - $lastTick < 0.5;
