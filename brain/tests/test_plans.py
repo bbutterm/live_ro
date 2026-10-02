@@ -18,6 +18,8 @@ import time
 import unittest
 from pathlib import Path
 
+from tests.worldtime import brain_argv, shift_time
+
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 NAMES = {"bot01": "Arkady", "bot02": "Vera"}
 IDENTITY = {"Arkady": ("Swordman", "Male", 40), "Vera": ("Acolyte", "Female", 30)}
@@ -136,6 +138,7 @@ class MeetingTest(unittest.TestCase):
                             "BRAIN_PLAN_TRAVEL_TIMEOUT=60\nBRAIN_PLAN_WAIT_TIMEOUT=60\n")
         self.procs = {}
         self.world = World(self.root)
+        self.shift = shift_time(self)        # timefix: полдень мира фиксированного дня — встреча не упирается в сон
 
     def tearDown(self):
         for p in self.procs.values():
@@ -146,8 +149,7 @@ class MeetingTest(unittest.TestCase):
     def start(self, bot):
         with open(self.root / f"{bot}.log", "ab") as log:
             self.procs[bot] = subprocess.Popen(
-                [sys.executable, "-m", "live_brain", "--env", str(self.env), "--bot", bot,
-                 "--lab-root", str(self.root)], cwd=BRAIN_DIR, stdout=log, stderr=subprocess.STDOUT)
+                brain_argv(self.shift, "--env", str(self.env), "--bot", bot, "--lab-root", str(self.root)), cwd=BRAIN_DIR, stdout=log, stderr=subprocess.STDOUT)
 
     def stop(self, bot):
         self.procs[bot].terminate()

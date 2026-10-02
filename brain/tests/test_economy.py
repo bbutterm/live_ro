@@ -15,6 +15,7 @@ from live_brain.economy import Economy, economy_metrics, metrics_from_rows
 from live_brain.memory import Memory
 from live_brain.routine import Routine, load_world
 from live_brain.safety import SafetyPolicy
+from tests.worldtime import shift_time
 
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
@@ -524,6 +525,7 @@ class SafetyGiveTest(unittest.TestCase):
 
 class RoutineVendTest(unittest.TestCase):
     def test_open_in_town_close_before_hunt(self):
+        shift_time(self)                     # timefix: полдень мира — ночью распорядок уводит в сон, а не в лавку
         tmp = tempfile.TemporaryDirectory()
         mem = Memory(Path(tmp.name) / "m.sqlite")
         persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
