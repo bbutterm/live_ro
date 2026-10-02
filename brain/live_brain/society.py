@@ -71,6 +71,7 @@ DEFAULTS = {
 EMOTE_ON = {"meeting": 12, "trade_sold": 18, "trade_bought": 33, "gift_received": 15, "gift_given": 33,
             "friend_dead": 28, "quarrel": 9, "reconciled": 17}
 NIGHT_OK = ("friend_dead", "gift_received", "reconciled")
+JOYFUL = ("meeting", "trade_sold", "gift_received", "reconciled")    # talk: ORG-064 шанс от настроения
 WATCH = ("meeting_confirmed", "trade_sold", "trade_bought", "trade_debt", "gift_received", "gift_given",
          "party_member_dead", "plan_failed", "chat_private", "party_refused", "heal_confirmed", "heal_given")
 NEED_NO = re.compile(r"\[need:[a-z0-9]{4,8}:no\]")
@@ -269,6 +270,10 @@ class Society:
         eid = EMOTE_ON.get(on)
         if eid is None or not self.near(peer):
             return False
+        mood = getattr(self.mind, "mood", None)                                     # talk: ORG-064
+        chance = mood.emote_chance() if mood and on in JOYFUL else 1.0               # talk: хмурый радуется реже
+        if chance < 1 and self.rng.random() >= chance:                              # talk:
+            return False                                                            # talk:
         if self.is_night(now) and on not in NIGHT_OK:
             return False
         social = self.social()

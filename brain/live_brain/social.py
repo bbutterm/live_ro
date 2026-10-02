@@ -154,6 +154,9 @@ class Social:
         factor = 1.0 if aff >= self.cfg["friend_affinity"] else (3.0 if aff < 0 else 1.5)
         if self.is_night(now):
             factor *= self.cfg["night_factor"]
+        mood = getattr(self.mind, "mood", None)
+        if mood:
+            factor *= mood.talk_factor()              # ORG-064: в плохом настроении реже, в хорошем чаще
         return self.cfg["pair_gap_minutes"] * 60 * factor
 
     def near_peers(self, state, cells=None):
@@ -316,6 +319,11 @@ class Social:
 
     def phrase(self, key, facts):
         """Фраза ключа key с подстановкой фактов; варианты не повторяются, пока не исчерпаны."""
+        mood = getattr(self.mind, "mood", None)
+        if mood:                                       # ORG-064: hello_good / hunt_bad, если такие фразы есть
+            k = mood.phrase_key(key)
+            if k != key and self.can_say(k, facts):
+                key = k
         options = [p for p in self.phrases.get(key) or [] if fields(p) <= set(facts)]
         if not options:
             return None
@@ -453,6 +461,9 @@ class Social:
         near = self.near_peers(state)
         self.near_since = {p: self.near_since.get(p, now) for p in near}
         if self.busy():
+            return
+        mood = getattr(self.mind, "mood", None)
+        if mood and mood.silent():                         # ORG-064: мрачный — первым не заговаривает (отвечает)
             return
         for peer in near:
             if self.quarrel(peer):                        # society: в ссоре — первым не заговаривать

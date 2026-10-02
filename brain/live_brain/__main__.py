@@ -139,6 +139,10 @@ def report(args, memory, state_dir):
     if needs:
         top = sorted(needs.items(), key=lambda kv: -kv[1])[:3]
         print("   мотивы сейчас: " + ", ".join(f"{k} {v:.2f}" for k, v in top))
+    mood = memory.get("mood") or {}                                            # talk: ORG-064
+    if mood:                                                                   # talk:
+        print(f"   настроение: {mood.get('label')} ({mood.get('value', 0):+.2f})"  # talk:
+              + (": " + ", ".join(mood["reasons"]) if mood.get("reasons") else ""))   # talk:
     party = memory.get("party") or {}
     if party:
         print(f"   группа: {'подтверждена сервером' if party.get('confirmed') else 'нет'}; "
