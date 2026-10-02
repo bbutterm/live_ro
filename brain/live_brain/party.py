@@ -236,6 +236,8 @@ class Party:
         if hunting and same_map:
             if state.get("follow") != self.leader and self.due("follow", 30, now):
                 await self.act([{"action": "follow", "to": self.leader}], f"группа: иду за {self.leader}")
+        elif state.get("follow") == self.leader and getattr(self.mind, "crew", None) and self.mind.crew.walking():
+            pass                                            # crew: гуляем с лидером по городу (crew.walk)
         elif state.get("follow") == self.leader and self.due("unfollow", 30, now):
             await self.act([{"action": "unfollow"}], "группа: лидер не охотится рядом")
 

@@ -25,6 +25,7 @@ PLAN_ACTIONS = ("friend_request", "job_change", "sleep", "service", "meet_point"
                 "emote")
 PLAN_ACTIONS += ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_check", "mail_take")   # market: торговля и почта (economy.py)
 PLAN_ACTIONS += ("pet_setup", "pet_tame", "pet_hatch")   # pets: питомец (pets.py, ORG-051)
+PLAN_ACTIONS += ("party_say",)   # crew: чат группы (crew.py, ORG-053)
 PLAN_ACTIONS += ("chat_room",)   # society: чат-комната-вывеска (society.py, ORG-026)
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
@@ -145,6 +146,11 @@ class SafetyPolicy:
             return {"action": "give", "to": to, "item": item, "amount": amount}, None
         if kind in ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_check", "mail_take"):   # market:
             return self.check_market(kind, action, state, now)                                       # market:
+        if kind == "party_say":                                                                       # crew:
+            text = fit_text(str(action.get("text", "")))
+            if not text or not state.get("party"):
+                return None, "пустой текст или нет группы"
+            return {"action": "party_say", "text": text}, None
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":

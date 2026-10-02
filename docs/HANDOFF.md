@@ -1303,6 +1303,9 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 5. **Ресурсы (ORG-047).** `scripts/lab resources` — прислать вывод целиком (RSS/CPU тел и мозгов, «сколько ещё влезет»).
    Это главный замер для решения о числе жителей.
 6. **Смены (ORG-044).** Не включать `LAB_MAX_ONLINE` без решения владельца; только `scripts/lab doctor` — раздел смен.
+8. **Жизнь группы (ORG-053, docs/SOCIETY.md).** В console.log: шёпот `[crew:pref:...]` от Vera лидеру, фразы
+   в чате группы (`[Party]` у обоих), `crew_group_choice` в decisions лидера перед сессией, прогулка Vera за Arkady
+   в городе (`crew_walk`, `follow`). Слишком шумно — `BRAIN_DISABLE=crew`.
 7. **Ревизия стыков.** Сон, квест и поход к NPC теперь ждут конца сделки/почты; при отказе «занят» — запись в decisions.
    Если житель долго не засыпает в своё окно — прислать `routine_sleep`/`sleep_blocker` из decisions.
 
@@ -1311,9 +1314,9 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
 git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
 python3 scripts/check.py
-(cd brain && python3 -m unittest discover -s tests)          # OK, 344 (без PyYAML/upstream часть skipped)
+(cd brain && python3 -m unittest discover -s tests)          # OK, 352 (без PyYAML/upstream часть skipped)
 for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done
-# auto_create 34, brain_bridge 68, combat 29, economy 102, job_change 34, pets 32, survival 39
+# auto_create 34, brain_bridge 70, combat 29, economy 102, job_change 34, pets 32, survival 39
 scripts/lab doctor; scripts/lab resources
 scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 ```
@@ -1322,5 +1325,5 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 `scripts/lab down`, `git checkout --detach <commit задания №15>`, `scripts/lab up`. Профили откатываются вместе с кодом.
 
 ### Что прислать
-`docs/qa/HERMES-<sha7>.md`: шаг 0, пункты 1–7 этого задания и 1–7 задания №15, `scripts/lab resources`,
+`docs/qa/HERMES-<sha7>.md`: шаг 0, пункты 1–8 этого задания и 1–7 задания №15, `scripts/lab resources`,
 `scripts/lab chronicle` за день, ручные вмешательства (цель — 0).

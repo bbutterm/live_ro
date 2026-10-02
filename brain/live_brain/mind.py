@@ -20,6 +20,7 @@ from . import llm
 from .activity import Activities
 from .bonds import Bonds
 from .pets import Pets
+from .crew import TAG as CREW_TAG, Crew
 from .aims import Aims                                  # events: недельные цели (ORG-038)
 from .career import Career
 from .economy import TAG as ECON_TAG, Economy
@@ -139,6 +140,7 @@ class Mind:
                 self.learn_hunt_map(m, save=False)
         self.activities = Activities(self) if self.routine and settings.feature("activity") else None
         self.bonds = Bonds(self) if self.ctx.peers and settings.feature("bonds") else None
+        self.crew = (Crew(self, (world or {}).get("crew")) if self.party and feat("crew") else None)   # crew: ORG-053
         self.pets = (Pets(self, (world or {}).get("pets")) if world and feat("pets")              # pets: ORG-051
                      and ((world or {}).get("pets") or {}).get("enabled", True) else None)
         # social: городской распорядок, разговоры жителей, реакции (social.py)
@@ -278,16 +280,24 @@ class Mind:
                 and INFO_TAG.search(str(event.get("text", "")))):
             self.on_rumor(str(event["from"]), str(event["text"]))
             return
+        if (self.crew and kind == "chat_private" and event.get("from") in self.ctx.peers     # crew: желание карты
+                and CREW_TAG.search(str(event.get("text", "")))):
+            await self.crew.on_tag(str(event["from"]), str(event["text"]))
+            return
         if (self.party and kind == "chat_private" and event.get("from") in self.ctx.peers
                 and PARTY_TAG.search(str(event.get("text", "")))):
             await self.party.on_tag(str(event["from"]), str(event["text"]))    # сигнал группы
             if self.social and "[party:dead:" in str(event["text"]):           # social: сочувствие
                 await self.social.on_peer_dead(str(event["from"]))
+            if self.crew and "[party:dead:" in str(event["text"]):             # crew: в чат группы
+                await self.crew.on_mate_dead(str(event["from"]))
             return
         if (self.social and kind == "chat_private" and event.get("from") in self.ctx.peers
                 and SOCIAL_TAG.search(str(event.get("text", "")))):            # social: реплика жителя
             await self.social.on_tag(str(event["from"]), str(event["text"]))
             return
+        if self.crew and kind in ("level_up", "support", "danger"):            # crew: чат группы
+            await self.crew.on_event(kind, event)
         if self.social and kind == "support":                                  # social: благодарность
             await self.social.on_support(event)
         if self.social and kind == "level_up":                                 # social: рассказать жителям
@@ -548,7 +558,7 @@ class Mind:
         await self.safety_tick()
         await self.plans.tick()
         for module in (self.routine, self.economy, self.party, self.career, self.activities, self.bonds,
-                       self.social, self.pets):
+                       self.social, self.pets, self.crew):
             if module:
                 await module.tick()
         await self.rumors.tick()                               # events: проверка слухов опытом, пересказ при встрече

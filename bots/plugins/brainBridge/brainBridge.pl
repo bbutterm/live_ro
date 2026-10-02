@@ -32,6 +32,7 @@
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
 #   friend_request {to}   -> friend request <to> (только жителю; видимому); запрос жителя принимается в хуке
+#   party_say {text} -> «p <текст>»: чат группы (crew.py, ORG-053)
 #   pet_tame {item,mob} / pet_hatch {egg} / pet_setup {food_on,items,mobs} -> плагин pets: питомец (ORG-051)
 #   job_change {path,stage,steps,success} -> плагин jobChange: этап квеста смены профессии (шаги из progression.json)
 #   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
@@ -432,6 +433,11 @@ sub actionToCommand {
 		my $t = cleanText($a->{text});
 		return (0, 'пустой текст') unless length $t;
 		return (1, "c $t");
+	} elsif ($kind eq 'party_say') {                                   # crew: чат группы (ORG-053)
+		my $t = cleanText($a->{text});
+		return (0, 'пустой текст') unless length $t;
+		return (0, 'нет группы') unless $char && $char->{party} && $char->{party}{joined};
+		return (1, "p $t");
 	} elsif ($kind eq 'whisper') {
 		my $to = cleanText($a->{to});
 		my $t  = cleanText($a->{text});

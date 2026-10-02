@@ -217,4 +217,16 @@ is_deeply(\@ev, [['party_refused', name => 'Vera', code => 1]], 'society: отк
 Plugins::call('packet/party_invite_result', {name => 'Vera', type => 2});
 is_deeply(\@ev, [], 'society: согласие — не событие');
 
+# ---- crew: чат группы (ORG-053) ----
+{
+	my $saved = $Globals::char->{party};
+	$Globals::char->{party} = undef;
+	my ($okp, $why) = brainBridge::actionToCommand({action => 'party_say', text => 'Погнали!'});
+	ok(!$okp && $why =~ /группы/, 'party_say без группы — отказ');
+	$Globals::char->{party} = {joined => 1, name => 'LR_Arkady'};
+	($okp, $why) = brainBridge::actionToCommand({action => 'party_say', text => 'Погнали!'});
+	ok($okp && $why eq 'p Погнали!', 'party_say -> p <текст>');
+	$Globals::char->{party} = $saved;
+}
+
 done_testing();

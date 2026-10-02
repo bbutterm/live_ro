@@ -733,6 +733,9 @@ class Routine:
         self.grow(maps)
         choice, why = maps.choose(self.mind.persona["hunt_maps"], bans, level=self.mind.state.get("lv"),
                                   needs=getattr(self.mind, "needs", None), rng=self.rng)
+        crew = getattr(self.mind, "crew", None)                  # crew: лидер группы решает с учётом желаний
+        if crew:
+            choice, why = crew.group_choice(choice, why)
         if choice != self.st.get("prefer_map"):
             self.note("routine_map_choice", f"На охоту пойду на {choice}: {why}.", 1)
         self.st["prefer_map"] = choice
