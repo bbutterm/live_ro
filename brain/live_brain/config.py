@@ -45,7 +45,7 @@ class Settings:
     @property
     def llm_off_reason(self):
         if self.llm_provider != "openrouter":
-            return "LLM выключен (BRAIN_LLM=off)"
+            return "BRAIN_LLM=off, платные вызовы не включены"
         if self.api_key in UNSET:
             return "нет OPENROUTER_API_KEY"
         return None

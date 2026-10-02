@@ -7,7 +7,8 @@
 # переподключается раз в 5 с.
 #
 # Наружу: hello, state (каждые brainBridge_stateInterval с, по умолчанию 15),
-# события in_game, died, level_up, kill, loot, chat_public, chat_private, ack.
+# события in_game, died, level_up, attack, kill, loot, chat_public, chat_private, ack.
+# В state: HP/SP, уровень, карта, координаты, lockMap, режим AI и текущее занятие (activity).
 # Внутрь (только эти действия, всё остальное отклоняется):
 #   say {text}            -> c <text>
 #   whisper {to, text}    -> pm "<to>" <text>
@@ -23,7 +24,7 @@ use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use JSON::PP;
 use Time::HiRes qw(time);
 use Plugins;
-use Globals qw($char $field $net %config);
+use Globals qw($char $field $net $monstersList %config);
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -39,6 +40,7 @@ my $hooks = Plugins::addHooks(
 	['in_game',            sub { event('in_game') }],
 	['self_died',          sub { event('died') }],
 	['base_level_changed', sub { event('level_up', level => $_[1]{level}) }],
+	['attack_start',       \&onAttack],
 	['target_died',        \&onKill],
 	['item_gathered',      sub { event('loot', item => "$_[1]{item}", amount => $_[1]{amount} + 0) }],
 	['packet_pubMsg',      \&onPubMsg],
@@ -118,8 +120,15 @@ sub sendState {
 		x         => $pos->{x}, y => $pos->{y},
 		lock_map  => $config{lockMap},
 		ai        => (AI::state() == AI::AUTO() ? 'auto' : 'manual'),
+		activity  => (AI::action() || 'idle'),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 	});
+}
+
+sub onAttack {
+	my (undef, $args) = @_;
+	my $m = $monstersList ? $monstersList->getByID($args->{ID}) : undef;
+	event('attack', monster => ($m ? "$m->{name}" : undef), hp_pct => pct($char->{hp}, $char->{hp_max}));
 }
 
 sub onKill {
