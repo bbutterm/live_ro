@@ -43,6 +43,13 @@
       "label": "сменить место охоты", "modes": ["hunt"],
       "satisfies": {"curiosity": 0.8, "progress": 0.3},
       "requires": {"other_maps": true, "no_leader": true}, "cooldown_minutes": 60, "proof": "map_changed", "proof_minutes": 15
+    },
+    "check_rumor": {
+      "label": "проверить слух о богатом или новом месте", "modes": ["hunt"],
+      "satisfies": {"curiosity": 1.0, "progress": 0.2, "wealth": 0.2},
+      "requires": {"day": true, "rumor_to_check": true, "no_leader": true},
+      "cooldown_minutes": 120, "proof": "map_changed", "proof_minutes": 20,
+      "_comment": "ORG-032: слух rich/new (rumors.to_check: доверие, карта из hunt_maps или по атласу, риск по смелости); итог — подтверждение/опровержение опытом (rumors.check)"
     }
   }
 }

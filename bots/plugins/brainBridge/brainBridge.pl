@@ -7,7 +7,8 @@
 # переподключается раз в 5 с.
 #
 # Наружу: hello, state (каждые brainBridge_stateInterval с, по умолчанию 15),
-# события in_game, died, level_up, attack, kill, loot, chat_public, chat_private, ack.
+# события in_game, died, level_up, attack, kill, loot, chat_public, chat_private, ack;
+# world_msg {text, source sys|broadcast} — объявление сервера (хуки packet_sysMsg и packet_localBroadcast, аргумент Msg).
 # В state: HP/SP, уровень, карта, координаты, lockMap, режим AI, текущее занятие (activity)
 # и до 10 игроков в зоне видимости (players), класс/пол/уровень самого бота и игроков.
 # delivery: подтверждение сервером шёпота (результат отправки) и общего чата (эхо) или таймаут.
@@ -84,6 +85,8 @@ my $hooks = Plugins::addHooks(
 	['packet_selfChat',    \&onSelfChat],
 	['party_invite',       \&onPartyInvite],
 	['packet_skilluse',    \&onSkillUse],
+	['packet_sysMsg',      sub { onWorldMsg('sys', $_[1]{Msg}) }],           # ORG-039: 009A system_chat (announce)
+	['packet_localBroadcast', sub { onWorldMsg('broadcast', $_[1]{Msg}) }],  # ORG-039: 01C3/040C local_broadcast
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -327,6 +330,20 @@ sub onPubMsg {
 sub onPrivMsg {
 	my (undef, $args) = @_;
 	event('chat_private', from => "$args->{privMsgUser}", text => "$args->{privMsg}");
+}
+
+# ORG-039: объявление сервера -> событие world_msg {text, source}. Только данные: мозг пишет их в память
+# как note и в шину мира как event, команд по ним не исполняет. Повтор того же текста за 60 с не шлётся.
+my %worldMsgSeen;
+sub onWorldMsg {
+	my ($source, $msg) = @_;
+	my $text = cleanText($msg);
+	return unless length $text;
+	my $now = time;
+	delete $worldMsgSeen{$_} for grep { $now - $worldMsgSeen{$_} > 60 } keys %worldMsgSeen;
+	return if exists $worldMsgSeen{$text};
+	$worldMsgSeen{$text} = $now;
+	event('world_msg', text => $text, source => $source);
 }
 
 sub cleanText {

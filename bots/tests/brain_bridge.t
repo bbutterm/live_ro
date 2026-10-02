@@ -143,4 +143,21 @@ ok(!(brainBridge::actionToCommand({action => 'sleep', seconds => 'x; quit'}))[0]
 $Globals::config{storageAuto} = 0;
 is((brainBridge::actionToCommand({action => 'service'}))[1], 'autosell', 'без склада — продать и докупить');
 
+# ---- ORG-039: объявления сервера -> событие world_msg (хуки packet_sysMsg / packet_localBroadcast, аргумент Msg) ----
+@ev = ();
+Plugins::call('packet_sysMsg', {Msg => "  Ивент: нашествие порингов на prt_fild08!\n", RawMsg => 'x', MsgColor => undef});
+is_deeply(\@ev, [['world_msg', text => 'Ивент: нашествие порингов на prt_fild08!', source => 'sys']],
+	'системное сообщение — world_msg без управляющих символов');
+@ev = ();
+Plugins::call('packet_sysMsg', {Msg => 'Ивент: нашествие порингов на prt_fild08!'});
+is_deeply(\@ev, [], 'тот же текст за 60 с — не повторяю');
+Plugins::call('packet_localBroadcast', {Msg => 'Сервер перезагрузится через 5 минут', color => 'FFFF00'});
+is_deeply(\@ev, [['world_msg', text => 'Сервер перезагрузится через 5 минут', source => 'broadcast']],
+	'объявление (local_broadcast) — world_msg');
+@ev = ();
+Plugins::call('packet_sysMsg', {Msg => "\x00 \x01"});
+is_deeply(\@ev, [], 'пустое после очистки — не событие');
+Plugins::call('packet_sysMsg', {Msg => 'x' x 300});
+is(length($ev[0][2]), 120, 'длинное обрезано до 120 символов');
+
 done_testing();

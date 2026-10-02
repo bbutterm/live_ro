@@ -2,8 +2,8 @@
 
 Владелец видит мир целиком, а не по одному боту: кто где охотился, кто с кем встречался,
 кто кого вылечил, кто кому помог, кто погиб и почему (по разбору смерти), что сказали
-дневники и какие были оповещения. Источник — только события в памяти жителей (факты игры),
-ничего не придумывается. Запуск: scripts/lab chronicle [YYYY-MM-DD] (по умолчанию — сегодня
+дневники и какие были оповещения. Источник — только события в памяти жителей (факты игры)
+и общая шина мира state/shared/world.sqlite (раздел «События мира», ORG-045), ничего не придумывается. Запуск: scripts/lab chronicle [YYYY-MM-DD] (по умолчанию — сегодня
 по часовому поясу мира из goals.json).
 
     python3 -m live_brain.chronicle --lab-root /opt/ro-bot-lab --bots bot01 bot02 [--day 2026-10-02]
@@ -14,6 +14,8 @@ import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from . import world_bus
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -85,6 +87,7 @@ def chronicle(lab_root, bots, day=None, tz_hours=3):
             out.append(f"- {datetime.fromtimestamp(ts, tz).strftime('%H:%M')} {name}: {text}")
     else:
         out.append("Событий за день нет.")
+    out += world_section(lab_root, start, end, tz)
     alerts = Path(lab_root) / "run" / "alerts.log"
     if alerts.exists():
         day_alerts = [json.loads(l) for l in alerts.read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -93,6 +96,20 @@ def chronicle(lab_root, bots, day=None, tz_hours=3):
             out += ["", "## Оповещения владельцу"] + [f"- {a['ts'][11:16]}Z {a['bot']}: {a['kind']} — {a['text']}"
                                                        for a in day_alerts]
     return "\n".join(out)
+
+
+def world_section(lab_root, start, end, tz):
+    """ORG-045: раздел «События мира» — общая шина state/shared/world.sqlite (значимые факты всех жителей,
+    объявления сервера, слухи, цели недели). Нет шины или событий — раздела нет."""
+    events = world_bus.read_period(Path(lab_root) / "state" / "shared" / "world.sqlite", start, end)
+    if not events:
+        return []
+    lines = ["", "## События мира"]
+    for e in events:
+        mark = "!" * max(0, e["importance"] - 3)
+        lines.append(f"- {datetime.fromtimestamp(e['ts'], tz).strftime('%H:%M')} {e['bot']}: "
+                     f"{world_bus.describe(e['kind'], e['data'])}{(' ' + mark) if mark else ''}")
+    return lines
 
 
 def main(argv=None):
