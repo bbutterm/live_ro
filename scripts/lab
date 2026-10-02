@@ -74,6 +74,8 @@ usage() {
                         новый житель из bots/templates/ШАБЛОН (active: false): профиль, персона, реестр
   birth BOT [--yes]     процедура рождения: проверки и следующие шаги; с --yes — db-backup (если нет
                         свежего) и db-add-account BOT, больше ничего
+  census [--json]       перепись мира и «кого родить следующим»: роли, связи, дефицит, ресурсы, блокеры
+                        рождения (ORG-088; только чтение, только совет)
 Только режим release:
   build [DIR] | deploy <commit> | activate <release> | rollback | db-init
 EOF
@@ -1200,6 +1202,8 @@ main() {
     memoir) load_env; [[ "${1:-}" =~ ^bot[0-9]+$ ]] || die "scripts/lab memoir botNN [НЕДЕЛЯ] [--llm]"   # dreams: ORG-082
             bot="$1"; shift; ( cd "$(profile_root)/brain" && python3 -m live_brain.memoir "$@" --env "$LAB_ENV" \
                  --lab-root "$LAB_ROOT" --bot "$bot" ) ;;   # dreams: мемуары (только чтение памяти)
+    census) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain.census --repo "$(profile_root)" \
+              --lab-root "$LAB_ROOT" --bots $(lab_bots) --max-online "${LAB_MAX_ONLINE:-}" "$@" ) ;;   # census: ORG-088
     alerts) load_env; if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then tail -n "${1:-30}" "$LAB_ROOT/run/alerts.log"; else info "оповещений нет"; fi ;;
     supervise) cmd_supervise ;;
     routine)

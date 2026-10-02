@@ -1435,6 +1435,54 @@ class Memoir:                            # ATTR memoir, FEATURE memoir, CONFIG m
 
 **Готово.** Тесты зелёные; `docs/LIFE.md`; статус ORG-082 «код, в игре не проверено».
 
+### Т-26 · ORG-088 · Перепись и «кого родить следующим»
+
+**Цель.** Одна команда, по которой владелец видит состав мира и получает совет, кого родить следующим и можно ли
+это сделать сейчас. Только чтение и только совет: ни БД, ни реестр, ни профили не меняются, рождает владелец
+(docs/POPULATION.md §4).
+
+**Файлы.** `brain/live_brain/census.py` (новый, только чтение), `scripts/lab` (подкоманда `census [--json]` по
+образцу `dashboard`), `brain/tests/test_census.py`, `docs/POPULATION.md` (раздел «Перепись»), строка ORG-088 в
+`docs/ORGANIC_BACKLOG.md`.
+
+**Интерфейсы.**
+```python
+role_of(job) -> str            # healer | merchant | tank | ranged | magic | thief | novice (по ветке профессии)
+residents(repo, lab_root, lab_bots, now) -> [{bot, name, target, job, lv, job_lv, map, role, active, online_cfg,
+                                             born, template, relations: {имя: affinity}, party, activities}]
+    # реестр brain/world/roster.json + kv last_state/activity события памяти state/<bot>/memory.sqlite (mode=ro);
+    # нет памяти — профессия-цель из реестра, уровень неизвестен
+gaps(residents) -> [{role, text}]             # каких ролей не хватает и что из-за этого спит в коде
+recommend(repo, residents, gaps) -> [{template, job, score, why, blockers}]   # шаблоны bots/templates, лучший первым
+capacity(lab_root, lab_bots, max_online) -> {more, online, max_online, notes}  # resources.scan/meminfo/capacity
+birth_blockers(repo, residents, now) -> [str]  # start_point, auto_job_change, темп ORG-043, ждущие active: false
+collect(repo, lab_root, lab_bots, max_online=None, now=None) -> dict
+render(data) -> str                            # текст для терминала
+main(argv=None) -> int                         # --repo --lab-root --bots --max-online --json
+```
+- Роли по профессии (ветки): лекарь — Acolyte (`healer.HEALER_JOBS`), торговец — `economy.MERCHANTS`, танк —
+  Swordman-ветка, дальний бой — Archer-ветка, маги — `atlas.ARCHETYPES["magic"]`, ловкач — Thief-ветка.
+- Дефицит — только то, что правда по коду: нет торговца → лавка `offer_shop` (ORG-034) спит, первого продавца с
+  Overcharge нет; нет лекаря → пост у собора (ORG-069) пуст, мини-боссу (ORG-079) нужен хилер или ≥ 10 зелий у
+  каждого; группа (`last_state.party`) без лекаря; нет танка/дальнего боя/мага — однообразие боя (кода, который их
+  ждёт, нет — так и писать).
+- Рекомендация: балл = важность закрываемой роли − число жителей той же профессии; штраф за известные преграды
+  первой профессии (POPULATION.md §6.3: Thief — 1200 z на Kafra, Swordsman — переходы izlude); шаблон без своей
+  персоны (`persona: null`) — пометка «нужна --persona». Объяснение — одна строка «почему».
+- Ресурсы: живой замер `/proc` (как `scripts/lab resources`), иначе последний замер истории сторожа
+  `logs/resources.jsonl`; «влезет ещё N»; `LAB_MAX_ONLINE` ≤ числа жителей → новый житель будет ждать смены.
+- Блокеры рождения: `start.override.enabled` в `progression.json` (start_point в Пронтере не включён — новичок
+  появится в iz_int, выход есть по данным, в игре не проверен), `progression.auto_job_change: false`, рождение
+  < 7 дней назад (темп ORG-043), жители с `active: false` в реестре (сначала довести их).
+- Без секретов: env не печатается, только `LAB_MAX_ONLINE` и список ботов.
+
+**Тесты.** Временная лаборатория с двумя `memory.sqlite` (Swordman и Acolyte в одной группе): состав, роли,
+связи; дефицит торговца → рекомендация Merchant с объяснением; при Merchant в мире рекомендация другая; группа без
+лекаря; отсутствующая память не роняет; блокеры start_point/auto_job_change/темп; LAB_MAX_ONLINE и «влезет»
+по подменённому `/proc` и истории; `--json`; память открывается только на чтение (файл не меняется).
+
+**Готово.** Тесты зелёные; `scripts/lab census` печатает перепись и совет; статус ORG-088 «код».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности
