@@ -51,6 +51,7 @@ class Collection:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "collection", "collection", "collection", True, "world"
     TICK_ORDER = 220
+    TICK_EVERY = 10             # perf: реестр не зовёт tick до next_tick (modules.py)
 
     def __init__(self, mind, world=None, clock=None, rng=None, prices=None):
         self.mind = mind

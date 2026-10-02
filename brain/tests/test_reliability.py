@@ -13,7 +13,7 @@ from pathlib import Path
 from live_brain.budget import SharedBudget
 from live_brain.config import Settings
 from live_brain.gate import RuleGate
-from live_brain.memory import MAX_MEMORIES, Memory
+from live_brain.memory import MAX_MEMORIES, SCHEMA_VERSION, Memory   # perf: SCHEMA_VERSION
 from live_brain.mind import Mind, rotate
 from live_brain.routine import load_world
 
@@ -46,7 +46,7 @@ class ReliabilityTest(unittest.TestCase):
         self.assertTrue((self.root / "memory.sqlite.bak-v1").exists(), "копия до миграции")
         self.assertEqual(mem.top_memories(1)[0]["text"], "Я Arkady из Пронтеры")
         self.assertEqual(mem.top_memories(1)[0]["kind"], "note")
-        self.assertEqual(mem.get("schema_version"), 2)
+        self.assertEqual(mem.get("schema_version"), SCHEMA_VERSION)   # perf: v3 — индекс events_kind_ts
         mem.close()
         Memory(path).close()                                # повторный запуск — миграция не повторяется
         self.assertEqual(len(list(self.root.glob("*.bak-*"))), 1)

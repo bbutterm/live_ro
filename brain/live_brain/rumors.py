@@ -77,6 +77,7 @@ class Rumors:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR = "rumors"             # всегда включён; world_msg — явно в mind (до всех)
     TICK_ORDER = 120
+    TICK_EVERY = TICK_SEC       # perf: реестр не зовёт tick до next_tick (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 30
     PROMPT = [("слухи_не_факты", "summary", 240)]
 

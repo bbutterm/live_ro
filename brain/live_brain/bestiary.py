@@ -45,6 +45,7 @@ class Bestiary:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "bestiary", "bestiary", "bestiary", True, "world"
     TICK_ORDER = 225                          # после collection (220): та же память kill
+    TICK_EVERY = 10             # perf: реестр не зовёт tick до next_tick (modules.py)
     EVENTS, EVENT_ORDER = {"kill": "on_kill"}, 75   # после boss (70), событие не поглощается
     PROMPT = [("бестиарий", "summary", 235)]  # после соперника (230), до слухов (240)
 

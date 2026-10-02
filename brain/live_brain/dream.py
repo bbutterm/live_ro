@@ -85,6 +85,7 @@ class Dream:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "dream", "dream", "dream", True, "world"
     TICK_ORDER = 145                       # до aims (150): цель недели видит свежий этап
+    TICK_EVERY = 60             # perf: реестр не зовёт tick до next_tick (modules.py)
     PROMPT = [("мечта", "summary", 225)]   # после целей недели (220)
 
     def __init__(self, mind, world=None, clock=None, rng=None, reach=None):

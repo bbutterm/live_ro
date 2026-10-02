@@ -42,6 +42,7 @@ class Savings:
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "savings", "savings", "savings", True, "world"
     REQUIRES = ("dream",)                       # цель копилки — от мечты (Dream стоит выше в MODULES)
     TICK_ORDER = 147                            # после мечты (145), до целей недели (150)
+    TICK_EVERY = 30             # perf: реестр не зовёт tick до next_tick (modules.py)
     EVENT_ORDER = 70
     EVENTS = {"bank_result": {"call": "on_bank", "kind": True, "own": True},
               "bank_balance": {"call": "on_bank", "kind": True, "own": True}}

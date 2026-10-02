@@ -65,6 +65,7 @@ class Mentor:
     # реестр модулей (modules.py, W8): создание, тик, метка, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "mentor", "mentor", "mentor", True, ("world", "peers"), "world"
     TICK_ORDER = 95                          # после crew (90): группа и карта уже решены в этом тике
+    TICK_EVERY = 10             # perf: реестр не зовёт tick до next_tick (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 55  # после crew [crew:] (50), до guild (60)
     PROMPT = [("наставничество", "summary", 215)]
 
