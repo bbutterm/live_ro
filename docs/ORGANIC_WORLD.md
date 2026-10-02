@@ -397,6 +397,9 @@ ttl)`. Мозг каждого жителя читает новые событи
 2. Одна строка в `modules.MODULES` — место в порядке СОЗДАНИЯ (ниже модулей из `REQUIRES`).
 3. `mind.py` не трогать. Тест порядка `brain/tests/test_mind_order.py` покажет новые вызовы: обновить его таблицу
    (`cd brain && python3 -m tests.test_mind_order dump`) и проверить глазами, что старые строки не сдвинулись.
+4. perf: тик раз в секунду — бюджет такта (`docs/PERF.md`, страж `tests/test_perf.py`: ≤ 4 SQL-запросов на тик у
+   модуля). Тяжёлое — `TICK_EVERY = N` (или свой `next_tick`), kv/отношения — через `mind.mem` (кэш такта),
+   «событий вида за период» — `mem.count_events`.
 
 **Атрибуты.**
 - Включение: `REQUIRES` (`"world"`, `"peers"`, `"config"` — непустой `world[CONFIG]`, или `ATTR` другого модуля),

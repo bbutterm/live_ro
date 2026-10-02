@@ -63,6 +63,13 @@ class PlanStore:
         self.db = db
         self.db.executescript(SCHEMA)
         self.db.commit()
+        self.cached = False           # perf: внутри такта мозга (Mind.tick_scope) active() читается из БД один раз
+        self._active = None
+
+    def cache(self, on):
+        """perf: включить/выключить кэш active() на такт; запись (create/update) сбрасывает его."""
+        self.cached = on
+        self._active = None
 
     def create(self, **plan):
         now = time.time()
@@ -70,6 +77,7 @@ class PlanStore:
         plan.update(created=now, updated=now, history=json.dumps([[now, "создан"]], ensure_ascii=False))
         cols = ", ".join(plan)
         self.db.execute(f"INSERT INTO plans ({cols}) VALUES ({', '.join('?' * len(plan))})", list(plan.values()))
+        self._active = None                                                   # perf:
         self.db.commit()
         return self.get(plan["id"])
 
@@ -78,8 +86,12 @@ class PlanStore:
         return dict(row) if row else None
 
     def active(self):
+        if self.cached and self._active is not None:                          # perf: (row или False — «нет плана»)
+            return dict(self._active) if self._active else None
         row = self.db.execute("SELECT * FROM plans WHERE status IN ('planned', 'executing') "
                               "ORDER BY created DESC LIMIT 1").fetchone()
+        if self.cached:                                                       # perf:
+            self._active = dict(row) if row else False
         return dict(row) if row else None
 
     def recent(self, n=5):
@@ -98,6 +110,7 @@ class PlanStore:
         fields.update(updated=now, history=json.dumps(history[-50:], ensure_ascii=False))
         sets = ", ".join(f"{k} = ?" for k in fields)
         self.db.execute(f"UPDATE plans SET {sets} WHERE id = ?", [*fields.values(), plan_id])
+        self._active = None                                                   # perf:
         self.db.commit()
         return self.get(plan_id)
 

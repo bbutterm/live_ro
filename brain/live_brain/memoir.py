@@ -78,11 +78,20 @@ def item_label(item, amount):
     if str(item) in ("z", "zeny"):
         return f"{amount} зени"
     try:
-        from .prices import Prices
-        name = Prices.load().name(str(item))
+        name = _prices().name(str(item))       # perf: справочник один на процесс (был Prices.load() на каждую строку)
     except (OSError, ValueError, AttributeError):
         name = None
     return f"{amount} × {name or item}"
+
+
+_PRICES = []                                    # perf: Prices.load() каждый раз пересобирает словарь ≈ 3 мс
+
+
+def _prices():
+    if not _PRICES:
+        from .prices import Prices
+        _PRICES.append(Prices.load())
+    return _PRICES[0]
 
 
 # ---------------- чтение памяти ----------------
@@ -322,6 +331,7 @@ class Memoir:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "memoir", "memoir", "memoir", True, "world"
     TICK_ORDER = 230
+    TICK_EVERY = 600            # perf: реестр не зовёт tick до next_tick (modules.py)
 
     def __init__(self, mind, world=None, clock=None):
         self.mind = mind

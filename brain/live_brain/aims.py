@@ -49,6 +49,7 @@ class Aims:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE = "aims", "aims"
     TICK_ORDER = 150
+    TICK_EVERY = TICK_SEC       # perf: реестр не зовёт tick до next_tick (modules.py)
     PROMPT = [("цели_недели", "summary", 220)]
 
     def __init__(self, mind, clock=None, rng=None):

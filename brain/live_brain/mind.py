@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import time
+from contextlib import contextmanager
 
 from . import llm
 from . import modules                                   # W8: реестр модулей (создание, тик, метки, события, промпт)
@@ -139,23 +140,43 @@ class Mind:
             self.mem.add_event("bridge_connected", {"char": msg.get("char")})
             self.reconnected()
         elif kind == "state":
-            self.state = {k: v for k, v in msg.items() if k not in ("type", "ts")}
-            self.state["goal"] = self.mem.get("goal")
-            if self.state.get("name"):
-                self.ctx.name = self.state["name"]
-            self.remember_players(self.state.get("players") or [])
-            self.notice_peers(self.state.get("players") or [])
-            self.mem.set("last_state", self.state)
-            self.postmortem.on_state(self.state)
-            self.check_job_ready()
-            self.state_received = time.time()
-            self.fresh_state = True
+            with self.tick_scope():                   # perf: состояние тела (раз в 1–2 с) — один коммит, не 3–5
+                self.on_state(msg)
         elif kind == "event":
             await self.on_event(msg)
         elif kind == "ack":
             self.on_ack(msg)
         elif kind == "delivery":
             self.on_delivery(msg)
+
+    def on_state(self, msg):
+        self.state = {k: v for k, v in msg.items() if k not in ("type", "ts")}
+        self.state["goal"] = self.mem.get("goal")
+        if self.state.get("name"):
+            self.ctx.name = self.state["name"]
+        self.remember_players(self.state.get("players") or [])
+        self.notice_peers(self.state.get("players") or [])
+        self.mem.set_changed("last_state", self.state)   # perf: тот же снимок — без записи (WAL, коммит)
+        self.postmortem.on_state(self.state)
+        self.check_job_ready()
+        self.state_received = time.time()
+        self.fresh_state = True
+
+    @contextmanager
+    def tick_scope(self):
+        """perf: такт мозга (docs/PERF.md): kv/relations и активный план читаются из БД один раз за такт,
+        записи памяти — одним коммитом на выходе. Поведение то же: кэш сквозной и живёт только внутри такта."""
+        store = getattr(self.plans, "store", None)
+        store = store if isinstance(store, PlanStore) else None
+        outer = store is not None and not store.cached
+        if outer:
+            store.cache(True)
+        try:
+            with self.mem.tick():
+                yield
+        finally:
+            if outer:
+                store.cache(False)
 
     def on_delivery(self, msg):
         """Подтверждение сервера: только оно доказывает, что реплика дошла (ack — лишь исполнение команды)."""
@@ -487,6 +508,16 @@ class Mind:
 
     async def step(self):
         """Один тик мозга (1 с): правила, модули, повод для модели. Реплей (replay.py) зовёт его напрямую."""
+        with self.tick_scope():                       # perf: кэш такта и один коммит; решение LLM — вне такта
+            taken = await self.step_rules()
+        if not taken:
+            return
+        reason, context, kind = taken
+        async with self.lock:
+            await self.decide(reason, context, kind)
+
+    async def step_rules(self):
+        """Тик без вызова модели: правила, модули, inbox; повод для модели (или None)."""
         self.fresh_state = bool(self.state_received) and time.time() - self.state_received < STALE_SEC
         if self.fresh_state and time.time() - self.ctx.last.get("needs_saved", 0) >= 60:
             self.ctx.last["needs_saved"] = time.time()            # ORG-015: мотивы видны в отчёте
@@ -508,13 +539,8 @@ class Mind:
                 and now - self.last_decision >= self.s.decide_interval):
             self.trigger("плановое размышление", {}, "timer")
         if not self.reasons or self.lock.locked():
-            return
-        taken = self.take_reason(now)
-        if not taken:
-            return
-        reason, context, kind = taken
-        async with self.lock:
-            await self.decide(reason, context, kind)
+            return None
+        return self.take_reason(now)
 
     async def read_inbox(self):
         """Команды оператора из run/brain/<bot>.inbox (JSON-строки): meet, cancel, rest, hunt, ask.

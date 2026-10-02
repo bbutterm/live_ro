@@ -16,6 +16,12 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
   EARLY       True — создаётся до SafetyPolicy (дом задаёт точку отдыха); остальные — после ядра.
   CREATED     имя метода экземпляра, вызываемого сразу после создания (до следующих модулей).
   TICK_ORDER  место в тике mind.step() (число; None — модуль не тикает). Метод tick() — sync или async.
+  TICK_EVERY  perf: тик не чаще раза в N секунд (None — каждый такт, 1 с). Если у экземпляра есть числовой
+              next_tick (модуль сам ведёт срок: `if now < self.next_tick: return` первой строкой tick), реестр
+              не зовёт tick, пока now < next_tick (часы — module.clock, иначе time.time): то же «рано», без вызова,
+              и сброс next_tick = 0 работает как раньше. Иначе срок ведёт реестр: следующий вызов — через N с
+              после предыдущего. Модулю, который должен реагировать на состояние тела каждую секунду, не ставить.
+              Тест-страж — tests/test_perf.py (docs/PERF.md).
   TAGS        [(regex, "метод")] — метки в шёпоте ДРУГОГО ЖИТЕЛЯ; метод(sender, text). Совпавшая метка
               поглощает шёпот: дальше (gate/LLM) он не идёт. TAG_ORDER — место модуля в цепочке меток.
   ECHO        [("ATTR источника", regex, "метод", порядок)] — отклик на метку, которую обработал ДРУГОЙ
@@ -45,6 +51,7 @@ bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # 
 """
 import inspect
 import re
+import time
 
 from .activity import Activities
 from .aims import Aims
@@ -172,6 +179,8 @@ class Registry:
                 self._need(cls, meth)
                 prompt.append((order, key, attr, meth))
         self.ticks = [attr for _, _, attr in sorted(ticks)]
+        self.every = {cls.ATTR: cls.TICK_EVERY for cls in self.classes            # perf: TICK_EVERY
+                      if getattr(cls, "TICK_ORDER", None) is not None and getattr(cls, "TICK_EVERY", None)}
         self.tags = [(rx, attr, meth) for *_, rx, attr, meth in sorted(tags, key=lambda t: t[:3])]
         self.events = {k: [(attr, sub) for _, _, attr, sub in sorted(v, key=lambda t: t[:2])]
                        for k, v in events.items()}
@@ -235,8 +244,24 @@ class Registry:
     async def tick(self, mind):
         for attr in self.ticks:
             module = getattr(mind, attr, None)
-            if module:
+            if module and self.due(mind, attr, module):
                 await call(module.tick)
+
+    def due(self, mind, attr, module):
+        """perf: TICK_EVERY — пора ли звать tick (см. описание атрибута в начале файла)."""
+        every = self.every.get(attr)
+        if not every:
+            return True
+        own = getattr(module, "__dict__", {})
+        now = (own.get("clock") or time.time)()
+        nt = own.get("next_tick")
+        if isinstance(nt, (int, float)) and not isinstance(nt, bool):
+            return now >= nt
+        due = mind.__dict__.setdefault("_tick_due", {})
+        if now < due.get(attr, 0.0):
+            return False
+        due[attr] = now + every
+        return True
 
     async def tag(self, mind, sender, text):
         """Метка в шёпоте жителя: первый включённый модуль с совпавшей меткой забирает шёпот (True)."""

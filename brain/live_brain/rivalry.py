@@ -51,6 +51,7 @@ class Rivalry:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "rivalry", "rivalry", "rivalry", True, ("peers",), "world"
     TICK_ORDER = 190
+    TICK_EVERY = 30             # perf: реестр не зовёт tick до next_tick (modules.py)
     PROMPT = [("соперник", "summary", 230)]
 
     def __init__(self, mind, world=None, clock=None, rng=None):
