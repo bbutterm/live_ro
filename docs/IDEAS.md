@@ -1674,6 +1674,144 @@ humanize(text, names)            # летопись: «погиб на prt_fild0
 
 **Готово.** Тесты зелёные; `docs/SOCIETY.md`; статус ORG-084 «код, в игре не проверено».
 
+### Т-32 · ORG-076 · Травник: зелья у старого фармацевта
+
+**Цель.** Житель-травник не продаёт травы с лутом, а копит их и иногда ездит в Альберту к старому фармацевту:
+тот варит зелья из трав за небольшую плату. Возвращается с зельями в рюкзаке (проверка по факту), экономия зени
+записывается и становится темой разговора и строкой летописи. Ремесло без Alchemist: навыка AM_PHARMACY в мире нет.
+По умолчанию выключено (`goals.json → herbal.enabled: false`): дорога в Альберту в игре не проверена.
+
+**Данные (сверено).** `alberta_in,16,28` Pharmacist (`npc/merchants/old_pharmacist.txt:27`). Меню: «Make Potion» (:40) →
+зелье («Red Potion.», «Orange Potion.», …, :55) → «Make as many as I can.» (:81, :205); итог — «Here you go» (:130,
+:251). Рецепты (код, а не текст :168-173): Red 501 = 2 Red Herb 507 + Empty Bottle 713 + 3z (в тексте 2z),
+Orange 502 = Red Herb + Yellow Herb 508 + бутылка + 5z, Yellow 503 = 2 × 508 + 10z, White 504 = 2 × White Herb 509 + 20z,
+Blue 505 = 2 × Blue Herb 510 + 30z, Green 506 = 2 × Green Herb 511 + 3z. Условия NPC: `checkweight(1201,1)` (:28) и свободный
+вес ≥ 500 (`MaxWeight - Weight < 5000` — вес rAthena в 0.1, :42). Empty Bottle — 400z у Tool Dealer (`prt_in,126,76`).
+По ценам `prices.json` выгодны только White (1200z против 20 + 400 + 2 × 60) и Blue — остальные дешевле купить.
+Путь: из `prontera 156,185` по `portals.txt` профиля, подтверждённым варпами сервера, до клетки у фармацевта —
+11 переходов (через `moc_fild01`, `pay_fild01..03`, `alberta`, комнату `alberta_in`), обратно — тоже; Морокк по пути
+не нужен.
+
+**Файлы.** `scripts/gen_crafts.py` (новый: рецепты и меню из скрипта, клетка у NPC, путь), `brain/world/crafts.json`,
+`brain/live_brain/herbal.py` (модуль реестра), `brain/live_brain/modules.py` (строка в `MODULES`; `consume: "result"` —
+поглотить событие, только если обработчик вернул True: `job_change_result` с `path` herbal не уходит в career),
+`brain/live_brain/safety.py` (`craft_setup`), `bots/plugins/brainBridge/brainBridge.pl` (`state.craft`, действие
+`craft_setup`), `bots/bot0{1,2}/control/config.txt` (блок `buyAuto Empty Bottle`, `disabled 1`),
+`brain/world/goals.json` (`herbal`), `brain/live_brain/chronicle.py` (строки), `brain/tests/test_herbal.py`,
+`bots/tests/craft.t`, `docs/ECONOMY.md`. `mind.py` не трогается.
+
+**Протокол.**
+```text
+state.craft {items {id: n} (травы, бутылка, материалы стрел), kept [id], weight_free, skills {AC_MAKINGARROW: ур.}}
+craft_setup {keep: [id], bottles: N}   -> %items_control{id} = не продавать/не складывать (до перезагрузки),
+                                          buyAuto «Empty Bottle»: maxAmount N, minAmount N-1, disabled 0 (N=0 — выкл.)
+job_change {path herbal, stage pharmacist, steps: [move по клеткам прибытия пути] + move к NPC + talk × рецепт,
+            success {text "Here you go", map alberta_in}}
+kv herbal {pending {ts, recipes, before}, trips [...], brewed {зелье: n}, saved, next_try, fails, told}
+события памяти: herbal_start, herbal_brewed {potions, saved}, herbal_failed {reason}, herbal_returned
+```
+```python
+class Herbal:     # ATTR herbal, CONFIG herbal, ENABLED False, REQUIRES world+routine, TICK_ORDER 103, PROMPT 207
+    def plan(self, state) -> [{potion, n, herbs, fee, saved}]   # выгодные рецепты по травам, бутылкам и зени
+    def why_not_now(self, now, state) -> str | None              # город отдыха, HP, ночь/сон, план, этап, сделка
+    def on_result(self, event) -> bool                            # только path herbal (True — поглощено)
+    def facts(self, peer, now) / said(...)                        # тема herbal: свежая варка, раз каждому
+```
+- Травник — житель из `herbal.residents` или с `persona.herbalist: true`; остальные модули не замечают.
+- Не продавать травы: `craft_setup keep` при подключении и если `state.craft.kept` их не содержит.
+- Бутылки: не хватает — `craft_setup bottles N` и `service` (OpenKore после продажи докупает по buyAuto); после
+  поездки покупка выключается (`bottles 0`).
+- Поездка: не чаще `gap_hours` (96), травы минимум на `min_potions` (5) выгодных зелий, свободный вес ≥ 500 + запас,
+  зени ≥ плата + `reserve`, сон не ближе `sleep_guard_hours` (3). Итог — по факту: зелий в `state.items` стало больше,
+  чем до поездки; иначе «фармацевт ответил, а зелий нет» — провал. Провал — пауза `retry_hours`, после `max_fails` —
+  сутки и оповещение. Возвращение — распорядок (jobChange возвращает прежний lockMap города).
+- Экономия = Σ n × (цена NPC зелья − плата − бутылка − продажная цена трав) — в событии, kv и теме разговора.
+
+**Тесты.** Генератор: рецепты, плата и ответы меню совпадают со скриптом (строки), клетка у NPC проходима на
+полях rAthena и OpenKore, путь — варпы атласа, файл = выход генератора (при наличии upstream). Модуль: выбор
+выгодных рецептов, закупка бутылок, условия старта, шаги действия (ответы по тексту), итог по факту (+ зелья —
+`herbal_brewed` с экономией; ok без зелий — провал), `job_change_result path=herbal` не попадает в career, пауза после
+провалов, тема разговора, выключатель и «не травник». Perl: `state.craft`, `craft_setup` (items_control, buyAuto).
+
+**Готово.** Тесты зелёные; `docs/ECONOMY.md`; статус ORG-076 «код, выкл., в игре не проверено».
+
+### Т-33 · ORG-075 · Arrow Crafting — ремесло лучника
+
+**Цель.** Житель-Archer (шаблон `archer`, Ilsa) получает навык Arrow Crafting у Roberto и делает стрелы из своего
+лута. Пока Archer в мире нет, модуль спит (нет действий и записей).
+
+**Данные (сверено).** Roberto `moc_ruins,118,99` (`npc/quests/skills/archer_skills.txt:18`): `BaseClass == Job_Archer`,
+`JobLevel >= 30` (Hunter/Bard/Dancer — без условия, :37), предметы (:43): 20 Resin 907, 7 Mushroom Spore 921,
+41 Pointed Scale 906, 13 Trunk 1019, 1 Red Potion 501; при всех предметах меню нет, итог — «as I promised, I will teach you
+the skill» (:47), `skill "AC_MAKINGARROW",1,SKILL_PERM` (:54). Рецепты — `db/create_arrow_db.yml` (Trunk → 40 Arrow, Jellopy → 4 Arrow,
+Tree Root → 7 Arrow, Empty Bottle → 2 Iron Arrow, …). OpenKore: `arrowcraft use` = навык AC_MAKINGARROW, сервер
+присылает список (пакет 01AD → `@arrowCraftID`, `Receive.pm arrowcraft_list`), выбор — `sendArrowCraft(nameID)`
+(`Commands.pm:1161`). Путь до `moc_ruins` по таблицам OpenKore **не найден** (Морокк закрыт до патча порталов):
+этап квеста в `crafts.json` записан с `route: null` и не запускается.
+
+**Файлы.** `brain/live_brain/arrows.py` (модуль), `scripts/gen_crafts.py`/`crafts.json` (Roberto, рецепты),
+`brainBridge.pl` (действие `arrowcraft {item}`, хук `packet/arrowcraft_list`, событие `arrowcraft_result`,
+`craft.skills`), `safety.py` (`arrowcraft`), `modules.py`, `goals.json` (`arrows`), `chronicle.py`,
+`brain/tests/test_arrows.py`, `bots/tests/craft.t`, `docs/ECONOMY.md`.
+
+**Логика.**
+- Лучник: `state.job` из ветки Archer (Archer, Hunter, Bard, Dancer, их 2-2/транс). Не лучник — `tick` ничего не делает.
+- Навык уже есть (`craft.skills.AC_MAKINGARROW`) — ремесло: в городе отдыха или на охоте вне боя, не чаще
+  `craft_minutes` (20), источник — лут из рецептов (`sources`, по умолчанию Trunk, Jellopy, Tree Root), не трогая
+  запас для квеста; итог по факту — стрел в `craft.items` стало больше → `arrows_crafted {source, arrow, n}`.
+- Навыка нет — этап progression «квест навыка» в kv `arrows.stage`: `job_lv` < 30 → «копить опыт»; не хватает
+  предметов → список недостающих (их держит `craft_setup keep`, сбор — лут; «заказы себе» ORG-070 — следующим шагом);
+  всё есть → при `quest_auto` и найденном пути — `job_change {path arrows, stage roberto}`; без пути — «ждёт патча
+  порталов», честная запись один раз. Навык подтверждается только по `craft.skills`.
+- Поле промпта «ремесло», тема `arrows` («Наделал(а) 40 стрел из Trunk»), строка летописи.
+
+**Тесты.** На синтетическом лучнике (state Archer, job_lv, craft): не лучник — тишина; этап квеста (опыт → предметы
+→ путь нет); с навыком — выбор источника, действие `arrowcraft`, итог по факту и без стрел; Perl — `arrowcraft`
+без навыка/предмета отклонён, список сервера → `sendArrowCraft`, таймаут.
+
+**Готово.** Тесты зелёные; `docs/ECONOMY.md`; статус ORG-075 «код, спит без Archer; квест без пути до Морокка».
+
+### Т-34 · ORG-078 · Экспедиция: дальний поход группой
+
+**Цель.** Раз в неделю 2–3 жителя собираются и идут в город другого региона (Геффен, Пайон, Альберта, Альдебаран)
+с привалами в промежуточных городах, осматриваются и возвращаются. Поход — расширение экспедиций ORG-054: каждое
+плечо — экспедиция `explorer` к следующему городу, ведёт лидер группы (crew). По умолчанию выключено.
+
+**Данные.** `scripts/gen_trek_routes.py` → `brain/world/trek_routes.json`: плечи «город → город» (≤ 7 переходов) по
+тому же правилу, что `explore_reach.json` (`portals.txt` профиля, подтверждённые варпами атласа, обратный путь
+обязателен), из точек отдыха `homes.json`. На закреплённых upstream: Пронтера ↔ Геффен 5, Пронтера ↔ Пайон 6,
+Пайон ↔ Альберта 4, Пронтера ↔ Альдебаран 7, Пронтера ↔ Излюд 2 (изъят: перестроен); Морокк — без плеч. Маршрут похода
+— кратчайшая цепочка плеч: Пронтера → Пайон (привал) → Альберта.
+
+**Файлы.** `brain/live_brain/trek.py` (модуль, REQUIRES routine, explorer, party, crew), `scripts/gen_trek_routes.py`,
+`brain/world/trek_routes.json`, `modules.py`, `goals.json` (`trek`), `chronicle.py`, `brain/tests/test_trek.py`,
+`docs/EXPLORE.md`. `explore.py` не меняется: поход запускает `explorer.start(target, led_by)` как мини-босс.
+
+**Протокол.**
+```text
+[trek:go:<город>]   лидер зовёт участников на той же карте      [trek:ok:<город>] / [trek:no:<город>] ответ участника
+kv trek {trip {target, legs [[город, переходы]], i, phase gather|leg|halt|stay|back, led_by, members, started}, last, done [...]}
+события памяти: trek_start {target, members, legs}, trek_halt {town}, trek_arrived {target}, trek_done {target, ok, why}
+```
+- Сбор: лидер (crew активна, я лидер группы), участники онлайн на той же карте ≥ `min_members − 1` (до
+  `max_members − 1`), `explorer.blocked(joining=True)` пусто, не чаще `gap_days` (7), любопытство ≥ `min_curiosity`,
+  запасы: зелий ≥ `min_potions` (10), вес < 50 %, зени ≥ `min_zeny`; оценка длительности (переходы × `hop_minutes` × 2
+  + привалы + стоянка) заканчивается не позже чем за час до сна. Цель — из `targets`, путь есть, риск всех карт пути
+  ниже `max_risk` для слабейшего (уровни участников — из crew), давно не был. Ответы ждём `gather_seconds` (120):
+  согласных меньше нужного — поход отменён.
+- Плечо: `explorer.start(город, led_by)`, `deadline = переходы × hop_minutes`, стоянка — `halt_minutes` (в цели —
+  `stay_minutes`). Конец плеча ok → привал (`halt_save`: сохранение у Kafra города через jobChange `path trek`, если
+  город есть в `homes.json`; дома `home.py` потом пересохранится) → следующее плечо; цель → стоянка → обратные плечи
+  до дома. Прерывание плеча (ночь, HP, тревога, смерть, срок, лидер ушёл) — конец похода `ok=false`, домой ведёт
+  распорядок.
+- Итог: слух/открытия даёт сама экспедиция (`explore_found`), поход — событие недели в летописи, тема `trek`.
+
+**Тесты.** Генератор: плечи — варпы атласа, Морокк без плеч, Изюлд исключён; цепочка Пронтера → Пайон → Альберта.
+Модуль: сбор (мало участников — отмена; согласие участника по своим условиям), плечи с привалами, Kafra-сохранение
+на привале, стоянка, возвращение, прерывание, лимиты (раз в неделю, сон, запасы), выключатель.
+
+**Готово.** Тесты зелёные; `docs/EXPLORE.md`; статус ORG-078 «код, выкл., в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности
