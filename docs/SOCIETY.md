@@ -180,3 +180,24 @@
 - **Прогулка.** `activity.py`: очки занятия `stroll` × `stroll_factor(вид)`: дождь 0.8, ясно 1.1, иначе 1.0.
 - Фразы `weather_clear/cloudy/rain/wind/hot/cold` (по 3) и `weather_re` (4) во всех шести персонах.
 - Выключить: `BRAIN_DISABLE=weather` — общие фразы `weather` как раньше, прогулка без множителя.
+
+## «Помнишь?» — эпизоды пары (ORG-055) — `brain/live_brain/episodes.py`
+
+Код и тесты (`brain/tests/test_episodes.py`); в игре не проверено. Закрывает слабое место W2 («речь без прошлого»)
+и частично W6 (причины дружбы забываются вместе с событиями через 90 дней).
+
+- **Источники** (только факты памяти, по курсору `kv episodes_cursor`, как в society.py):
+  `heal_confirmed` (он вылечил меня, `to == я`) → `heal`, вес 5; `heal_given` (я вылечил его) → `healed`, 3;
+  `gift_received`/`gift_given` → `gift`, 3/2; `meeting_confirmed` → `meet`, 3; `society_reconciled` → `peace`, 4;
+  `party_member_dead` → `death`, 3. Второй участник — житель из `ctx.peers` (не я). Отличие от ТЗ: лечение у лекаря
+  пишется как `heal_given` (heal_confirmed — только у получателя, ORG-002), поэтому у лекаря свой вид `healed`.
+- **Хранение** — `kv episodes` ≤ 200 `{id, ts, last, kind, peer, map, item, weight, times, recalled}`; вытесняются
+  по вес × свежесть (полураспад 30 дней). Повтор того же вида с тем же жителем за сутки — `times + 1`. Карта — из
+  события, иначе из `state.map`, если событие свежее (5 мин).
+- **Вспомнить.** `recall(peer, now)`: эпизод старше 2 суток, не вспоминали 7 суток, с наибольшим вес × свежесть;
+  в ссоре не вспоминают `peace` и `death`. Тема `remember` в реестре тем: шанс 0.35, может заменить приветствие
+  (шаг 1 — `[chat:remember:1]`), фраза `remember_<вид>` с `{ago}` («3 дня назад»), `{days}`, `{map}`; собеседник
+  отвечает `remember_re`. После реплики — `recalled` и событие `episode_recalled`.
+- Фразы `remember_heal/healed/gift/meet/peace/death` (по 3) и `remember_re` (4) во всех персонах; заодно по 2 новых
+  `hello` и `bye` (слабое место W13).
+- Выключить: `BRAIN_DISABLE=episodes` или `"episodes": {"enabled": false}` в goals.json.

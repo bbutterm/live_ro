@@ -39,6 +39,7 @@ from .social import TAG as SOCIAL_TAG, Social   # social: общение без 
 from .society import Society                    # society: эмоции, чат-комнаты, ссоры (ORG-022/026/027)
 from . import world_bus                                 # events: шина событий мира (ORG-045)
 from . import topics                                    # talk: темы разговора из жизни мира (ORG-066)
+from .episodes import Episodes                          # talk: «помнишь?» — эпизоды пары (ORG-055)
 
 log = logging.getLogger("mind")
 
@@ -155,6 +156,8 @@ class Mind:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
             world_bus_db = world_bus.WorldBus(bus_path, persona["name"])              # events:
         self.world = world_bus.Feed(self, world_bus_db) if world_bus_db else None     # events:
+        self.episodes = (Episodes(self) if self.ctx.peers and feat("episodes")                 # talk: ORG-055
+                         and ((world or {}).get("episodes") or {}).get("enabled", True) else None)  # talk:
         if self.social:                                                               # talk: ORG-066 реестр тем
             topics.install(self.social, self, world)                                  # talk:
 
@@ -571,6 +574,8 @@ class Mind:
             self.aims.tick()                                   # events: недельные цели
         if self.world:                                         # events:
             self.world.tick()                                  # events: публикация в шину мира и новости жителей
+        if self.episodes:                                      # talk: ORG-055 эпизоды пары из событий памяти
+            self.episodes.tick()                               # talk:
         await self.read_inbox()
         now = time.time()
         self.peer_smalltalk(now)

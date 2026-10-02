@@ -11,10 +11,14 @@
     aim    — активная невыполненная цель недели (aims.py) -> {"aim": кратко, "pct": прогресс %};
     news   — последнее событие из kv world_news (шина мира) про третьего жителя (не собеседника и не меня),
              младше NEWS_HOURS, ещё не рассказанное этому жителю (kv social.told_news[peer]) -> {"who", "what"}.
+    remember — «помнишь?» (episodes.py, ORG-055): эпизод пары → {ago, days, map}, фразы remember_<вид>;
+             шанс CHANCE, может заменить приветствие.
 Выключатель: BRAIN_DISABLE=topics или "topics": {"enabled": false} в goals.json (погода и эпизоды — свои).
 """
 import json
 import logging
+
+from .episodes import CHANCE
 
 log = logging.getLogger("topics")
 
@@ -46,7 +50,10 @@ AIM_SHORT = {
 
 
 def install(social, mind, world=None):
-    """Зарегистрировать встроенные темы (pet, rumor, aim, news) в реестре social."""
+    """Зарегистрировать темы в реестре social: remember (свой выключатель episodes) и pet, rumor, aim, news."""
+    episodes = getattr(mind, "episodes", None)                     # ORG-055: «помнишь?» (episodes.py)
+    if episodes:
+        social.register_topic("remember", episodes.facts, said=episodes.said, chance=CHANCE, opener=True)
     s = getattr(mind, "s", None)
     if s is not None and not s.feature("topics"):
         return
