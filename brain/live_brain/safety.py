@@ -14,6 +14,8 @@
   EMOTE_LIMIT за 10 минут;
 - чат-комната (chat_room) — только от исполнителей правил (society.py): открыть — в городе, заголовок
   ≤ 36 символов/байт без '#', не чаще CHAT_ROOM_GAP; закрыть — всегда (society:).
+- гильдия (guild_create/guild_invite/guild_say/guild_expect) — только от исполнителей правил (guild.py):
+  имя по правилам rAthena, приглашение — только жителю (guild:).
 """
 import re
 import time
@@ -27,6 +29,8 @@ PLAN_ACTIONS += ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_che
 PLAN_ACTIONS += ("pet_setup", "pet_tame", "pet_hatch")   # pets: питомец (pets.py, ORG-051)
 PLAN_ACTIONS += ("party_say",)   # crew: чат группы (crew.py, ORG-053)
 PLAN_ACTIONS += ("chat_room",)   # society: чат-комната-вывеска (society.py, ORG-026)
+PLAN_ACTIONS += ("guild_create", "guild_invite", "guild_say", "guild_expect")   # guild: гильдия (guild.py, ORG-052)
+GUILD_NAME = re.compile(r"^[A-Za-z0-9 ]{1,23}$")   # guild: rAthena NAME_LENGTH 24, char_name_letters upstream
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
 MAX_PRICE = 100_000_000          # market: цена лота между жителями
@@ -151,6 +155,8 @@ class SafetyPolicy:
             if not text or not state.get("party"):
                 return None, "пустой текст или нет группы"
             return {"action": "party_say", "text": text}, None
+        if kind in ("guild_create", "guild_invite", "guild_say", "guild_expect"):                    # guild:
+            return self.check_guild(kind, action, state)                                             # guild:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":
@@ -245,6 +251,28 @@ class SafetyPolicy:
         if not ints(action.get("egg"), 9000, 9999):
             return None, "неверное яйцо"
         return {"action": kind, "egg": action["egg"]}, None
+
+    def check_guild(self, kind, action, state):                                                    # guild:
+        """guild: только исполнитель правил (guild.py); имя — латиница/цифры/пробел ≤ 23; звать и ждать
+        приглашения — только жителей и гильдию с таким именем; создать — не в гильдии; говорить и звать — в гильдии."""
+        in_guild = bool((state.get("guild") or {}).get("name")) if isinstance(state.get("guild"), dict) else False
+        if kind in ("guild_create", "guild_expect"):
+            name = " ".join(str(action.get("name", "")).split())
+            if not GUILD_NAME.match(name):
+                return None, "имя гильдии: 1..23 латинских букв, цифр, пробелов"
+            if in_guild:
+                return None, "уже в гильдии"
+            return {"action": kind, "name": name}, None
+        if not in_guild:
+            return None, "не в гильдии"
+        if kind == "guild_invite":
+            if action.get("to") not in self.peers:
+                return None, "в гильдию — только жителей"
+            return {"action": kind, "to": action["to"]}, None
+        text = fit_text(str(action.get("text", "")))
+        if not text:
+            return None, "пустой текст"
+        return {"action": kind, "text": text}, None
 
     def check_chat_room(self, action, state, now):                                             # society:
         """society: чат-комната — op close всегда; op open только живому, в городе, без лавки, заголовок

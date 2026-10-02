@@ -229,4 +229,68 @@ is_deeply(\@ev, [], 'society: согласие — не событие');
 	$Globals::char->{party} = $saved;
 }
 
+# ---- guild: гильдия жителей (ORG-052) ----
+{
+	$Globals::config{residents} = 'Vera';
+	$Globals::char->{guild} = undef;
+	is(brainBridge::guildState(), undef, 'guild: не в гильдии — state.guild пусто');
+	my ($okg, $cg) = brainBridge::actionToCommand({action => 'guild_create', name => 'Hearth of  Prontera'});
+	ok($okg && $cg eq 'guild create Hearth of Prontera', 'guild: guild create <имя> (Commands.pm cmdGuild)');
+	ok(!(brainBridge::actionToCommand({action => 'guild_create', name => 'LR_Guild'}))[0], 'guild: _ нет в char_name_letters — нельзя');
+	ok(!(brainBridge::actionToCommand({action => 'guild_create', name => 'A' x 24}))[0], 'guild: длиннее 23 — нельзя');
+	ok(!(brainBridge::actionToCommand({action => 'guild_create', name => 'Гильдия'}))[0], 'guild: кириллица — нельзя');
+	ok(!(brainBridge::actionToCommand({action => 'guild_invite', to => 'Vera'}))[0], 'guild: не в гильдии — звать нельзя');
+	ok(!(brainBridge::actionToCommand({action => 'guild_say', text => 'Привет'}))[0], 'guild: не в гильдии — чат нельзя');
+
+	# приглашение: без ожидания — не принимаю (решает guildAutoDeny), после guild_expect — принимаю сразу
+	@Commands::ran = (); @ev = ();
+	Plugins::call('packet/guild_request', {ID => 'G1', name => "Hearth of Prontera\0\0"});
+	is_deeply(\@Commands::ran, [], 'guild: неожиданное приглашение — не принимаю');
+	is_deeply(\@ev, [['guild_invite', guild => 'Hearth of Prontera']], 'guild: событие guild_invite');
+	my ($oke, $ce) = brainBridge::actionToCommand({action => 'guild_expect', name => 'Hearth of Prontera'});
+	ok($oke && ref $ce eq 'HASH', 'guild: guild_expect — без команды OpenKore');
+	@ev = ();
+	Plugins::call('packet/guild_request', {ID => 'G2', name => 'Other Guild'});
+	is_deeply(\@Commands::ran, [], 'guild: другая гильдия — не принимаю');
+	Plugins::call('packet/guild_request', {ID => 'G1', name => 'Hearth of Prontera'});
+	is_deeply(\@Commands::ran, ['guild join 1'], 'guild: ожидаемая гильдия жителя — guild join 1');
+	is_deeply($ev[-1], ['guild_joined_auto', guild => 'Hearth of Prontera'], 'guild: событие guild_joined_auto');
+	@Commands::ran = ();
+	Plugins::call('packet/guild_request', {ID => 'G1', name => 'Hearth of Prontera'});
+	is_deeply(\@Commands::ran, [], 'guild: ожидание одноразовое');
+
+	# состав по пакетам: 0A84 (master_char_id) + 0AA5 (имена дозапрошены), я — по $charID
+	$Globals::charID = 'C1';
+	$Globals::char->{guild} = {name => 'Hearth of Prontera'};
+	%Globals::guild = (master_char_id => 'C2', member => [
+		{charID => 'C1', online => 1, lv => 12}, {charID => 'C2', name => 'Vera', online => 1, lv => 15},
+		{charID => 'C3', name => 'Boris', online => 0, lv => 9}]);
+	is_deeply(brainBridge::guildState(), {name => 'Hearth of Prontera', master => 'Vera', online => 2, members => [
+		{name => 'Arkady', online => JSON::PP::true(), lv => 12}, {name => 'Vera', online => JSON::PP::true(), lv => 15},
+		{name => 'Boris', online => JSON::PP::false(), lv => 9}]}, 'guild: state.guild — имя, мастер по charID, состав, онлайн');
+	ok(!(brainBridge::actionToCommand({action => 'guild_create', name => 'Second'}))[0], 'guild: уже в гильдии — создать нельзя');
+	$Globals::playersList = FakePlayers->new(V1 => {name => 'Vera'});
+	is((brainBridge::actionToCommand({action => 'guild_invite', to => 'Vera'}))[1], 'guild request Vera', 'guild: guild request жителю');
+	ok(!(brainBridge::actionToCommand({action => 'guild_invite', to => 'Stranger'}))[0], 'guild: чужого — нельзя');
+	$Globals::playersList = FakePlayers->new();
+	my ($okv, $whyv) = brainBridge::actionToCommand({action => 'guild_invite', to => 'Vera'});
+	ok(!$okv && $whyv =~ /не виден/, 'guild: житель не виден — guild request не найдёт (Match::player)');
+	is((brainBridge::actionToCommand({action => 'guild_say', text => "Кто в городе?\n"}))[1], 'g Кто в городе?', 'guild: g <текст>');
+
+	@ev = ();
+	Plugins::call('packet/guild_create_result', {type => 3});
+	Plugins::call('packet/guild_invite_result', {type => 2});
+	Plugins::call('packet_guildMsg', {MsgUser => 'Vera', Msg => 'Кто в городе?'});
+	Plugins::call('packet_guildMsg', {MsgUser => 'Arkady', Msg => 'моё'});
+	is_deeply(\@ev, [['guild_create_result', code => 3], ['guild_invite_result', code => 2],
+		['chat_guild', from => 'Vera', text => 'Кто в городе?']], 'guild: события создания, приглашения и чата (своё — нет)');
+
+	$Globals::char->{inventory} = [{nameID => 714, amount => 1}, {nameID => 501, amount => 5}];
+	is(brainBridge::emperiumCount(), 1, 'guild: Emperium в рюкзаке');
+	delete $Globals::char->{inventory};
+	is(brainBridge::emperiumCount(), 0, 'guild: нет рюкзака — 0');
+	$Globals::char->{guild} = undef;
+	%Globals::guild = ();
+}
+
 done_testing();
