@@ -11,7 +11,7 @@
     rest — ничего (тело садится само); stroll — social.walk_now(); socialize — social.visit(к жителю);
     service — routine.service_now(); hunt_early — распорядок: отдых закончен (выход — по HP-правилу);
     end_hunt — routine.to_town(); change_map — другая карта по опыту (maps.choose без текущей);
-    keep_hunting — ничего.
+    keep_hunting — ничего; check_rumor — карта слуха на сессию (rumors.to_check, ORG-032; итог — rumors.check).
 Факт завершения (proof) за proof_minutes — иначе занятие «не удалось» (activity_failed), а не «сделано»:
     moved — позиция сменилась; peer_near — житель рядом; supply_better — вес меньше или зелий больше;
     on_hunt_map — на карте охоты; in_town — на карте города; map_changed — карта охоты другая.
@@ -82,6 +82,9 @@ class Activities:
                 ok = not (party and party.leader_wants())
             elif key == "other_maps":
                 ok = len([m for m in self.mind.persona["hunt_maps"] if m not in r.bans()]) > 1
+            elif key == "rumor_to_check":                   # events: ORG-032 есть слух, который стоит проверить
+                rumors = getattr(self.mind, "rumors", None)     # events:
+                ok = bool(rumors and rumors.to_check(state))    # events:
             else:
                 ok = False                                   # неизвестное условие — занятие недоступно
             if bool(ok) != bool(want) and key != "supply_min":
@@ -196,6 +199,14 @@ class Activities:
                 r.st["prefer_map"] = choice
                 r.last_sent = 0
                 r.note("routine_map_choice", f"Сменю место охоты на {choice}: {why}.", 1)
+        elif name == "check_rumor":                             # events: ORG-032 проверить слух на сессию
+            rumors = getattr(self.mind, "rumors", None)             # events:
+            rec = rumors.to_check(state) if rumors else None        # events:
+            if rec and (rec["map"] in self.mind.persona["hunt_maps"] or self.mind.learn_hunt_map(rec["map"])):  # events:
+                rumors.start_check(rec)                             # events:
+                r.st["prefer_map"] = rec["map"]                     # events:
+                r.last_sent = 0                                     # events:
+                r.note("routine_map_choice", f"Проверю слух от {rec.get('author')}: {rec['map']} ({rec['kind']}).", 1)  # events:
 
     # ---------- факт завершения ----------
 

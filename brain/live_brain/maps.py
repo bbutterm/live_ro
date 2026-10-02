@@ -9,6 +9,7 @@
     Модель может предложить карту (prefer), но опыт и исключения важнее догадки.
 Места (kv places): карта -> первый/последний раз, источник seen (был сам) или told (сказал житель,
 с автором и временем). Слух не становится фактом: told не исключает карту и не меняет выбор (AUT-076).
+Слухи v2 (ORG-031): виды, пересказы (hops), доверие и проверка опытом — rumors.py; здесь только след в places.
 """
 import logging
 import random
@@ -147,10 +148,14 @@ class MapStats:
         places[hmap] = p
         self.mind.mem.set("places", places)
 
-    def told(self, hmap, author, what):
-        """Слух от жителя: хранится с автором и временем, но не превращается в факт."""
+    def told(self, hmap, author, what, hops=0, origin=None):
+        """Слух от жителя: хранится с автором и временем, но не превращается в факт.
+        ORG-031: hops — сколько раз пересказан, origin — первоисточник (доверие считает rumors.py)."""
         places = self.mind.mem.get("places", {})
         p = places.setdefault(hmap, {"source": "told"})
         p.setdefault("rumors", [])
-        p["rumors"] = (p["rumors"] + [{"from": author, "what": what, "ts": self.clock()}])[-5:]
+        rec = {"from": author, "what": what, "ts": self.clock()}
+        if hops:
+            rec.update(hops=hops, origin=origin)
+        p["rumors"] = (p["rumors"] + [rec])[-5:]
         self.mind.mem.set("places", places)
