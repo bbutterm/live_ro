@@ -1276,3 +1276,51 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 ### Что прислать
 `docs/qa/HERMES-<sha7>.md`: вывод шага 0, итоги пунктов 1–7 и пунктов №14, `scripts/lab chronicle` за день,
 ручные вмешательства (цель — 0).
+
+## Задание №16: общество, питомцы, смены и ресурсы, исправления ревизии стыков
+
+**Ветка:** `claude/brain-routine`. **Commit:** из сообщения разработчика. Заменяет №15 (его пункты 1–7 актуальны).
+Правила те же: login/char/map не перезапускать, БД не трогать, без SQL/GM/ручного respawn. `LAB_BOTS="bot01 bot02"`.
+Новых жителей не рождать, `start_point` не включать, `auto_job_change` не трогать — это решения владельца
+(docs/POPULATION.md §6).
+
+### Важно до запуска
+- **Обновлять мост и мозг вместе:** номер эмоции теперь в поле `emotion` (раньше уходил в `id`, занятый ack, — эмоции,
+  скорее всего, не работали). Проверка: `scripts/lab doctor` — плагины `pets` и все прежние загружены.
+- Профили: в `sys.txt` добавлен плагин `pets`; в `config.txt` — блок `buyAuto Pet Food` (`disabled 1`); в конце
+  `items_control.txt` — раздел питомцев (яйца, инкубатор, Pet Food не продаются).
+
+### Что проверить
+1. **Эмоции (ORG-022).** В console.log обоих: `e wav` при встрече, `e thx`/`e ok` после передачи. Нет — выдержку
+   `decisions.jsonl` с `"action": "emote"` и ack.
+2. **Вывеска (ORG-026).** В городе `chat create "..."` в console.log и комната видна другому (`chat list` у второго
+   бота — только чтение). Перед уходом на охоту — `chat leave`. `society_room_failed` — прислать (возможно, рядом NPC).
+3. **Ссоры (ORG-027).** Специально не провоцировать; если в `decisions.jsonl` есть `society_quarrel`/`society_reconciled` —
+   прислать контекст.
+4. **Питомцы (ORG-051, docs/PETS.md).** Скорее всего «не наблюдалось» (нужен предмет приручения в рюкзаке).
+   Если в decisions есть `pet_tame`/`pet_hatch` — прислать выдержку console.log (`Attempting to capture pet`,
+   `Pet capture success/failed`). Ошибки пакетов — выключить `BRAIN_DISABLE=pets` и прислать.
+5. **Ресурсы (ORG-047).** `scripts/lab resources` — прислать вывод целиком (RSS/CPU тел и мозгов, «сколько ещё влезет»).
+   Это главный замер для решения о числе жителей.
+6. **Смены (ORG-044).** Не включать `LAB_MAX_ONLINE` без решения владельца; только `scripts/lab doctor` — раздел смен.
+7. **Ревизия стыков.** Сон, квест и поход к NPC теперь ждут конца сделки/почты; при отказе «занят» — запись в decisions.
+   Если житель долго не засыпает в своё окно — прислать `routine_sleep`/`sleep_blocker` из decisions.
+
+### Шаг 0
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest discover -s tests)          # OK, 344 (без PyYAML/upstream часть skipped)
+for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done
+# auto_create 34, brain_bridge 68, combat 29, economy 102, job_change 34, pets 32, survival 39
+scripts/lab doctor; scripts/lab resources
+scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
+```
+
+### Откат
+`scripts/lab down`, `git checkout --detach <commit задания №15>`, `scripts/lab up`. Профили откатываются вместе с кодом.
+
+### Что прислать
+`docs/qa/HERMES-<sha7>.md`: шаг 0, пункты 1–7 этого задания и 1–7 задания №15, `scripts/lab resources`,
+`scripts/lab chronicle` за день, ручные вмешательства (цель — 0).
