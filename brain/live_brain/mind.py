@@ -35,8 +35,8 @@ from .social import TAG as SOCIAL_TAG, Social   # social: общение без 
 log = logging.getLogger("mind")
 
 MAX_ACTIONS = 2
-REASON_PRIO = {"plan": 4, "event": 3, "chat": 2, "timer": 1}
-REASON_TTL = {"plan": 600, "event": 600, "chat": 300, "timer": 120}
+REASON_PRIO = {"plan": 4, "event": 3, "chat": 2, "diary": 2, "timer": 1}
+REASON_TTL = {"plan": 600, "event": 600, "chat": 300, "diary": 3600, "timer": 120}
 REASON_MAX = 5
 # AUT-091: обещание движения без плана — пустые слова («уже иду», а тело сидит в другом городе).
 PROMISE = re.compile(r"(уже\s+иду|иду\s+к\s+тебе|бегу\s+к|скоро\s+буду|буду\s+через|жди\s+меня|"

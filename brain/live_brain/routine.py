@@ -438,6 +438,11 @@ class Routine:
         text = f"Дневник {day_state['day']}: " + ", ".join(parts) + "."
         mem.remember(text, 3)
         mem.add_event("diary", {"day": day_state["day"], "text": text})
+        if getattr(self.mind, "s", None) and self.mind.s.llm_enabled:
+            # ORG-049: один вызов в сутки — пересказ дня своим голосом; факты — только из text выше.
+            self.mind.trigger("напиши в remember запись дневника (2-3 предложения, своим голосом, importance 3) "
+                              f"строго по фактам дня, ничего не добавляя: {text}", {"diary": day_state["day"]},
+                              kind="diary")
         self.mind.write_decision({"type": "routine", "event": "diary", "text": text})
         log.info("%s", text)
 
