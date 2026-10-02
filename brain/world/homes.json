@@ -1,0 +1,59 @@
+{
+  "_comment": [
+    "ORG-014: домашние города жителя и точка сохранения у Kafra (brain/live_brain/home.py, docs/HOME.md).",
+    "Дом жителя: persona.home -> home_town в brain/world/roster.json -> default. Данные Kafra — из скриптов rAthena",
+    "(upstream/rathena e985006): npc — заголовок NPC (file:line), savepoint — строка savepoint (куда сервер вернёт после смерти).",
+    "Меню всех этих Kafra — F_Kafra arg(1)=0: default-меню npc/kafras/functions_kafras.txt:142",
+    "\"Save\",\"Use Storage\",\"Use Teleport Service\",\"Rent a Pushcart\",\"Check Other Information\",\"Cancel\"; пункт выбирается",
+    "по ТЕКСТУ \"Save\" (плагин jobChange), подтверждение — фраза F_KafEnd functions_kafras.txt:452 \"Your Respawn Point\".",
+    "stand — проходимая клетка в 2 клетках от NPC (rAthena map_cache и поле OpenKore, тест test_home); rest — точка отдыха",
+    "распорядка в этом городе (prontera — фонтан goals.json, остальные — у точки возрождения). izlude не включён: поле OpenKore",
+    "izlude (fields/izlude.fld2.gz) не совпадает по размеру с renewal-картой сервера."
+  ],
+  "default": "prontera",
+  "towns": {
+    "prontera": {
+      "npc": {"name": "kaf_prontera5", "x": 146, "y": 89, "src": "npc/kafras/kafras.txt:289"},
+      "stand": {"x": 144, "y": 87},
+      "savepoint": {"x": 116, "y": 73, "src": "npc/kafras/kafras.txt:299"},
+      "rest": null
+    },
+    "geffen": {
+      "npc": {"name": "kaf_geffen", "x": 120, "y": 62, "src": "npc/kafras/kafras.txt:130"},
+      "stand": {"x": 118, "y": 60},
+      "savepoint": {"x": 119, "y": 40, "src": "npc/kafras/kafras.txt:139"},
+      "rest": {"x": 119, "y": 40}
+    },
+    "payon": {
+      "npc": {"name": "kaf_payon", "x": 181, "y": 104, "src": "npc/kafras/kafras.txt:190"},
+      "stand": {"x": 179, "y": 102},
+      "savepoint": {"x": 160, "y": 58, "src": "npc/kafras/kafras.txt:199"},
+      "rest": {"x": 160, "y": 58}
+    },
+    "morocc": {
+      "npc": {"name": "kaf_morocc", "x": 156, "y": 97, "src": "npc/kafras/kafras.txt:160"},
+      "stand": {"x": 154, "y": 95},
+      "savepoint": {"x": 156, "y": 46, "src": "npc/kafras/kafras.txt:169"},
+      "rest": {"x": 156, "y": 46}
+    },
+    "alberta": {
+      "npc": {"name": "kaf_alberta2", "x": 113, "y": 60, "src": "npc/kafras/kafras.txt:360"},
+      "stand": {"x": 111, "y": 58},
+      "savepoint": {"x": 117, "y": 57, "src": "npc/kafras/kafras.txt:371"},
+      "rest": {"x": 117, "y": 57}
+    },
+    "aldebaran": {
+      "npc": {"name": "kaf_aldebaran", "x": 143, "y": 119, "src": "npc/kafras/kafras.txt:115"},
+      "stand": {"x": 141, "y": 117},
+      "savepoint": {"x": 143, "y": 109, "src": "npc/kafras/kafras.txt:124"},
+      "rest": {"x": 143, "y": 109}
+    }
+  },
+  "save": {
+    "answer": "Save",
+    "proof_text": "Respawn Point",
+    "retry_minutes": 30,
+    "max_fails": 3,
+    "wait_result_minutes": 10
+  }
+}

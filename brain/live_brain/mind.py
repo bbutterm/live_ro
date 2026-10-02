@@ -26,6 +26,7 @@ from .career import Career
 from .economy import TAG as ECON_TAG, Economy
 from .economy import OFFER_TAG   # market: метка торговли жителей
 from .gate import GateContext, JevGate
+from .home import Home                                  # home: дом и точка сохранения (ORG-014)
 from .lifecycle import STALE_SEC, Lifecycle
 from .maps import MapStats
 from .needs import Needs
@@ -107,9 +108,11 @@ class Mind:
                                peers=set(peers) - {persona["name"]},
                                peer_replies_per_hour=settings.peer_replies_per_hour)
         town = ((world or {}).get("routine") or {}).get("town", {}).get("map")
-        self.point_maps = set(persona["hunt_maps"]) | ({town} if town else set())
+        self.home = Home(self) if world and settings.feature("home") else None    # home: до распорядка (точка отдыха)
+        home_map = self.home.town if self.home else None                           # home:
+        self.point_maps = set(persona["hunt_maps"]) | ({town} if town else set()) | ({home_map} if home_map else set())  # home:
         self.safety = SafetyPolicy(persona["hunt_maps"], safe_hp=settings.safe_hp, peers=self.ctx.peers,
-                                   extra_point_maps=[town] if town else [])
+                                   extra_point_maps=[m for m in dict.fromkeys((town, home_map)) if m])   # home:
         self.state = memory.get("last_state", {})
         self.lock = asyncio.Lock()
         self.reasons = []              # очередь поводов для LLM (ORG-007/D16): приоритет и срок годности
@@ -258,6 +261,8 @@ class Mind:
                 await self.party.on_my_death(event)
         if self.routine and kind == "died":
             await self.routine.on_death()
+        if self.home and kind == "died":                       # home: где возродится — проверить по карте
+            self.home.on_death(event)                          # home:
         if self.routine and kind == "escape":
             await self.routine.on_escape()
         if kind in ("chat_private", "chat_public") and event.get("from"):
@@ -311,6 +316,10 @@ class Mind:
             if self.pets:
                 self.pets.on_event(event)
             return
+        if kind == "job_change_result" and event.get("path") == "home":   # home: этап «сохраниться у Kafra»
+            if self.home:                                                 # home:
+                self.home.on_result(event)                                # home:
+            return                                                        # home:
         if kind == "job_change_result":
             if self.career:
                 self.career.on_result(event)
@@ -561,6 +570,8 @@ class Mind:
                        self.social, self.pets, self.crew):
             if module:
                 await module.tick()
+        if self.home:                                          # home: сохраниться у Kafra дома (ORG-014)
+            await self.home.tick()                             # home:
         await self.rumors.tick()                               # events: проверка слухов опытом, пересказ при встрече
         if self.society:                                       # society: эмоции, вывески, ссоры по фактам памяти
             await self.society.tick()                          # society:
