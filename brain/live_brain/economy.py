@@ -430,6 +430,11 @@ class Economy:
     def body_elsewhere(self):                               # review: квест профессии или сон — не до сделок
         if ((self.state.get("job_change") or {}).get("running")):
             return "занят квестом профессии"
+        if (self.state.get("refine") or {}).get("running"):                # refine: тело у кузнеца (ORG-072)
+            return "точу снаряжение"
+        explorer = getattr(self.mind, "explorer", None)                   # review3: экспедиция — не до сделок
+        if explorer and explorer.busy():
+            return "в походе"
         r = getattr(self.mind, "routine", None)
         if r and getattr(r, "sleeping", False):
             return "ложусь спать"
