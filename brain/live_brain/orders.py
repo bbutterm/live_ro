@@ -258,6 +258,14 @@ class Orders:
                 continue
         return False
 
+    def spare(self, item, state):
+        """review3: сколько предмета можно отдать — без единственной копии карты альбома (collection.sellable),
+        как в economy.for_sale; раньше заказ на карту забирал альбомную копию в обход коллекции."""
+        coll = getattr(self.mind, "collection", None)
+        if coll is None:
+            return self.econ.have(item, state)
+        return int(coll.sellable((state or self.state).get("items") or {}).get(str(item), 0) or 0)
+
     def can_fill(self, o, state):
         """None — могу взять; иначе причина."""
         econ = self.econ
@@ -268,7 +276,7 @@ class Orders:
             return "самому нужно"
         if int(o.get("reward") or 0) < econ.prices.npc_sell(item, n, econ.overcharge(state)):
             return "NPC заплатит больше"
-        if econ.have(item, state) >= n:
+        if self.spare(item, state) >= n:                            # review3: не альбомная копия
             return None
         name = o.get("name") or econ.prices.name(item)
         return None if self.looted(name) else "нет в рюкзаке и сам не добываю"
@@ -283,7 +291,7 @@ class Orders:
         options = []
         for o in self.open_orders(now):
             if self.can_fill(o, state) is None:
-                have = econ.have(str(o["item"]), state) >= int(o["n"])
+                have = self.spare(str(o["item"]), state) >= int(o["n"])      # review3:
                 options.append((0 if have else 1, -int(o.get("reward") or 0), o["id"], o))
         if not options:
             return
@@ -324,9 +332,9 @@ class Orders:
                       id=j["id"], customer=j["customer"], item=j["item"])
             return
         econ = self.econ
-        if (econ.have(j["item"], state) < j["n"] or not self.visible(j["customer"], state)
+        if (self.spare(j["item"], state) < j["n"] or not self.visible(j["customer"], state)
                 or econ.busy_trade() or econ.giving or econ.mailing or state.get("give")
-                or now - j.get("offered", 0) < self.cfg["offer_gap_minutes"] * 60):
+                or now - j.get("offered", 0) < self.cfg["offer_gap_minutes"] * 60):   # review3: spare
             return
         j["offered"] = now
         self.save()

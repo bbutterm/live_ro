@@ -695,6 +695,23 @@ class Review3JointsTest(BodyMixin, unittest.TestCase):
         self.assertIn("gossip_heard", msgs[1]["content"])
 
 
+    def test_order_does_not_sell_album_card(self):
+        """Заказ на карту: единственная копия альбома (collection.sellable) не уходит исполнителю заказа — как и в for_sale."""
+        self.state(items={"501": 30, "4001": 1})
+        coll, orders = self.mind.collection, self.mind.orders
+        self.assertIsNotNone(coll)
+        self.assertIsNotNone(orders)
+        coll.seed()
+        self.assertIn("4001", coll.album(), "карта рюкзака — в альбоме")
+        self.assertEqual([lot for lot in self.mind.economy.for_sale(self.mind.state) if lot[0] == "4001"], [],
+                         "рынок альбомную карту не продаёт")
+        o = {"id": "abc123", "customer": "Vera", "item": "4001", "name": "Poring Card", "n": 1, "reward": 100000,
+             "until": self.clock.t + 3600}
+        self.assertIsNotNone(orders.can_fill(o, self.mind.state), "заказ не берут ради карты из альбома")
+        self.state(items={"501": 30, "4001": 2})
+        self.assertIsNone(orders.can_fill(o, self.mind.state), "дубликат — можно")
+
+
 class ProtocolSurfaceTest(unittest.TestCase):
     def test_every_safe_action_has_bridge_branch(self):
         """Действие, которое safety пропускает, исполняет brainBridge.pl (и наоборот: у моста нет лишних веток)."""
