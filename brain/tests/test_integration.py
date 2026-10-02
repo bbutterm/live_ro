@@ -381,6 +381,21 @@ class NewModulesJointsTest(BodyMixin, unittest.TestCase):
         self.state()
         self.assertTrue(self.mind.may_move("routine")[0], "этап так и не начался — тело свободно")
 
+    def test_no_chat_room_when_expedition_starts(self):
+        """Экспедиция начата в этом такте (тело ещё сидит в городе): общество не открывает вывеску — чат-комната
+        остановила бы тело (pc_cant_act), а мост закрыл бы её лишь по route AI."""
+        self.town_rest()
+        soc = self.mind.society
+        soc.next_room = self.clock.t - 1
+        soc.rng = mock.Mock(random=lambda: 0.0, uniform=lambda lo, hi: hi, choice=lambda xs: xs[0])
+        self.trip()
+        asyncio.run(soc.rooms(self.clock.t, self.mind.state))
+        self.assertNotIn("chat_room", [a["action"] for a in self.sent], "вывеска посреди экспедиции")
+        self.mind.explorer.st["trip"] = None
+        soc.next_room = self.clock.t - 1
+        asyncio.run(soc.rooms(self.clock.t, self.mind.state))
+        self.assertIn("chat_room", [a["action"] for a in self.sent], "без экспедиции — можно")
+
     def test_nap_waits_for_expedition(self):
         """Сторож просит уснуть раньше посреди экспедиции: сначала вернуться (экспедиция прервана), не relog в поле."""
         r = self.town_rest()
@@ -395,6 +410,218 @@ class NewModulesJointsTest(BodyMixin, unittest.TestCase):
         asyncio.run(r.tick())
         self.assertNotIn("sleep", [a["action"] for a in self.sent], "сначала дойти до города")
         self.assertIn("meet_point", [a["action"] for a in self.sent], "распорядок ведёт в город")
+
+
+class SimBody:
+    """review2: отзывчивое тело для долгого дня — исполняет команды мозга (lockMap, точка, follow, jobChange, чат-комната,
+    relog) упрощённо: переход на другую карту TRAVEL с, по карте — WALK с. Vera — в группе, рядом с Arkady."""
+    TRAVEL, WALK, QUEST = 90, 20, 25
+    SAVE = ("prontera", 116, 73)                      # homes.json: savepoint Kafra Пронтеры
+
+    def __init__(self, t0):
+        self.t = t0
+        self.msgs = []                                  # события/state к отправке мозгу
+        self.s = {"type": "state", "name": "Arkady", "job": "Swordsman", "lv": 41, "job_lv": 20, "sp_pct": 80,
+                  "zeny": 40000, "ai": "auto", "map": "prontera", "x": 150, "y": 180, "hp_pct": 100, "dead": False,
+                  "weight_pct": 20, "items": {"501": 30, "4001": 1, "909": 40}, "lock_map": "prontera",
+                  "lock_x": None, "lock_y": None, "activity": "idle", "players": [], "friends": [],
+                  "party": "LR_Arkady", "party_members": [], "vend": {"can": 0, "open": 0}, "sitting": False,
+                  "follow": None, "chat_room": None,
+                  "pet": {"has": False, "running": False, "items": {}, "eggs": [], "near": {}}}
+        self.go = None                                  # (когда прибуду, карта, x, y)
+        self.quest = None                               # (когда закончится этап, path, stage, id)
+        self.dead_until = None
+        self.asleep = False
+
+    def event(self, **kw):
+        self.msgs.append(dict(type="event", ts=self.t, **kw))
+
+    def apply(self, a):
+        kind = a.get("action")
+        s = self.s
+        if kind in replay.MOVES + ("meet_point", "sleep", "shop_open"):
+            s["chat_room"] = None                       # brainBridge: chat leave перед движением
+        if kind in ("meet_point", "hunt", "explore"):
+            s.update(lock_map=a["map"], lock_x=a.get("x"), lock_y=a.get("y"), sitting=False)
+            self.route()
+        elif kind == "follow":
+            s["follow"] = a.get("to")
+        elif kind == "unfollow":
+            s["follow"] = None
+        elif kind == "sit":
+            s["sitting"] = True
+        elif kind == "chat_room":
+            s["chat_room"] = a.get("title") if a.get("op") == "open" else None
+        elif kind == "job_change":
+            self.quest = (self.t + self.QUEST, a.get("path"), a.get("stage"), a.get("id"))
+            s["job_change"] = {"running": True, "stage": a.get("stage")}
+            s.update(lock_map=None, lock_x=None, lock_y=None)
+        elif kind == "sleep":
+            self.asleep = True
+
+    def route(self):
+        s = self.s
+        if s["dead"] or self.quest or not s.get("lock_map"):
+            return
+        x, y = (s["lock_x"], s["lock_y"]) if s.get("lock_x") is not None else (100, 100)
+        if s["map"] == s["lock_map"] and (s.get("lock_x") is None or max(abs(s["x"] - x), abs(s["y"] - y)) <= 3):
+            self.go = None
+            return
+        dt = self.WALK if s["map"] == s["lock_map"] else self.TRAVEL
+        if not self.go or self.go[1:] != (s["lock_map"], x, y):
+            self.go = (self.t + dt, s["lock_map"], x, y)
+
+    def tick(self, t, rng):
+        self.t = t
+        s = self.s
+        if self.dead_until and t >= self.dead_until:          # возрождение у точки сохранения
+            self.dead_until = None
+            s.update(dead=False, hp_pct=5, map=self.SAVE[0], x=self.SAVE[1], y=self.SAVE[2], activity="idle")
+            self.go = None
+        if self.quest and t >= self.quest[0]:
+            _, path, stage, qid = self.quest
+            self.quest = None
+            s["job_change"] = {"running": False}
+            s.update(map="prontera", x=144, y=87, lock_map="prontera", lock_x=156, lock_y=185)   # плагин вернул lockMap
+            self.event(kind="job_change_result", id=qid, path=path, stage=stage, step=2, ok=True, reason="ok")
+        if not s["dead"] and not self.quest:
+            self.route()
+            if self.go and t >= self.go[0]:
+                _, m, x, y = self.go
+                s.update(map=m, x=x, y=y)
+                self.go = None
+            hunting = s["map"] != "prontera" and s["map"] == s.get("lock_map") and not self.go
+            s["activity"] = "attack" if hunting and int(t) % 60 < 40 else ("route" if self.go else "idle")
+            if hunting and int(t) % 30 == 0:
+                s["x"] += rng.randint(-3, 3)
+                s["y"] += rng.randint(-3, 3)
+                s["hp_pct"] = max(60, min(100, s["hp_pct"] + rng.randint(-10, 8)))
+                self.event(kind="kill", monster="Lunatic", map=s["map"])
+            elif int(t) % 10 == 0:
+                s["hp_pct"] = min(100, s["hp_pct"] + 2)
+        vera = {"name": "Vera", "online": True, "map": s["map"], "x": s["x"] + 2, "y": s["y"] + 1, "hp_pct": 90,
+                "lv": 38, "visible": True}
+        s["party_members"] = [dict(vera, name="Arkady", x=s["x"], y=s["y"], lv=41), vera]
+        s["players"] = [{"name": "Vera", "x": vera["x"], "y": vera["y"], "job": "Acolyte", "lv": 38, "sex": "Female"}]
+        self.msgs.append(dict(s, ts=t))
+
+    def die(self):
+        self.s.update(dead=True, hp_pct=0, activity="dead")
+        self.go = None
+        self.dead_until = self.t + 20
+        self.event(kind="died", map=self.s["map"])
+
+class LongDayAllModulesTest(unittest.TestCase):
+    """review2: долгий день со ВСЕМИ новыми модулями (дом, группа и crew, питомец, общество, занятия и цепочки,
+    экспедиция) на отзывчивом теле: город → сохранение у Kafra → охота группой → экспедиция → тревога и гибель там →
+    возрождение дома → вечер → сон. Экспедицию начинает тест (как занятие explore каталога), остальное — модули."""
+
+    def test_city_kafra_hunt_expedition_alarm_sleep(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        t0 = datetime(2025, 3, 2, 17, 0, tzinfo=TZ).timestamp()        # Arkady спит с 02:30
+        clock, rng = Clock(), random.Random(5)
+        clock.t = t0
+        body = SimBody(t0)
+        sent, marks = [], {}
+        with mock.patch("time.time", clock):
+            mem = Memory(root / "m.sqlite")
+            persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+            mind = None
+
+            async def send(a):
+                sent.append((clock.t, dict(a), dict(mind.state)))
+                body.apply(dict(a, id=len(sent)))
+                return len(sent)
+
+            mind = Mind(Settings.from_env({}), persona, mem, send, root / "d.jsonl", RuleGate(),
+                        peers={"Arkady", "Vera"}, world=WORLD, world_bus_db=WorldBus(root / "w.sqlite", "Arkady"))
+            mind.routine.rng = mind.activities.rng = random.Random(7)
+            for name in ("home", "crew", "pets", "society", "activities", "explorer", "party", "routine"):
+                self.assertIsNotNone(getattr(mind, name), f"модуль {name} включён")
+            mind.routine.new_day(t0, keep_mode="town")                   # день начинается в городе
+            mind.routine.st["rest_until"] = t0 + 15 * 60
+
+            async def day():
+                body.event(kind="chat_private", **{"from": "Vera"}, text="[crew:pref:prt_fild08:38]")
+                while clock.t < t0 + 12 * 3600:
+                    body.tick(clock.t, rng)
+                    for m in body.msgs:
+                        await mind.on_message(m)
+                    body.msgs.clear()
+                    await mind.step()
+                    ex, r = mind.explorer, mind.routine
+                    if "hunted" not in marks and r.st.get("mode") == "hunt" and body.s["map"] == r.hunt_map():
+                        marks["hunted"] = clock.t
+                    if ("hunted" in marks and "expedition" not in marks and r.st.get("mode") == "town"
+                            and r.st.get("arrived") and not ex.trip and body.s["hp_pct"] >= 80):
+                        why = ex.blocked(mind.state)
+                        cands = ex.candidates()
+                        if why in (None,) or why.startswith("любопытство"):
+                            self.assertTrue(cands, "есть цель экспедиции")
+                            marks["expedition"] = clock.t
+                            await ex.start(cands[0])
+                    trip = ex.trip
+                    if trip and trip.get("phase") == "stay" and "alarm" not in marks \
+                            and clock.t >= trip["arrived"] + 60:
+                        marks["alarm"] = clock.t
+                        body.event(kind="danger", map=body.s["map"])
+                    if "alarm" in marks and "died" not in marks and clock.t >= marks["alarm"] + 3:
+                        marks["died"] = clock.t
+                        body.die()
+                    if body.asleep:
+                        marks.setdefault("sleep", clock.t)
+                        if clock.t > marks["sleep"] + 5:
+                            break
+                    clock.t += 1
+
+            asyncio.run(day())
+            kinds = [r[0] for r in mem.db.execute("SELECT kind FROM events ORDER BY id")]
+            calls = mem.db.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0]
+            home, explore, crew = mem.get("home") or {}, mem.get("explore") or {}, mem.get("crew") or {}
+            mem.close()
+        decisions = [json.loads(l) for l in (root / "d.jsonl").read_text().splitlines()]
+        acts = [a["action"] for _, a, _ in sent]
+        # этапы дня — по порядку
+        for k in ("hunted", "expedition", "alarm", "died", "sleep"):
+            self.assertIn(k, marks, f"этап {k}: {marks}")
+        self.assertIn("home_saved", kinds)
+        t_hunt = next(t for t, a, _ in sent if a["action"] == "hunt")
+        self.assertTrue([1 for t, a, s in sent if t < t_hunt and a["action"] == "job_change"],
+                        "к Kafra — до выхода на охоту")
+        self.assertFalse([a for t, a, s in sent if (s.get("job_change") or {}).get("running")
+                          and a["action"] in replay.MOVES + ("meet_point", "sleep")], "этап Kafra держит тело")
+        for k in ("explore_start", "explore_arrived", "explore_done", "explore_returned", "home_respawn"):
+            self.assertIn(k, kinds)
+        done = next(d for d in decisions if d.get("event") == "explore_done")
+        self.assertIn("опасность", done["why"])
+        self.assertEqual(done["rumor"], "danger")
+        # инварианты реплея: мёртвому не двигаться, не больше SPAM_PER_MIN в минуту, без LLM — ноль вызовов
+        self.assertEqual(replay.invariants(sent, llm_calls=calls), [])
+        # один этап jobChange (дом), не посреди экспедиции
+        self.assertEqual([a.get("path") for a in (x for _, x, _ in sent) if a["action"] == "job_change"], ["home"])
+        # экспедиция: lockMap цели, после неё распорядок вернул город (точка отдыха)
+        t_exp = [t for t, a, _ in sent if a["action"] == "explore"]
+        self.assertTrue(t_exp)
+        self.assertTrue([1 for t, a, _ in sent if t > marks["died"] and a["action"] == "meet_point"
+                         and a["map"] == "prontera"], "после экспедиции lockMap снова город")
+        # пока экспедиция шла (до тревоги) — ни охоты, ни прогулок, ни Kafra, ни сна
+        during = [a["action"] for t, a, _ in sent if marks["expedition"] < t < marks["alarm"]]
+        for bad in ("hunt", "meet_point", "job_change", "sleep", "service", "chat_room"):
+            self.assertNotIn(bad, during, f"{bad} посреди экспедиции")
+        # сон — в городе, после него тело не двигают
+        t_sleep, _, s_sleep = next(x for x in sent if x[1]["action"] == "sleep")
+        self.assertEqual(s_sleep.get("map"), "prontera")
+        self.assertFalse([a for t, a, _ in sent if t > t_sleep and a["action"] in replay.MOVES + ("meet_point",)])
+        # группа: подтверждена, лидер объявлял режим, crew говорил в чате группы
+        self.assertIn("party_confirmed", kinds)
+        self.assertIn("party_say", acts)
+        # часы новых модулей — часы реплея
+        end = clock.t
+        self.assertTrue(t0 <= home["saved"]["ts"] <= end, "home: время реплея")
+        self.assertTrue(t0 <= explore["last"] <= end, "explore: время реплея")
+        self.assertTrue(all(t0 <= p["ts"] <= end for p in crew.get("prefs", {}).values()), "crew: время реплея")
 
 
 class ProtocolSurfaceTest(unittest.TestCase):
