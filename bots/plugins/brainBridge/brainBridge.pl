@@ -42,6 +42,12 @@
 #   mail_send {to,title,body,zeny?,item?,amount?} / mail_check {} / mail_take {mail_id} -> economy: RODEX  # market:
 #   emote {id}            -> e <команда> (Commands.pm cmdEmotion, tables/emotions.txt); только номера
 #                            из %EMOTES (приветствие, смех, сердце, вопрос, спасибо...), как safety.EMOTES
+#   chat_room {op open, title, limit} / {op close} -> chat create "<title>" <limit> 1 / chat leave  # society:
+#                            (ORG-026, вывеска; заголовок ≤ 36 байт UTF-8, без '#' и '"'); в state — chat_room
+#                            (заголовок комнаты, где я сейчас). В комнате сервер не даёт ходить (rAthena
+#                            pc_cant_act: chatID): перед действием, двигающим тело, и когда AI начинает
+#                            route/move/attack/... — chat leave (chatFirst/chatGuard). Событие party_refused
+#                            {name, code} — житель отказался вступить в группу (пакет party_invite_result).
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -62,7 +68,7 @@ use JSON::PP;
 use Time::HiRes qw(time);
 use Plugins;
 use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID %ai_v
-               %friends @friendsID);
+               %friends @friendsID $currentChatRoom %chatRooms);   # society: чат-комната
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -94,6 +100,7 @@ my $hooks = Plugins::addHooks(
 	['friend_request',     \&onFriendRequest],
 	['packet_sysMsg',      sub { onWorldMsg('sys', $_[1]{Msg}) }],           # ORG-039: 009A system_chat (announce)
 	['packet_localBroadcast', sub { onWorldMsg('broadcast', $_[1]{Msg}) }],  # ORG-039: 01C3/040C local_broadcast
+	['packet/party_invite_result', \&onPartyInviteResult],                   # society: отказ в группе (ORG-027)
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -194,6 +201,7 @@ sub sendState {
 		(defined &economy::buyStatus ? (buy => economy::buyStatus()) : ()),   # market: жду продавца
 		(defined &survival::status ? (survival => survival::status()) : ()),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
+		chat_room => chatTitle(),                                                 # society: комната, где я сейчас
 	});
 }
 
@@ -379,6 +387,35 @@ sub cleanText {
 our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav', 15 => 'thx', 17 => 'sry',
                18 => 'heh', 20 => 'hmm', 21 => 'no1', 28 => 'sob', 29 => 'gg', 33 => 'ok');
 
+# society: чат-комната (ORG-026). Действия, которые двигают тело (или нужны без комнаты: лавка), — перед ними
+# chat leave; AI OpenKore о комнате не знает и упрётся в отказ сервера — chatGuard закрывает и тогда.
+my %MOVES = map { $_ => 1 } qw(follow meet_point hunt unstuck service give offer_sell offer_buy job_change
+                               sleep shop_open);
+my %CHAT_BUSY = map { $_ => 1 } qw(route move attack follow sellAuto buyAuto storageAuto take items_take
+                                   NPC deal skill_use);
+sub inChat { return defined $currentChatRoom && $currentChatRoom ne ''; }
+sub chatFirst { return inChat() ? 'chat leave' : (); }
+sub chatTitle {
+	return undef unless inChat();
+	my $room = $chatRooms{$currentChatRoom};
+	return $room && defined $room->{title} ? "$room->{title}" : '?';
+}
+sub chatGuard {
+	return unless inGame() && inChat();
+	my $act = AI::action() // '';
+	return unless $CHAT_BUSY{$act};
+	message "[brainBridge] AI начинает $act — закрываю чат-комнату\n", 'system';
+	Commands::run('chat leave');
+	event('chat_left', why => $act);
+}
+sub onPartyInviteResult {
+	my (undef, $args) = @_;
+	return unless defined $args->{type} && ($args->{type} == 1 || $args->{type} == 5);   # JOIN_REFUSE, JOINMSG_REFUSE
+	my $name = defined &I18N::bytesToString ? I18N::bytesToString($args->{name}) : "$args->{name}";
+	$name =~ s/\0.*//s;
+	event('party_refused', name => $name, code => $args->{type} + 0) if length $name;
+}
+
 # Перед движением: если бот посажен командой sit (флаг sitAuto_forcedBySitCommand) или сидит — stand,
 # иначе OpenKore не пойдёт к lockMap/за целью (флаг снимает только cmdStand).
 sub standFirst {
@@ -498,9 +535,23 @@ sub actionToCommand {
 		my ($ok, $desc) = economy::startMailTake($a);                                             # market:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
 	} elsif ($kind eq 'emote') {
-		my $id = $a->{id} // '';
+		my $id = $a->{emotion} // $a->{id} // '';   # society: id сообщения — номер действия (ack), номер эмоции — emotion
 		return (0, 'эмоция не из списка') unless $id =~ /^\d{1,2}$/ && exists $EMOTES{$id};
 		return (1, "e $EMOTES{$id}");
+	} elsif ($kind eq 'chat_room') {                                       # society: вывеска (ORG-026)
+		my $op = $a->{op} || '';
+		return (1, inChat() ? 'chat leave' : []) if $op eq 'close';          # society: нет комнаты — нечего закрывать
+		return (0, 'op open или close') unless $op eq 'open';                # society:
+		return (0, 'уже в чат-комнате') if inChat();                         # society:
+		my $t = cleanText($a->{title});                                       # society:
+		return (0, 'неверный заголовок') unless length $t && $t !~ /["#]/;   # society:
+		my $bytes = do { my $c = $t; utf8::encode($c); length $c };          # society: rAthena CHATROOM_TITLE_SIZE 36+1
+		return (0, 'заголовок длиннее 36 байт') if $bytes > 36 || length $t > 36;   # society:
+		my $limit = $a->{limit} // 5;                                         # society:
+		$limit = 5 unless $limit =~ /^\d{1,2}$/;                             # society:
+		$limit = 2 if $limit < 2;                                             # society:
+		$limit = 20 if $limit > 20;                                           # society:
+		return (1, qq{chat create "$t" $limit 1});                            # society: сидя тоже можно
 	} elsif ($kind eq 'friend_request') {
 		my $to = cleanText($a->{to});
 		return (0, 'неверный адресат') unless $to =~ /^[^"\s]{1,23}$/;
@@ -538,6 +589,10 @@ sub handleLine {
 	}
 	return unless ($msg->{type} || '') eq 'action';
 	my ($ok, $res) = inGame() ? actionToCommand($msg) : (0, 'бот не в игре');
+	if ($ok && $MOVES{$msg->{action} || ''} && inChat()) {                # society: в комнате не уйти — сначала chat leave
+		message "[brainBridge] перед $msg->{action} закрываю чат-комнату\n", 'system';
+		Commands::run('chat leave');
+	}
 	if ($ok && ref $res eq 'HASH') {
 		$res = $res->{note};                            # действие исполняет другой плагин (economy)
 		message "[brainBridge] решение мозга -> $res\n", 'system';
@@ -593,6 +648,7 @@ sub deadWatch {
 
 sub onTick {
 	deadWatch();
+	chatGuard();                                                                  # society: комната не держит AI
 	tryConnect();
 	return unless $sock;
 	readIncoming();

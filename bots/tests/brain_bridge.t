@@ -171,4 +171,50 @@ is_deeply(\@ev, [], 'пустое после очистки — не событ�
 Plugins::call('packet_sysMsg', {Msg => 'x' x 300});
 is(length($ev[0][2]), 120, 'длинное обрезано до 120 символов');
 
+# ---- society: чат-комната-вывеска (ORG-026) и отказ в группе (ORG-027) ----
+undef $Globals::currentChatRoom;
+%Globals::chatRooms = ();
+my ($okC, $resC) = brainBridge::actionToCommand({action => 'chat_room', op => 'open', title => 'Ищу группу на prt_fild08', limit => 5});
+ok($okC, 'society: вывеска принята');
+is($resC, 'chat create "Ищу группу на prt_fild08" 5 1', 'society: chat create "<title>" <limit> 1 (Commands.pm cmdChatRoom)');
+ok(!(brainBridge::actionToCommand({action => 'chat_room', op => 'open', title => 'Продаю "Jellopy"'}))[0], 'society: кавычки нельзя');
+ok(!(brainBridge::actionToCommand({action => 'chat_room', op => 'open', title => 'Продаю #1'}))[0], 'society: # нельзя');
+ok(!(brainBridge::actionToCommand({action => 'chat_room', op => 'open', title => 'Я' x 19}))[0], 'society: 38 байт UTF-8 — нельзя');
+is((brainBridge::actionToCommand({action => 'chat_room', op => 'open', title => 'Отдыхаю', limit => 99}))[1],
+	'chat create "Отдыхаю" 20 1', 'society: лимит не больше 20');
+is_deeply((brainBridge::actionToCommand({action => 'chat_room', op => 'close'}))[1], [], 'society: не в комнате — закрывать нечего');
+is(brainBridge::chatTitle(), undef, 'society: в state chat_room пусто');
+$Globals::currentChatRoom = 'R1';
+%Globals::chatRooms = (R1 => {title => 'Отдыхаю'});
+is(brainBridge::chatTitle(), 'Отдыхаю', 'society: в state — заголовок комнаты');
+ok(!(brainBridge::actionToCommand({action => 'chat_room', op => 'open', title => 'Отдыхаю'}))[0], 'society: уже в комнате');
+is((brainBridge::actionToCommand({action => 'chat_room', op => 'close'}))[1], 'chat leave', 'society: закрыть — chat leave');
+@Commands::ran = ();
+brainBridge::handleLine('{"type":"action","id":7,"action":"follow","to":"Vera"}');
+is_deeply(\@Commands::ran, ['chat leave', 'follow Vera'], 'society: перед движением — chat leave');
+@Commands::ran = ();
+brainBridge::handleLine('{"type":"action","id":57,"action":"emote","emotion":12}');
+is_deeply(\@Commands::ran, ['e wav'], 'society: номер эмоции — emotion, id сообщения (57) не мешает; комната открыта');
+@Commands::ran = ();
+@ev = ();
+$AI::action = 'route';
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['chat leave'], 'society: AI начал route — chat leave');
+is($ev[0][0], 'chat_left', 'society: событие chat_left');
+$AI::action = undef;
+@Commands::ran = ();
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, [], 'society: AI свободен — комната остаётся');
+undef $Globals::currentChatRoom;
+$AI::action = 'route';
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, [], 'society: не в комнате — нечего закрывать');
+$AI::action = undef;
+@ev = ();
+Plugins::call('packet/party_invite_result', {name => "Vera\0\0\0", type => 1});
+is_deeply(\@ev, [['party_refused', name => 'Vera', code => 1]], 'society: отказ в группе — party_refused');
+@ev = ();
+Plugins::call('packet/party_invite_result', {name => 'Vera', type => 2});
+is_deeply(\@ev, [], 'society: согласие — не событие');
+
 done_testing();
