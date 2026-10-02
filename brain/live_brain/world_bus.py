@@ -70,6 +70,7 @@ QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки с�
 BACKSTAGE = {"director"}                      # director: решения режиссёра (ORG-086) — в дашборд, не в летопись/серию
 QUIET |= {"healer_post"}                      # healer: снимок поста лекаря (затирание)
 QUIET |= {"mentee_seek"}                      # mentor: снимок «ищу наставника» (затирание)
+QUIET |= {"bestiary_known"}                   # bestiary: снимок «какие виды и карты знаю» (затирание)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS world_events (
@@ -326,6 +327,9 @@ TEXTS = {
     "mentor_start": lambda d: f"взял(а) под крыло {d.get('mentee')}",                          # mentor: ORG-057
     "mentor_graduated": lambda d: f"выпуск ученика {d.get('mentee')} ({d.get('lv')} ур.)",         # mentor:
     "mentor_end": lambda d: f"опека с {d.get('peer')} закончилась ({d.get('why')})",             # mentor:
+    "monster_first": lambda d: (f"первым(ой) из жителей победил(а) {d.get('monster')}"                  # bestiary: ORG-077
+                                + (" (мини-босс)" if d.get("boss") else "")),                          # bestiary:
+    "place_first": lambda d: f"первым(ой) из жителей дошёл(шла) до {d.get('map')} — «{d.get('name')}»",   # bestiary:
     "order_done": lambda d: f"выполнил(а) заказ {d.get('for')}: {d.get('name')} x{d.get('n')}",   # orders:
     "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
                                      f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)

@@ -41,6 +41,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
 Новые после таблицы: healer (ORG-069) — метка [heal:] 65, события support/chat_* 25, тик 135.  # healer:
 orders (ORG-070) — метка [order:] 25, тик 25.  # orders:
 mentor (ORG-057) — метка [mentor:] 55, тик 95, промпт 215.  # mentor:
+bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # bestiary:
 """
 import inspect
 import re
@@ -77,6 +78,7 @@ from .dream import Dream             # dreams: ORG-081 жизненный пут
 from .savings import Savings         # dreams: ORG-073 копилка мечты и банк
 from .memoir import Memoir           # dreams: ORG-082 мемуары жителя
 from .mentor import Mentor           # mentor: ORG-057 наставничество новичков
+from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -116,6 +118,7 @@ MODULES = (
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
+    Bestiary,          # bestiary: ORG-077 после social (тема bestiary); тик 225, событие kill 75, промпт 235
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
