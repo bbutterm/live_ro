@@ -42,6 +42,8 @@ CAST_LIMIT = 40                  # healer: кастов на игроков за
 CAST_MIN_SP = 10                 # healer: при меньшем SP % не кастовать вовсе (лекарь сам держит порог выше)
 PLAN_ACTIONS += ("bank_check", "bank_deposit", "bank_withdraw")   # dreams: банк rAthena (savings.py, ORG-073)
 MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
+PLAN_ACTIONS += ("refine",)      # refine: заточка своего оружия до безопасного уровня (refine.py, ORG-072)
+REFINE_ORES = (1010, 1011)       # refine: Phracon, Emveretarcon — продаёт Vurewell (тот же список в refine.pl)
 BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
@@ -175,6 +177,8 @@ class SafetyPolicy:
             return self.check_explore(action, state)                                                 # explore:
         if kind in ("bank_check", "bank_deposit", "bank_withdraw"):                                  # dreams:
             return self.check_bank(kind, action, state, now)                                         # dreams:
+        if kind == "refine":                                                                          # refine:
+            return self.check_refine(action, state)                                                  # refine:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":
@@ -270,6 +274,28 @@ class SafetyPolicy:
             return None, f"лимит кастов {CAST_LIMIT}/10 мин"
         self.casts.append(now)
         return {"action": "skill_on_player", "skill": skill, "to": to}, None
+
+    def check_refine(self, action, state):                                                      # refine:
+        """refine: заточка (ORG-072) — ID и индекс целые, руда из REFINE_ORES, цель 1..10, докупка 0..20, точки —
+        карта и координаты; в городе отдыха или в prt_in (кузнец). Шанс 100 и шаги проверяет плагин refine."""
+        def num(v, lo, hi):
+            return isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+
+        def point(p, menu=False):
+            return (isinstance(p, dict) and re.fullmatch(r"[a-z0-9_]{3,16}", str(p.get("map", "")))
+                    and num(p.get("x"), 1, 999) and num(p.get("y"), 1, 999) and isinstance(p.get("stand"), dict)
+                    and num(p["stand"].get("x"), 1, 999) and num(p["stand"].get("y"), 1, 999)
+                    and (not menu or re.fullmatch(r"[A-Za-z]{3,20}", str(p.get("menu", "")))))
+        if not (num(action.get("item"), 1, 999999) and num(action.get("inv"), 0, 999999)
+                and num(action.get("target"), 1, 10) and num(action.get("buy"), 0, 20)
+                and action.get("ore") in REFINE_ORES):
+            return None, "неверная заточка"
+        if not point(action.get("smith")) or (action["buy"] and not point(action.get("shop"), menu=True)):
+            return None, "неверный кузнец или продавец руды"
+        if self.chat_maps and state.get("map") not in self.chat_maps | {"prt_in"}:
+            return None, "заточка — только из города"
+        keys = ("action", "id", "item", "inv", "target", "ore", "buy", "smith", "shop")
+        return {k: action[k] for k in keys if k in action}, None
 
     def check_explore(self, action, state):                                                     # explore:
         """explore: экспедиция (ORG-054) — карта из атласа, не pvp/gvg, не полигон новичков/перестроенный izlude

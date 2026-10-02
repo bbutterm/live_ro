@@ -37,6 +37,8 @@
 #   party_say {text} -> «p <текст>»: чат группы (crew.py, ORG-053)
 #   pet_tame {item,mob} / pet_hatch {egg} / pet_setup {food_on,items,mobs} -> плагин pets: питомец (ORG-051)
 #   job_change {path,stage,steps,success} -> плагин jobChange: этап квеста смены профессии (шаги из progression.json)
+#   refine {item,inv,target,ore,buy,shop,smith} -> плагин refine: заточка своего оружия у Hollgrehenn только при  # refine:
+#                            шансе 100 (Refine UI); в state — refine {running, phase, weapon, ores}; итог refine_result  # refine:
 #   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
 #   service {}            -> autostorage (если есть что сдать на склад) или autosell — продать/сдать/докупить
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
@@ -228,6 +230,7 @@ sub sendState {
 		activity  => (AI::action() || 'idle'),
 		players   => nearbyPlayers(),
 		(defined &jobChange::status ? (job_change => jobChange::status()) : ()),
+		(defined &refine::status ? (refine => refine::status()) : ()),             # refine: заточка (ORG-072)
 		(defined &pets::status ? (pet => pets::status()) : ()),                  # pets: питомец (ORG-051)
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
@@ -448,6 +451,7 @@ our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav
 # chat leave; AI OpenKore о комнате не знает и упрётся в отказ сервера — chatGuard закрывает и тогда.
 my %MOVES = map { $_ => 1 } qw(follow meet_point hunt unstuck service give offer_sell offer_buy job_change
                                sleep shop_open explore skill_on_player);   # explore: экспедиция двигает тело; healer: каст
+$MOVES{refine} = 1;                                                           # refine: идёт к продавцу руды и кузнецу
 my %CHAT_BUSY = map { $_ => 1 } qw(route move attack follow sellAuto buyAuto storageAuto take items_take
                                    NPC deal skill_use);
 sub inChat { return defined $currentChatRoom && $currentChatRoom ne ''; }
@@ -708,6 +712,12 @@ sub actionToCommand {
 		return (0, 'плагин jobChange не загружен') unless defined &jobChange::start;
 		my ($ok, $desc) = jobChange::start($a);
 		return $ok ? (1, {note => $desc}) : (0, $desc);
+	} elsif ($kind eq 'refine') {                                          # refine: заточка (ORG-072)
+		return (0, 'плагин refine не загружен') unless defined &refine::start;   # refine:
+		return (0, 'идёт сделка') if %currentDeal || %outgoingDeal || %incomingDeal;   # refine:
+		return (0, 'открыта лавка') if $shopstarted;                          # refine:
+		my ($ok, $desc) = refine::start($a);                                  # refine:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                       # refine:
 	} elsif ($kind eq 'pet_tame' || $kind eq 'pet_hatch' || $kind eq 'pet_setup') {   # pets: (ORG-051)
 		return (0, 'плагин pets не загружен') unless defined &pets::startTame;
 		my ($ok, $desc) = $kind eq 'pet_tame' ? pets::startTame($a)

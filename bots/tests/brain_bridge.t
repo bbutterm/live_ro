@@ -360,4 +360,19 @@ package main;
 	$Globals::playersList = $savedPlayers;
 }
 
+# ---- refine: заточка (ORG-072) — действие передаётся плагину refine, при сделке и лавке — отказ ----  # refine:
+{
+	my ($okr, $whyr) = brainBridge::actionToCommand({action => 'refine', item => 1201, inv => 3, target => 7});
+	ok(!$okr && $whyr =~ /не загружен/, 'refine: без плагина — отказ');
+	no warnings 'once';
+	my @got;
+	local *refine::start = sub { push @got, $_[0]; return (1, 'заточка Knife до +7') };
+	($okr, my $res) = brainBridge::actionToCommand({action => 'refine', item => 1201, inv => 3, target => 7});
+	ok($okr && $res->{note} =~ /Knife/ && $got[0]{inv} == 3, 'refine: действие отдано плагину');
+	%Globals::currentDeal = (name => 'Vera');             # local не виден через импорт Globals — присваиваю
+	($okr, $whyr) = brainBridge::actionToCommand({action => 'refine', item => 1201, inv => 3, target => 7});
+	ok(!$okr && $whyr =~ /сделка/, 'refine: во время сделки — отказ');
+	%Globals::currentDeal = ();
+}
+
 done_testing();

@@ -46,6 +46,15 @@
     "orders_gap_factor": 0.5,
     "sign_chance": 0.9
   },
+  "refine": {
+    "_comment": "ORG-072 заточка своего оружия у Hollgrehenn (prt_in,63,60) только до безопасного предела (brain/live_brain/refine.py, плагин bots/plugins/refine, данные brain/world/refine.json; docs/ECONOMY.md). ВЫКЛЮЧЕНО: Refine UI на живом сервере не проверен. Включить — enabled: true.",
+    "enabled": false,
+    "check_minutes": 30,
+    "gap_days": 3,
+    "chance": 0.3,
+    "max_steps": 3,
+    "spare_share": 0.25
+  },
   "tradition": {
     "_comment": "ORG-058 вечерний круг (brain/live_brain/tradition.py, docs/SOCIETY.md): point — точка social.points, hours — окно [с, до) по часовому поясу мира, minutes — сколько стоять в круге. Выключить — enabled: false или BRAIN_DISABLE=tradition.",
     "enabled": true,
