@@ -83,7 +83,9 @@ class FakePlugin:
         self.s.close()
 
 
-class BrainTest(unittest.TestCase):
+class BrainHarness(unittest.TestCase):
+    """Фейковый OpenRouter, процесс мозга и фейковый плагин. Тестов не содержит."""
+
     @classmethod
     def setUpClass(cls):
         cls.http = HTTPServer(("127.0.0.1", 0), FakeOpenRouter)
@@ -135,6 +137,9 @@ class BrainTest(unittest.TestCase):
     def connect(self):
         return FakePlugin(str(self.root / "run" / "brain" / "bot01.sock"))
 
+
+
+class BrainTest(BrainHarness):
     def test_chat_decision_execution_and_memory(self):
         env = self.env_file()
         proc = self.start_brain(env)
@@ -159,9 +164,10 @@ class BrainTest(unittest.TestCase):
         self.assertIn("Tester", req["body"]["messages"][1]["content"])
 
         recs = self.decisions()
-        decision = [r for r in recs if r["type"] == "decision"][0]
+        decision = [r for r in recs if r["type"] == "decision" and r["source"] == "llm"][0]
         self.assertEqual(len(decision["actions"]), 2)
-        self.assertEqual(decision["rejected"], [{"action": "set_hunt_map", "map": "gef_dun02"}])
+        self.assertEqual(decision["source"], "llm")
+        self.assertEqual([r["action"].get("map") for r in decision["rejected"]], ["gef_dun02"])
         acks = [r for r in recs if r["type"] == "ack"]
         self.assertEqual(sorted(a["command"] for a in acks), ["cmd-say", "cmd-set_hunt_map"])
 

@@ -1,13 +1,13 @@
-"""Разум персонажа: события -> память -> (редко) решение LLM -> действия OpenKore.
+"""Координатор персонажа: события тела -> gate -> правила/LLM -> safety -> команды OpenKore.
 
-Правила:
-- LLM вызывается только по таймеру (BRAIN_DECIDE_INTERVAL), значимому событию
-  (смерть, уровень; не чаще BRAIN_EVENT_MIN_GAP) или обращению в чате
-  (не чаще BRAIN_CHAT_MIN_GAP), и только в пределах BRAIN_DAILY_LIMIT за сутки.
-- Без ключа, при исчерпанном бюджете или ошибке API работает fallback:
-  события и воспоминания пишутся, бот играет по профилю OpenKore.
-- Действия ограничены списком, карты — списком hunt_maps из характера.
-- Каждое решение и подтверждение исполнения пишутся в decisions.jsonl.
+Поток:
+  1. Каждое событие пишется в память и проходит decision gate (gate.py).
+  2. Действия gate (правила, без LLM) сразу идут через SafetyPolicy в тело.
+  3. Если gate просит LLM и LLM включён (BRAIN_LLM=openrouter, ключ, лимит) — модель
+     решает; её действия тоже проходят SafetyPolicy.
+  4. Плановое размышление по таймеру — только при включённом LLM.
+  5. Каждое решение, отказ и подтверждение исполнения пишутся в decisions.jsonl.
+Без LLM бот играет по профилю OpenKore, правила gate и safety продолжают работать.
 """
 import asyncio
 import json
@@ -15,28 +15,34 @@ import logging
 import time
 
 from . import llm
+from .gate import GateContext
+from .safety import SafetyPolicy
 
 log = logging.getLogger("mind")
 
-ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume")
 MAX_ACTIONS = 2
 
 
 class Mind:
-    def __init__(self, settings, persona, memory, bridge_send, decisions_path):
+    def __init__(self, settings, persona, memory, bridge_send, decisions_path, gate):
         self.s = settings
         self.persona = persona
         self.mem = memory
         self.bridge_send = bridge_send
         self.decisions_path = decisions_path
+        self.gate = gate
+        self.ctx = GateContext(name=persona["name"], hunt_maps=persona["hunt_maps"],
+                               greeting=persona.get("greeting", ""),
+                               last=memory.get("gate_last", {}))
+        self.safety = SafetyPolicy(persona["hunt_maps"], safe_hp=settings.safe_hp)
         self.state = memory.get("last_state", {})
         self.lock = asyncio.Lock()
-        self.pending = None            # (reason, context) — ждёт свободного разума
-        self.last_decision = 0.0
+        self.pending = None            # (повод, контекст, вид) — ждёт свободного LLM
+        self.last_decision = time.time()
         self.last_event_decision = 0.0
         self.last_chat_decision = 0.0
         self.backoff_until = 0.0
-        self.sent = {}                 # id действия -> запись решения
+        self.sent = {}                 # id действия -> действие
 
     # ---------- входящие сообщения плагина ----------
 
@@ -47,6 +53,7 @@ class Mind:
             self.mem.add_event("bridge_connected", {"char": msg.get("char")})
         elif kind == "state":
             self.state = {k: v for k, v in msg.items() if k not in ("type", "ts")}
+            self.state["goal"] = self.mem.get("goal")
             self.mem.set("last_state", self.state)
         elif kind == "event":
             await self.on_event(msg)
@@ -54,53 +61,84 @@ class Mind:
             self.on_ack(msg)
 
     async def on_event(self, msg):
-        ev = msg.get("kind")
-        data = {k: v for k, v in msg.items() if k not in ("type", "kind", "ts")}
-        self.mem.add_event(ev, data)
-        name = self.persona["name"]
-        if ev == "died":
-            self.mem.remember(f"Я погиб на карте {data.get('map')}.", 3)
-            self.trigger("я только что погиб", data, kind="event")
-        elif ev == "level_up":
-            self.mem.remember(f"Я достиг {data.get('level')} уровня на карте {data.get('map')}.", 3)
-            self.trigger(f"новый уровень {data.get('level')}", data, kind="event")
-        elif ev == "chat_private":
-            self.mem.touch_relation(data.get("from", "?"))
-            self.trigger(f"{data.get('from')} пишет мне в личку", data, kind="chat")
-        elif ev == "chat_public":
-            sender = data.get("from", "?")
-            self.mem.touch_relation(sender)
-            if name.lower() in str(data.get("text", "")).lower():
-                self.trigger(f"{sender} обращается ко мне в общем чате", data, kind="chat")
+        event = {k: v for k, v in msg.items() if k not in ("type", "ts")}
+        kind = event.get("kind")
+        self.mem.add_event(kind, {k: v for k, v in event.items() if k != "kind"})
+        if kind in ("chat_private", "chat_public") and event.get("from"):
+            self.mem.touch_relation(str(event["from"]))
+        result = self.gate.evaluate(event, self.state, self.ctx)
+        self.mem.set("gate_last", self.ctx.last)
+        for text, importance in result.memory:
+            self.mem.remember(text, importance)
+        if kind not in ("kill", "loot", "attack"):
+            log.info("событие %s: %s", kind, result.note)
+        if result.actions:
+            await self.execute(result.actions, source="rule", reason=result.note)
+        if result.llm:
+            self.trigger(result.llm, event, result.llm_kind)
 
     def on_ack(self, msg):
-        rec = self.sent.pop(msg.get("id"), None)
+        action = self.sent.pop(msg.get("id"), None)
         result = {"ok": bool(msg.get("ok")), "command": msg.get("command"), "error": msg.get("error")}
-        self.write_decision({"type": "ack", "id": msg.get("id"), "action": rec, **result})
+        self.write_decision({"type": "ack", "id": msg.get("id"), "action": action, **result})
         if result["ok"]:
             log.info("исполнено в игре: %s", result["command"])
         else:
-            log.warning("тело отклонило действие %s: %s", rec, result["error"])
+            log.warning("тело отклонило действие %s: %s", action, result["error"])
 
-    # ---------- когда думать ----------
+    # ---------- исполнение (всегда через safety) ----------
+
+    async def execute(self, actions, source, reason, extra=None):
+        allowed, rejected = [], []
+        for a in actions:
+            if len(allowed) >= MAX_ACTIONS:
+                rejected.append({"action": a, "why": f"больше {MAX_ACTIONS} действий"})
+                continue
+            if a.get("action") == "set_hunt_map" and a.get("map") == self.state.get("lock_map"):
+                continue
+            clean, why = self.safety.check(a, self.state)
+            if why:
+                rejected.append({"action": a, "why": why})
+            else:
+                allowed.append(clean)
+        sent = []
+        for a in allowed:
+            action_id = await self.bridge_send(a)
+            if action_id is None:
+                rejected.append({"action": a, "why": "тело не подключено"})
+                continue
+            a["id"] = action_id
+            self.sent[action_id] = a
+            sent.append(a)
+        self.write_decision({"type": "decision", "source": source, "reason": reason,
+                             "actions": sent, "rejected": rejected, **(extra or {})})
+        log.info("%s (%s): действия %s%s", "правило" if source == "rule" else "решение LLM", reason,
+                 sent or "нет", f", отклонено {rejected}" if rejected else "")
+
+    async def safety_tick(self):
+        if self.safety.pause_expired():
+            log.warning("пауза дольше %d с — продолжаю охоту по правилу", self.safety.max_pause)
+            await self.execute([{"action": "resume"}], source="rule", reason="правило: пауза истекла")
+
+    # ---------- когда думать LLM ----------
 
     def trigger(self, reason, context=None, kind="event"):
         now = time.time()
-        if kind == "chat" and now - self.last_chat_decision < self.s.chat_min_gap:
-            log.info("чат: слишком часто, отложено (%s)", reason)
-        elif kind == "event" and now - self.last_event_decision < self.s.event_min_gap:
-            log.info("событие: слишком часто, только память (%s)", reason)
+        if kind == "event" and now - self.last_event_decision < self.s.event_min_gap:
+            log.info("событие: слишком часто для LLM, только память (%s)", reason)
             return
         self.pending = (reason, context or {}, kind)
 
     async def run(self, connected):
-        """Главный цикл: раз в секунду проверяет, пора ли думать."""
+        """Главный цикл: раз в секунду правила безопасности и проверка, пора ли думать."""
         while True:
             await asyncio.sleep(1)
             if not connected() or not self.state:
                 continue
+            await self.safety_tick()
             now = time.time()
-            if self.pending is None and now - self.last_decision >= self.s.decide_interval:
+            if (self.pending is None and self.s.llm_enabled
+                    and now - self.last_decision >= self.s.decide_interval):
                 self.pending = ("плановое размышление", {}, "timer")
             if self.pending is None or self.lock.locked():
                 continue
@@ -110,8 +148,6 @@ class Mind:
             self.pending = None
             async with self.lock:
                 await self.decide(reason, context, kind)
-
-    # ---------- решение ----------
 
     def budget_left(self):
         return self.s.daily_limit - self.mem.llm_calls_since(time.time() - 86400)
@@ -192,33 +228,6 @@ class Mind:
             {"role": "user", "content": json.dumps(user, ensure_ascii=False, default=str)},
         ]
 
-    def validate_actions(self, actions):
-        ok, rejected = [], []
-        if not isinstance(actions, list):
-            return ok, ["actions не список"]
-        for a in actions:
-            if len(ok) >= MAX_ACTIONS:
-                rejected.append(a)
-                continue
-            if not isinstance(a, dict) or a.get("action") not in ACTIONS:
-                rejected.append(a)
-                continue
-            if a["action"] == "set_hunt_map":
-                if a.get("map") not in self.persona["hunt_maps"]:
-                    rejected.append(a)
-                    continue
-                if a.get("map") == self.state.get("lock_map"):
-                    continue
-            if a["action"] in ("say", "whisper"):
-                text = " ".join(str(a.get("text", "")).split())[:100]
-                if not text:
-                    rejected.append(a)
-                    continue
-                a = dict(a, text=text)
-            clean = {k: a[k] for k in ("action", "text", "to", "map") if k in a}
-            ok.append(clean)
-        return ok, rejected
-
     async def apply(self, d, reason, latency, usage):
         if d.get("goal"):
             self.mem.set("goal", str(d["goal"])[:200])
@@ -230,20 +239,13 @@ class Mind:
         for r in d.get("relations") or []:
             if isinstance(r, dict) and r.get("name"):
                 self.mem.update_relation(str(r["name"])[:23], r.get("delta", 0), r.get("note"))
-        actions, rejected = self.validate_actions(d.get("actions") or [])
-        record = {
-            "type": "decision", "reason": reason, "model": self.s.model,
-            "latency": round(latency, 2), "usage": usage,
-            "thought": str(d.get("thought", ""))[:300], "goal": d.get("goal"), "mood": d.get("mood"),
-            "actions": actions, "rejected": rejected,
-        }
-        for a in actions:
-            action_id = await self.bridge_send(a)
-            if action_id is not None:
-                self.sent[action_id] = a
-                a["id"] = action_id
-        self.write_decision(record)
-        log.info("решение (%s): %s | действия: %s", reason, record["thought"], actions or "нет")
+        actions = d.get("actions") or []
+        if not isinstance(actions, list):
+            actions = []
+        actions = [a if isinstance(a, dict) else {"action": "invalid", "raw": a} for a in actions]
+        await self.execute(actions, source="llm", reason=reason, extra={
+            "model": self.s.model, "latency": round(latency, 2), "usage": usage,
+            "thought": str(d.get("thought", ""))[:300], "goal": d.get("goal"), "mood": d.get("mood")})
 
     def write_decision(self, record):
         record = dict(record, ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))

@@ -7,5 +7,10 @@
     "накопить зеней на хорошее снаряжение",
     "не умирать по глупости"
   ],
-  "hunt_maps": ["prt_fild08", "prt_fild07", "prt_fild05"]
+  "hunt_maps": [
+    "prt_fild08",
+    "prt_fild07",
+    "prt_fild05"
+  ],
+  "greeting": "Arkady снова на поле. Кто тут по мою душу?"
 }

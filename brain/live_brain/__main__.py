@@ -14,6 +14,7 @@ from pathlib import Path
 from . import llm
 from .bridge import Bridge
 from .config import Settings, load_env, load_persona
+from .gate import make_gate
 from .memory import Memory
 from .mind import Mind
 
@@ -65,11 +66,12 @@ async def main_async(args, settings, persona, memory, state_dir):
         await mind.on_message(msg)
 
     bridge = Bridge(socket_path, on_message)
-    mind = Mind(settings, persona, memory, bridge.send_action, state_dir / "decisions.jsonl")
+    gate = make_gate(settings.gate)
+    mind = Mind(settings, persona, memory, bridge.send_action, state_dir / "decisions.jsonl", gate)
     await bridge.start()
     memory.add_event("brain_started", {"model": settings.model, "llm": settings.llm_enabled})
-    log.info("мозг %s запущен: модель %s, LLM %s, лимит %d/сутки, план раз в %d с; "
-             "память: %s воспоминаний", persona["name"], settings.model,
+    log.info("мозг %s запущен: gate %s, модель %s, LLM %s, лимит %d/сутки, план раз в %d с; "
+             "память: %s воспоминаний", persona["name"], gate.name, settings.model,
              "включена" if settings.llm_enabled else f"ВЫКЛЮЧЕНА ({settings.llm_off_reason})",
              settings.daily_limit, settings.decide_interval, len(memory.top_memories(1000)))
 

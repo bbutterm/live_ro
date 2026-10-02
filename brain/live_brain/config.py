@@ -34,6 +34,8 @@ class Settings:
     chat_min_gap: int
     timeout: int
     max_tokens: int
+    gate: str
+    safe_hp: int
 
     @property
     def llm_enabled(self):
@@ -61,6 +63,8 @@ class Settings:
             chat_min_gap=_int(env, "BRAIN_CHAT_MIN_GAP", 15),
             timeout=_int(env, "BRAIN_TIMEOUT", 30),
             max_tokens=_int(env, "BRAIN_MAX_TOKENS", 500),
+            gate=(env.get("BRAIN_GATE", "") or "rules").lower(),
+            safe_hp=_int(env, "BRAIN_SAFE_HP", 30),
         )
 
 
