@@ -60,6 +60,9 @@ usage() {
                         (НЕДЕЛЯ — 2026-W40 или дата; --llm — окраска одним вызовом, если BRAIN_LLM включён)
   memoir BOT [НЕДЕЛЯ] [--llm]  мемуары жителя от первого лица по фактам памяти (вся жизнь или одна неделя;
                         --llm — окраска глав, если BRAIN_LLM включён; только чтение памяти)
+  modules [BOT] [--disable СПИСОК]  какие модули мозга BOT создадутся при старте: BRAIN_DISABLE из env (или
+                        СПИСОК — примерка этапа), goals.json, нужные модули/жители; опечатки в BRAIN_DISABLE
+                        (только чтение, docs/ROLLOUT.md)
   alerts [N]            последние оповещения владельцу (тупик, восстановление невозможно, сторож сдался)
   gift BOT ITEM N       BOT сейчас просит у жителя рядом N предметов ITEM (ID, например 501, или z — зени);
                         для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
@@ -875,6 +878,69 @@ resources_py() { # resources_py [--sample]
 }
 cmd_resources() { load_env; resources_py; }
 
+cmd_modules() { # rollout: какие модули мозга создадутся при старте (только чтение; docs/ROLLOUT.md)
+  load_env
+  local bot="" disable="${BRAIN_DISABLE:-}" src="env"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      bot[0-9]*) bot="$1" ;;
+      --disable) disable="${2:-}"; src="--disable"; shift ;;
+      *) die "scripts/lab modules [BOT] [--disable СПИСОК]" ;;
+    esac
+    shift
+  done
+  bot="${bot:-$(lab_bots | head -n1)}"
+  local pr; pr=$(profile_root)
+  ( cd "$pr/brain" && python3 - "$bot" "$disable" "$src" "$(lab_bots | tr '\n' ' ')" <<'PY'
+import json, sys
+from types import SimpleNamespace
+from live_brain.config import Settings
+from live_brain.modules import MODULES
+from live_brain.__main__ import peer_names
+bot, disable, src, bots = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split()
+s = Settings.from_env({"BRAIN_DISABLE": disable})
+world = json.load(open("world/goals.json", encoding="utf-8"))
+persona = json.load(open(f"personas/{bot}.json", encoding="utf-8"))
+peers = peer_names(f"personas/{bot}.json", bots or None) - {persona["name"]}
+mind = SimpleNamespace(s=s, ctx=SimpleNamespace(peers=peers))
+known = {getattr(c, "FEATURE", None) for c in MODULES} | {"world_bus", "grammar", "weather", "topics"}
+print(f"{bot} ({persona['name']}): жители {sorted(peers) or 'нет'}; BRAIN_DISABLE ({src}): {disable or '—'}")
+for name in sorted(s.disabled - known):
+    print(f"  ВНИМАНИЕ: '{name}' в BRAIN_DISABLE не выключает ни один модуль (опечатка?)")
+names = {c.ATTR: getattr(c, "FEATURE", None) or c.ATTR for c in MODULES}
+on = []
+for cls in MODULES:
+    cfg = (world.get(getattr(cls, "CONFIG", None) or "") or {})
+    why = ""
+    for req in getattr(cls, "REQUIRES", ()):
+        if req == "peers" and not peers:
+            why = "нет других жителей в LAB_BOTS"
+        elif req == "config" and not cfg:
+            why = f"нет раздела {cls.CONFIG} в goals.json"
+        elif req not in ("world", "peers", "config") and not getattr(mind, req, None):
+            why = f"нет модуля {names.get(req, req)}"
+        if why:
+            break
+    feature = getattr(cls, "FEATURE", None) or ("world_bus" if cls.ATTR == "world" else None)
+    if not why and feature and not s.feature(feature):
+        why = f"BRAIN_DISABLE={feature}"
+    default = getattr(cls, "ENABLED", None)
+    if not why and default is not None and not cfg.get("enabled", default):
+        why = f"goals.json {cls.CONFIG}.enabled: false"
+    setattr(mind, cls.ATTR, None if why else True)
+    if why:
+        print(f"  выкл.  {feature or cls.ATTR:<12} {why}")
+    else:
+        on.append(feature or cls.ATTR)
+print(f"  вкл. ({len(on)}): {', '.join(on)}")
+flags = [("progression", "auto_job_change"), ("routine", "auto_hunt_maps"), ("routine", "vend_in_town"),
+         ("savings", "bank"), ("achieve", "claim_rewards"), ("arrows", "quest_auto"), ("guild", "emperium_check"),
+         ("explore", "group"), ("trek", "halt_save")]
+print("  флаги goals.json: " + ", ".join(f"{a}.{b}={(world.get(a) or {}).get(b, '—')}" for a, b in flags))
+PY
+  )
+}
+
 cmd_supervise() {
   load_env
   ( umask 077; mkdir -p "$LAB_ROOT/run/supervisor" )
@@ -1202,6 +1268,7 @@ main() {
     memoir) load_env; [[ "${1:-}" =~ ^bot[0-9]+$ ]] || die "scripts/lab memoir botNN [НЕДЕЛЯ] [--llm]"   # dreams: ORG-082
             bot="$1"; shift; ( cd "$(profile_root)/brain" && python3 -m live_brain.memoir "$@" --env "$LAB_ENV" \
                  --lab-root "$LAB_ROOT" --bot "$bot" ) ;;   # dreams: мемуары (только чтение памяти)
+    modules) cmd_modules "$@" ;;                     # rollout: docs/ROLLOUT.md
     census) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain.census --repo "$(profile_root)" \
               --lab-root "$LAB_ROOT" --bots $(lab_bots) --max-online "${LAB_MAX_ONLINE:-}" "$@" ) ;;   # census: ORG-088
     alerts) load_env; if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then tail -n "${1:-30}" "$LAB_ROOT/run/alerts.log"; else info "оповещений нет"; fi ;;
