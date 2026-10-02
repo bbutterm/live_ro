@@ -1,4 +1,5 @@
-# Тест плагина economy на заглушках OpenKore: склад ценного, передача жителю, отказ чужим.
+# Тест плагина economy на заглушках OpenKore: склад ценного, передача жителю, отказ чужим,
+# торговля с жителем (offer_sell/offer_buy), почта RODEX, лавка из offer_shop, метрики продаж.
 # Запуск: perl -Ibots/tests/stubs bots/tests/economy.t   (из корня репозитория)
 use strict;
 use utf8;
@@ -10,6 +11,11 @@ package FakeChar;
 sub new { my ($c, %a) = @_; bless {%a}, $c }
 sub inventory { $_[0]{inv} }
 sub cartActive { $_[0]{cart} }
+sub cart { $_[0]{cartItems} || [] }
+
+package FakeList;                 # InventoryList почты: size()
+sub new { my ($c, @i) = @_; bless [@i], $c }
+sub size { scalar @{$_[0]} }
 
 package FakePlayers;
 sub new { my ($c, @p) = @_; bless [@p], $c }
@@ -131,5 +137,235 @@ ok($args{return}, 'стандартный dealAuto пропущен');
 %args = (); @Commands::ran = ();
 Plugins::call('deal_incoming', \%args);
 ok(!@Commands::ran && !$args{return}, 'жителю — принимает dealAuto 3');
+
+# ---- ценное в state.items (ORG-030) ----
+my $counts = economy::itemCounts();
+is($counts->{4001}, 1, 'карта видна мозгу');
+is($counts->{984}, 2, 'руда из economy_storeIds видна мозгу');
+is($counts->{1201}, 1, 'не надетое оружие видно мозгу');
+is($counts->{909}, 30, 'прочий лут виден мозгу (цену знает мозг)');
+ok(!exists $counts->{2301}, 'надетое не считается');
+
+sub evs { my ($kind) = @_; return map { +{@{$_}[1 .. $#$_]} } grep { $_->[0] eq $kind } @brainBridge::events; }
+
+# ---- продажа жителю: одна сделка, оплата проверяется до обмена (ORG-033) ----
+%Globals::incomingDeal = ();
+$Globals::char->{pos_to} = {x => 155, y => 184};
+($ok, $why) = economy::startGive({id => 20, to => 'Vera', item => 4001, amount => 1, price => 1250});
+ok($ok, "продажа начата: $why");
+is(economy::giveStatus()->{price}, 1250, 'в state видна цена');
+@Commands::ran = ();
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['deal "Vera"'], 'рядом — сделка');
+%Globals::currentDeal = (name => 'Vera');
+Plugins::call('engaged_deal', {name => 'Vera'});
+$economy::give{since} -= 2;
+@Commands::ran = ();
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['deal add 0 1'], 'кладу карту');
+$economy::give{since} -= 2;
+@Commands::ran = ();
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['deal'], 'подтверждаю своё');
+$Globals::currentDeal{other_zeny} = 1000;              # покупатель положил меньше обещанного
+$Globals::currentDeal{other_finalize} = 1;
+@Commands::ran = (); @brainBridge::events = ();
+Plugins::call('finalized_deal', {name => 'Vera'});
+is_deeply(\@Commands::ran, ['deal no'], 'недоплата — отменяю до обмена');
+my ($res) = evs('give_result');
+ok(!$res->{ok} && $res->{reason} =~ /1000 зени из 1250/, 'итог: не продано, причина');
+is($res->{price}, 1250, 'итог с ценой');
+%Globals::currentDeal = ();
+
+($ok) = economy::startGive({id => 21, to => 'Vera', item => 4001, amount => 1, price => 1250});
+Plugins::call('mainLoop_post');
+%Globals::currentDeal = (name => 'Vera');
+Plugins::call('engaged_deal', {name => 'Vera'});
+$economy::give{since} -= 2; Plugins::call('mainLoop_post');
+$economy::give{since} -= 2; Plugins::call('mainLoop_post');
+%Globals::currentDeal = (name => 'Vera', other_zeny => 1250, other_finalize => 1);
+@Commands::ran = (); @brainBridge::events = ();
+Plugins::call('finalized_deal', {name => 'Vera'});
+ok(!@Commands::ran, 'оплата полная — обмен завершит dealAuto');
+%Globals::currentDeal = ();
+Plugins::call('complete_deal');
+($res) = evs('give_result');
+ok($res->{ok}, 'продано');
+is($res->{paid}, 1250, 'оплата в итоге');
+($ok, $why) = economy::startGive({id => 22, to => 'Vera', item => 'zeny', amount => 10, price => 5});
+ok(!$ok, 'зени за зени не продаю');
+
+# ---- покупка у жителя ----
+($ok, $why) = economy::startBuy({id => 30, from => 'Stranger', item => 4001, amount => 1, price => 100});
+ok(!$ok, 'у чужого не покупаю');
+($ok, $why) = economy::startBuy({id => 30, from => 'Vera', item => 4001, amount => 1, price => 999999});
+ok(!$ok && $why =~ /зени/, 'дороже, чем есть зени, — нет');
+($ok, $why) = economy::startBuy({id => 31, from => 'Vera', item => 4002, amount => 1, price => 1200});
+ok($ok, "жду продавца: $why");
+is(economy::buyStatus()->{phase}, 'wait', 'статус покупки в state');
+($ok) = economy::startGive({id => 32, to => 'Vera', item => 501, amount => 1});
+ok(!$ok, 'пока жду продавца — не отдаю');
+@Commands::ran = ();
+%Globals::currentDeal = (name => 'Vera');
+Plugins::call('engaged_deal', {name => 'Vera'});
+is_deeply(\@Commands::ran, ['deal add z 1200'], 'сделка с продавцом — кладу зени');
+$Globals::currentDeal{other} = {4002 => {amount => 0}};
+@Commands::ran = (); @brainBridge::events = ();
+Plugins::call('finalized_deal', {name => 'Vera'});
+is_deeply(\@Commands::ran, ['deal no'], 'товара нет в окне сделки — отменяю');
+($res) = evs('buy_result');
+ok(!$res->{ok}, 'покупка не состоялась');
+ok(!%economy::buy, 'покупка закрыта');
+%Globals::currentDeal = ();
+
+economy::startBuy({id => 33, from => 'Vera', item => 4002, amount => 1, price => 1200});
+%Globals::currentDeal = (name => 'Vera');
+Plugins::call('engaged_deal', {name => 'Vera'});
+$Globals::currentDeal{other} = {4002 => {amount => 1, nameID => 4002}};
+@Commands::ran = (); @brainBridge::events = ();
+Plugins::call('finalized_deal', {name => 'Vera'});
+ok(!@Commands::ran, 'товар на месте — подтвердит dealAuto 3');
+%Globals::currentDeal = ();
+Plugins::call('complete_deal');
+($res) = evs('buy_result');
+ok($res->{ok} && $res->{price} == 1200, 'куплено');
+
+economy::startBuy({id => 34, from => 'Vera', item => 4002, amount => 1, price => 1200});
+$economy::buy{since} -= 300;
+@brainBridge::events = ();
+Plugins::call('mainLoop_post');
+($res) = evs('buy_result');
+ok(!$res->{ok} && $res->{reason} =~ /таймаут/, 'продавец не пришёл — таймаут');
+
+# ---- почта: отправка (ORG-035) ----
+($ok, $why) = economy::startMail({id => 40, to => 'Stranger', title => 'Подарок', body => 'x'});
+ok(!$ok, 'чужому не пишу');
+($ok, $why) = economy::startMail({id => 40, to => 'Vera', title => 'Хай', body => 'x'});
+ok(!$ok && $why =~ /4-24/, 'заголовок короче 4 — cmdRodex откажет');
+($ok, $why) = economy::startMail({id => 40, to => 'Vera', title => 'Подарок', body => 'x', zeny => 4950});
+ok(!$ok && $why =~ /сбор/, 'с учётом сбора зени не хватает');
+@Commands::ran = ();
+($ok, $why) = economy::startMail({id => 41, to => 'Vera', title => 'Подарок', body => "Держи;; quit\n", item => 501, amount => 5});
+ok($ok, "письмо начато: $why");
+is_deeply(\@Commands::ran, ['rodex open'], 'открываю ящик');
+@Commands::ran = ();
+Plugins::call('mainLoop_post');
+ok(!@Commands::ran, 'ящик ещё не открыт — жду');
+$Globals::rodexList = {mails => {}};
+Plugins::call('mainLoop_post');
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['rodex write Vera'], 'пишу жителю');
+@Commands::ran = ();
+$Globals::rodexWrite = {items => FakeList->new(), target => {name => 'Vera'}};
+Plugins::call('mainLoop_post');
+ok(!@Commands::ran, 'адресат ещё не проверен сервером');
+$Globals::rodexWrite->{target}{char_id} = 150001;
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['rodex settitle Подарок', 'rodex setbody Держи; quit', 'rodex add 3 5'],
+          'заголовок, текст (без ;;), вложение');
+@Commands::ran = ();
+Plugins::call('mainLoop_post');
+ok(!@Commands::ran, 'вложение ещё не принято сервером');
+$Globals::rodexWrite->{items} = FakeList->new({nameID => 501});
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['rodex send'], 'отправляю');
+@Commands::ran = (); @brainBridge::events = ();
+undef $Globals::rodexWrite;                            # Receive::rodex_write_result: undef $rodexWrite
+Plugins::call('packet/rodex_write_result', {fail => 0});
+is_deeply(\@Commands::ran, ['rodex close'], 'закрываю ящик');
+($res) = evs('mail_result');
+ok($res->{ok} && $res->{to} eq 'Vera' && $res->{item} == 501, 'итог: письмо принято сервером');
+undef $Globals::rodexList;
+
+($ok) = economy::startMail({id => 42, to => 'Vera', title => 'Итог недели', body => 'Привет', zeny => 100});
+$economy::mail{since} -= 20;
+@Commands::ran = (); @brainBridge::events = ();
+Plugins::call('mainLoop_post');
+($res) = evs('mail_result');
+ok(!$res->{ok} && $res->{reason} =~ /таймаут/, 'нет ответа сервера — таймаут');
+
+# ---- почта: входящие ----
+@Commands::ran = (); @brainBridge::events = ();
+Plugins::call('rodex_unread_mail');
+Plugins::call('mainLoop_post');
+is_deeply(\@Commands::ran, ['rodex open'], 'новое письмо — открываю ящик');
+my $mails = {7 => {mailID1 => 7, sender => 'Vera', title => 'Подарок', isRead => 0, attach => 'i', page_index => 0},
+             8 => {mailID1 => 8, sender => 'Stranger', title => 'Spam', isRead => 0, attach => 'z', page_index => 1},
+             9 => {mailID1 => 9, sender => 'Vera', title => 'Old', isRead => 1, page_index => 2}};
+$Globals::rodexList = {mails => $mails};
+@Commands::ran = ();
+Plugins::call('rodex_mail_list', {mails => $mails});
+my @got = evs('mail_received');
+is(scalar @got, 1, 'сообщаю только непрочитанное от жителя');
+is_deeply([@{$got[0]}{qw(mail_id from title attach)}], [7, 'Vera', 'Подарок', 'i'], 'письмо 7 от Vera');
+is_deeply(\@Commands::ran, ['rodex close'], 'проверка окончена — закрываю');
+undef $Globals::rodexList;
+@brainBridge::events = ();
+Plugins::call('rodex_mail_list', {mails => $mails});
+ok(!evs('mail_received'), 'о том же письме второй раз не сообщаю');
+
+# ---- почта: забрать вложение ----
+@Commands::ran = ();
+($ok) = economy::startMailTake({id => 50, mail_id => 7});
+is_deeply(\@Commands::ran, ['rodex open'], 'забрать: открываю ящик');
+$Globals::rodexList = {mails => $mails};
+@Commands::ran = ();
+Plugins::call('rodex_mail_list', {mails => $mails});
+is_deeply(\@Commands::ran, ['rodex read 0'], 'короткий mail_id -> номер в списке (cmdRodex)');
+@Commands::ran = ();
+Plugins::call('rodex_mail', {mailID => 7, from => 'Vera', zeny => 300, items => [{nameID => 501, amount => 5}]});
+is_deeply(\@Commands::ran, ['rodex getzeny 0'], 'сначала зени');
+@Commands::ran = ();
+Plugins::call('packet/rodex_get_zeny', {fail => 0, mailID1 => 7});
+is_deeply(\@Commands::ran, ['rodex getitems 0'], 'потом предметы');
+@Commands::ran = (); @brainBridge::events = ();
+Plugins::call('packet/rodex_get_item', {fail => 0, mailID1 => 7});
+is_deeply(\@Commands::ran, ['rodex close'], 'закрываю ящик');
+($res) = evs('mail_taken');
+ok($res->{ok} && $res->{zeny} == 300 && $res->{items}[0]{id} == 501, 'итог: забрал 300 зени и зелья');
+undef $Globals::rodexList;
+
+economy::startMailTake({id => 51, mail_id => 8});
+$Globals::rodexList = {mails => $mails};
+@brainBridge::events = ();
+Plugins::call('rodex_mail_list', {mails => $mails});
+($res) = evs('mail_taken');
+ok(!$res->{ok} && $res->{reason} =~ /не от жителя/, 'письмо чужого не забираю');
+undef $Globals::rodexList;
+is(economy::mailRef(5), undef, 'неизвестное письмо — без номера');
+
+# ---- лавка (ORG-034) ----
+($ok, $why) = economy::setupShop({title => 'Лавка', items => [{id => 984, price => 700, amount => 2}]});
+ok(!$ok && $why =~ /навыка/, 'без навыка лавки — нет');
+$Globals::char->{skills} = {MC_VENDING => {lv => 3}, MC_OVERCHARGE => {lv => 5}};
+$Globals::char->{cart} = 1;
+$Globals::char->{cartItems} = [{nameID => 4001, name => 'Poring Card', amount => 1}];
+my $v = economy::vendStatus();
+is_deeply([@$v{qw(can overcharge slots)}], [1, 5, 5], 'лавка: навык, Overcharge, мест MC_VENDING + 2');
+is_deeply($v->{cart}, {4001 => 1}, 'тележка в state');
+($ok, $why) = economy::setupShop({title => 'Лавка #Arkady', items => [{id => 4001, price => 1250, amount => 1},
+                                                                     {id => 984, price => 700, amount => 2},
+                                                                     {id => '1; quit', price => 1, amount => 1}]});
+ok($ok, "лавка подготовлена: $why");
+is($ic->{984}{cart_add}, 1, 'руда — в тележку');
+is($ic->{984}{sell}, 0, 'и не продавать NPC');
+is($Globals::shop{title_line}, 'Лавка Arkady', 'название без #');
+is_deeply($Globals::shop{items}, [{name => 'Poring Card', price => 1250, amount => 1}], 'в %shop — то, что уже в тележке');
+push @{$Globals::char->{cartItems}}, {nameID => 984, name => 'Oridecon', amount => 2};
+economy::buildShop();
+is(scalar @{$Globals::shop{items}}, 2, 'руда в тележке — тоже товар');
+
+# ---- метрики продаж ----
+@brainBridge::events = ();
+$Globals::char->{zeny} = 1000;
+Plugins::call('AI_sell_auto');
+$Globals::char->{zeny} = 1600;
+Plugins::call('AI_sell_auto');
+Plugins::call('AI_sell_auto_completed', {});
+($res) = evs('npc_sold');
+is($res->{zeny}, 600, 'выручка автопродажи NPC');
+Plugins::call('vending_item_sold', {amount => 1, zenyEarned => 1250, vendArticle => {name => 'Poring Card', nameID => 4001}});
+($res) = evs('vend_sold');
+is($res->{zeny}, 1250, 'продажа из лавки');
 
 done_testing();

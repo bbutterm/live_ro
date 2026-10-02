@@ -21,6 +21,9 @@ ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
 # Только исполнители плана (plans.py), распорядка (routine.py), экономики (economy.py) и общения (social.py) — модель их не получает.
 PLAN_ACTIONS = ("job_change", "sleep", "service", "meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close",
                 "emote")
+PLAN_ACTIONS += ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_check", "mail_take")   # market: торговля и почта (economy.py)
+MAX_PRICE = 100_000_000          # market: цена лота между жителями
+MAIL_PER_DAY = 5                 # market: писем в сутки от одного жителя (rAthena mail_daily_count 100 — наш лимит строже)
 # Безопасные эмоции (номер -> команда OpenKore «e <команда>», tables/emotions.txt); тот же список в brainBridge.pl.
 EMOTES = {1: "?", 2: "ho", 3: "lv", 5: "ic", 9: "...", 12: "wav", 15: "thx", 17: "sry", 18: "heh",
           20: "hmm", 21: "no1", 28: "sob", 29: "gg", 33: "ok"}
@@ -125,6 +128,8 @@ class SafetyPolicy:
             if not isinstance(amount, int) or not 0 < amount <= MAX_GIVE:
                 return None, "неверное количество"
             return {"action": "give", "to": to, "item": item, "amount": amount}, None
+        if kind in ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_check", "mail_take"):   # market:
+            return self.check_market(kind, action, state, now)                                       # market:
         if kind == "hunt":
             if action.get("map") not in self.hunt_maps:
                 return None, "карта охоты не из списка hunt_maps"
@@ -201,6 +206,60 @@ class SafetyPolicy:
         if not protocol and kind in ("say", "whisper"):
             self.texts[(str(clean.get("to", "")) if kind == "whisper" else "", clean["text"].lower())] = now
         return clean, None
+
+    def check_market(self, kind, action, state, now):                                             # market:
+        """market: торговля с жителем (offer_*) и почта RODEX (mail_*) — только жителям, числа в пределах."""
+        def num(key, lo, hi):
+            v = action.get(key)
+            return v if isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi else None
+
+        if kind == "mail_check":
+            return {"action": "mail_check"}, None
+        if kind == "mail_take":
+            mid = num("mail_id", 1, 9_999_999_999)
+            return ({"action": "mail_take", "mail_id": mid}, None) if mid else (None, "неверный номер письма")
+        if kind == "offer_shop":
+            title = " ".join(str(action.get("title", "")).replace("#", "").split())[:36]
+            items = action.get("items")
+            if not title or not isinstance(items, list) or not 0 < len(items) <= 12:
+                return None, "лавка: название и 1..12 товаров"
+            clean = []
+            for it in items:
+                ok = (isinstance(it, dict) and all(isinstance(it.get(k), int) and not isinstance(it.get(k), bool)
+                                                   for k in ("id", "price", "amount"))
+                      and 0 < it["id"] < 1000000 and 0 < it["price"] <= 1_000_000_000 and 0 <= it["amount"] <= 30000)
+                if not ok:
+                    return None, "лавка: неверный товар"
+                clean.append({"id": it["id"], "price": it["price"], "amount": it["amount"]})
+            return {"action": "offer_shop", "title": title, "items": clean}, None
+        who = "from" if kind == "offer_buy" else "to"
+        if action.get(who) not in self.peers:
+            return None, "торговать и писать можно только жителям"
+        if kind == "mail_send":
+            title = " ".join(str(action.get("title", "")).split())
+            body = " ".join(str(action.get("body", "")).split())
+            if not 4 <= len(title) <= 24 or not 0 < len(body) <= 200:
+                return None, "письмо: заголовок 4-24, текст 1-200 символов"
+            zeny = num("zeny", 0, MAX_GIVE) if "zeny" in action else 0
+            if zeny is None:
+                return None, "неверная сумма"
+            clean = {"action": "mail_send", "to": action["to"], "title": title, "body": body, "zeny": zeny}
+            if action.get("item") is not None:
+                item, amount = num("item", 1, 999999), num("amount", 1, 30000)
+                if not item or not amount:
+                    return None, "неверный предмет"
+                clean.update(item=item, amount=amount)
+            self.mailed = [t for t in getattr(self, "mailed", []) if now - t < 86400]
+            if len(self.mailed) >= MAIL_PER_DAY:
+                return None, f"лимит писем {MAIL_PER_DAY} в сутки"
+            self.mailed.append(now)
+            return clean, None
+        item, amount, price = num("item", 1, 999999), num("amount", 1, 30000), num("price", 1, MAX_PRICE)
+        if not item or not amount or not price:
+            return None, "неверный предмет, количество или цена"
+        if kind == "offer_buy" and state.get("zeny") is not None and int(state["zeny"]) < price:
+            return None, "не хватает зени"
+        return {"action": kind, who: action[who], "item": item, "amount": amount, "price": price}, None
 
     def pause_expired(self, now=None):
         now = now or time.time()
