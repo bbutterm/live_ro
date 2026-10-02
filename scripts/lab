@@ -250,6 +250,9 @@ find_procs() {
         [[ "$(basename -- "$argv0")" == perl* && "$args" == *openkore.pl* ]] || continue
         if [[ "$args" == *"/$name/"* || "$args" == *"/$name "* ]]; then
           echo "$p $(proc_user "$p")"
+        elif [[ "$args" =~ /bot[0-9]+(/|[[:space:]]) ]]; then
+          # Another explicitly labelled bot is not an unlabelled bot01.
+          continue
         else
           okore+=("$p")
         fi ;;
