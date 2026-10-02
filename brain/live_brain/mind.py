@@ -35,6 +35,9 @@ from .social import TAG as SOCIAL_TAG, Social   # social: общение без 
 log = logging.getLogger("mind")
 
 MAX_ACTIONS = 2
+REASON_PRIO = {"plan": 4, "event": 3, "chat": 2, "timer": 1}
+REASON_TTL = {"plan": 600, "event": 600, "chat": 300, "timer": 120}
+REASON_MAX = 5
 # AUT-091: обещание движения без плана — пустые слова («уже иду», а тело сидит в другом городе).
 PROMISE = re.compile(r"(уже\s+иду|иду\s+к\s+тебе|бегу\s+к|скоро\s+буду|буду\s+через|жди\s+меня|"
                      r"встретимся\s+(у|в|на)|подожди\s+меня|on\s+my\s+way|coming\s+to\s+you)", re.I)
@@ -102,7 +105,7 @@ class Mind:
                                    extra_point_maps=[town] if town else [])
         self.state = memory.get("last_state", {})
         self.lock = asyncio.Lock()
-        self.pending = None            # (повод, контекст, вид) — ждёт свободного LLM
+        self.reasons = []              # очередь поводов для LLM (ORG-007/D16): приоритет и срок годности
         self.last_decision = time.time()
         self.last_event_decision = 0.0
         self.last_chat_decision = 0.0
@@ -465,11 +468,32 @@ class Mind:
     # ---------- когда думать LLM ----------
 
     def trigger(self, reason, context=None, kind="event"):
+        """Повод подумать модели — в очередь. Важный повод (план, событие) не вытесняется болтовнёй (D16)."""
         now = time.time()
         if kind == "event" and now - self.last_event_decision < self.s.event_min_gap:
             log.info("событие: слишком часто для LLM, только память (%s)", reason)
             return
-        self.pending = (reason, context or {}, kind)
+        self.reasons = [r for r in self.reasons if r["reason"] != reason and now - r["ts"] < REASON_TTL[r["kind"]]]
+        self.reasons.append({"reason": reason, "context": context or {}, "kind": kind, "ts": now})
+        self.reasons.sort(key=lambda r: (-REASON_PRIO.get(r["kind"], 1), r["ts"]))
+        del self.reasons[REASON_MAX:]
+
+    @property
+    def pending(self):
+        """Ближайший повод (совместимость: None — думать не о чем)."""
+        now = time.time()
+        live = [r for r in self.reasons if now - r["ts"] < REASON_TTL.get(r["kind"], 300)]
+        return (live[0]["reason"], live[0]["context"], live[0]["kind"]) if live else None
+
+    def take_reason(self, now):
+        """Взять повод, который можно обработать сейчас: болтовня ждёт chat_min_gap, важное — нет."""
+        self.reasons = [r for r in self.reasons if now - r["ts"] < REASON_TTL.get(r["kind"], 300)]
+        for r in self.reasons:
+            if r["kind"] == "chat" and now - self.last_chat_decision < self.s.chat_min_gap:
+                continue
+            self.reasons.remove(r)
+            return r["reason"], r["context"], r["kind"]
+        return None
 
     async def run(self, connected):
         """Главный цикл: раз в секунду правила безопасности и проверка, пора ли думать."""
@@ -498,15 +522,15 @@ class Mind:
         await self.read_inbox()
         now = time.time()
         self.peer_smalltalk(now)
-        if (self.pending is None and self.s.llm_enabled
+        if (not self.reasons and self.s.llm_enabled
                 and now - self.last_decision >= self.s.decide_interval):
-            self.pending = ("плановое размышление", {}, "timer")
-        if self.pending is None or self.lock.locked():
+            self.trigger("плановое размышление", {}, "timer")
+        if not self.reasons or self.lock.locked():
             return
-        reason, context, kind = self.pending
-        if kind == "chat" and now - self.last_chat_decision < self.s.chat_min_gap:
+        taken = self.take_reason(now)
+        if not taken:
             return
-        self.pending = None
+        reason, context, kind = taken
         async with self.lock:
             await self.decide(reason, context, kind)
 

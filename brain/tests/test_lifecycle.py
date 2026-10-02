@@ -95,5 +95,18 @@ class LifecycleTest(unittest.TestCase):
         self.assertEqual(self.mind.stale_since(before), "сменилась карта")
 
 
+    def test_reason_queue_priority_and_ttl(self):
+        """D16: предложение встречи не вытесняется болтовнёй; устаревший повод отбрасывается."""
+        m = self.mind
+        m.last_event_decision = 0
+        m.trigger("Vera предлагает встретиться", {"plan": "x"}, kind="plan")
+        m.trigger("Vera рядом — можно поговорить", {}, kind="chat")
+        self.assertEqual(m.pending[2], "plan")
+        m.last_chat_decision = time.time()                      # болтовня ещё рано
+        self.assertEqual(m.take_reason(time.time())[2], "plan")
+        self.assertIsNone(m.take_reason(time.time()), "чат ждёт chat_min_gap")
+        self.assertEqual(m.take_reason(time.time() + 3600), None, "устарел — отброшен")
+
+
 if __name__ == "__main__":
     unittest.main()

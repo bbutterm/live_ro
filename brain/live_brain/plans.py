@@ -278,7 +278,7 @@ class PlanExecutor:
         if self.mind.s.llm_enabled:
             self.mind.trigger(f"{sender} предлагает встретиться (план {plan_id}, {pmap} {px},{py}): "
                               f"ответь accept_meeting или decline_meeting с id {plan_id}",
-                              {"from": sender, "plan": plan_id}, kind="chat")
+                              {"from": sender, "plan": plan_id}, kind="plan")
 
     # ---------- тик исполнителя ----------
 
