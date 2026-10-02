@@ -1,5 +1,5 @@
 package Globals; use Exporter 'import';
 our @EXPORT_OK = qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $messageSender
-                    %items_control %currentDeal %outgoingDeal %incomingDeal $shopstarted);
+                    %items_control %currentDeal %outgoingDeal %incomingDeal $shopstarted $accountID);
 our ($char, $field, $net, $monstersList, $playersList, %config, %jobs_lut, %sex_lut, @lastpm, $messageSender,
-     %items_control, %currentDeal, %outgoingDeal, %incomingDeal, $shopstarted); 1;
+     %items_control, %currentDeal, %outgoingDeal, %incomingDeal, $shopstarted, $accountID); 1;

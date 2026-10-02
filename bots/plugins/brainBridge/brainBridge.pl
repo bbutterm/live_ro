@@ -34,6 +34,7 @@
 # Смерть: если персонаж мёртв, а AI не в auto дольше 3 с (оператор поставил ai manual), плагин
 # сам включает ai auto — иначе OpenKore не делает респаун (AI::CoreLogic processDead только в auto).
 # В state от плагина economy: items (зелья/крылья по ID), vend {can, open}, give (идёт передача).
+# От плагина survival: survival {dps, attackers, last_action}; события survival, escape, danger.
 package brainBridge;
 
 use strict;
@@ -161,6 +162,7 @@ sub sendState {
 		players   => nearbyPlayers(),
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
+		(defined &survival::status ? (survival => survival::status()) : ()),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 	});
 }

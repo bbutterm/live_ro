@@ -378,7 +378,7 @@ cmd_doctor() {
     v="${b^^}_CONTROL_DIR"
     if is_set "$v"; then note "$b использует готовый control: ${!v} (профиль и плагины из Git НЕ применяются)"; fi
   done
-  for p in lowHpGuard gracefulStop brainBridge combatProfile economy; do
+  for p in lowHpGuard gracefulStop brainBridge combatProfile economy survival; do
     if [[ -f "$pr/bots/plugins/$p/$p.pl" ]]; then ok "плагин $p"; else bad "нет плагина $p"; fi
   done
   echo "== мозг"

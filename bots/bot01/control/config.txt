@@ -743,6 +743,15 @@ useSelf_item 569, 501, 502, 503, 504 {
 	# [checkSelfCondition]
 }
 
+# live_ro: снять яд/немоту/слепоту/смятение — Green Potion 506, Panacea 525 (по ID, AUT-017).
+# whenStatusActive принимает список через запятую (Actor::statusActive). Смятение в
+# tables/statusnametable.txt названо «Signum Crisis»/«Chaos» — для него внутренние имена статуса.
+useSelf_item 506, 525 {
+	whenStatusActive Poisoned, Silenced, Blinded, HEALTHSTATE_CONFUSION, EFST_HEALTHSTATE_CONFUSION
+	timeout 3
+	disabled 0
+}
+
 ######## Autostorage/autosell ########
 
 # live_ro: экономика — докупать красные зелья у торговца Пронтеры (rAthena: prt_in,126,76 Tool Dealer).
@@ -798,6 +807,15 @@ minStorageZeny 100
 economy_storeCards 1
 economy_storeEquipment 1
 economy_storeIds 984,985,756,757
+
+# live_ro: плагин survival (AUT-015, AUT-016, AUT-018) — прогноз урона за 6 с; при опасности зелье по ID
+# (сначала сильные), без зелий при HP < survival_escapeHp — Butterfly Wing, иначе событие danger мозгу;
+# бьют во время отдыха — встать. survival 0 — выключить.
+survival 1
+survival_hp 25
+survival_escapeHp 15
+survival_horizon 3
+survival_potions 504,503,502,501,569
 
 npcTimeResponse
 npcWrongStepsMethod 0
