@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import world_bus
 from .economy import CHRONICLE_LINES, metrics_from_rows
+from .society import CHRONICLE_LINES as SOCIETY_LINES   # society: ссоры, примирения, вывески
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -32,6 +33,7 @@ LINES = {
     "recover_blocked": lambda d: "не может восстановиться (вес/зелья)",
     "diary": lambda d: d.get("text"),
     **CHRONICLE_LINES,                                    # ORG-037: сделки и письма жителей
+    **SOCIETY_LINES,                                      # society: ORG-026/027
 }
 
 

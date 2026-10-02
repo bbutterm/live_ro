@@ -6,6 +6,7 @@
     точка в городе — посидеть рядом TOGETHER_MIN минут и поговорить (social: прогулка отложена,
     разговор пары — сразу, без ожидания интервала).
     Запись в память — что выбрали; через TOGETHER_MIN проверка фактом: житель всё ещё рядом (по state.players).
+    society: в городе тело остаётся у точки встречи и садится само (sit_near, ORG-022).
 Друзья (ORG-024): при отношении >= FRIEND_AFFINITY и видимом жителе — friend_request (не чаще раза в сутки);
     запрос жителя тело принимает само (brainBridge, хук friend_request, только жители из residents);
     «друзья» — только по списку друзей от сервера (state.friends).
@@ -28,6 +29,7 @@ class Bonds:
         self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.st = mind.mem.get("bonds") or {"friend_req": {}, "missed": {}, "jobs": {}}
         self.together = None            # (житель, до когда, карта)
+        self.sat_point = None           # society: точка «посидеть вместе» (вернуть распорядку обычную после)
 
     def save(self):
         self.mind.mem.set("bonds", self.st)
@@ -64,13 +66,33 @@ class Bonds:
                 social.next_walk = now + TOGETHER_MIN * 60              # не уходить гулять
             self.note("bonds_sit_together", f"После встречи с {partner} посидим вместе и поговорим.", 3,
                       partner=partner, map=pmap)
+            await self.sit_near(plan, now)                              # society: ORG-022 поза рядом с другом
         self.together = (partner, now + TOGETHER_MIN * 60, pmap)
+
+    async def sit_near(self, plan, now):
+        """society (ORG-022): посидеть рядом — точка отдыха распорядка = точка встречи (в городе), тело
+        садится само (sitAuto_idle; действие sit — без команды sit OpenKore, она блокирует AI, ORG-001)."""
+        r = self.mind.routine
+        town = ((getattr(r, "cfg", None) or {}).get("town") or {}).get("map")
+        if not r or not getattr(r, "in_town_mode", False) or plan["map"] != town or "x" not in plan:
+            return
+        r.town = self.sat_point = {"map": plan["map"], "x": int(plan["x"]), "y": int(plan["y"]), "radius": 2}
+        r.last_sent = now
+        social = getattr(self.mind, "social", None)
+        if social is not None:
+            social.spot, social.sat = None, True                    # прогулка не уводит и не садит повторно
+        await self.mind.execute([{"action": "sit"}], source="bonds",
+                                reason=f"связи: сижу рядом с {plan['partner']}", protocol=True)
 
     def check_together(self, now):
         if not self.together or now < self.together[1]:
             return
         partner, _, pmap = self.together
         self.together = None
+        r = self.mind.routine
+        if self.sat_point and r is not None and getattr(r, "town", None) == self.sat_point:   # society:
+            r.town = r.cfg["town"]                                                           # society:
+        self.sat_point = None                                                                 # society:
         if self.visible(partner):
             self.note("bonds_together_done", f"Провели время с {partner} — по данным игры рядом.", 2, partner=partner)
             self.mind.mem.update_relation(partner, 1, "провели время вместе после встречи")

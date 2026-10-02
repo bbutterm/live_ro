@@ -27,6 +27,8 @@
 Отношения по поступкам (AUT-102): время рядом с жителем (в городе или на охоте) от
     together_minutes за сутки — affinity +1, не чаще раза в сутки. Проигнорированное сообщение —
     ничего. Отношение задаёт частоту общения и шанс пойти к другу.
+Ссора (society.py, ORG-027): с жителем «в ссоре» не заговаривают первым и не идут к нему на прогулке;
+    ответ ему — холодная короткая реплика (тема cold, шаг 4 — без продолжения), кроме сочувствия.
 Ночь (night_hours по timezone_offset_hours мира): не гуляют, сидят, говорят в night_factor раз реже.
 Все реплики идут через SafetyPolicy как обычный чат (лимиты лички, без повторов за час);
 эмоции и переходы — служебные действия (protocol=True), модель их не получает.
@@ -155,6 +157,11 @@ class Social:
                     and dist(int(state["x"]), int(state["y"]), int(p["x"]), int(p["y"])) <= cells):
                 out.append(p["name"])
         return sorted(set(out))
+
+    def quarrel(self, peer):
+        """society: в ссоре с жителем (society.py, ORG-027) — не заговаривать первым, не идти к нему, отвечать холодно."""
+        society = getattr(self.mind, "society", None)
+        return bool(society and society.quarrel(peer))
 
     def busy(self):
         """AUT-095: не болтать в разгар аварии и боя."""
@@ -304,6 +311,8 @@ class Social:
         for p in state.get("players") or []:
             if not isinstance(p, dict) or p.get("name") not in self.mind.ctx.peers or p.get("x") is None:
                 continue
+            if self.quarrel(p["name"]):                   # society: в ссоре — к нему не идём
+                continue
             chance = self.cfg["join_friend_chance"] * (1.5 if self.affinity(p["name"]) >= self.cfg["friend_affinity"]
                                                        else 1.0)
             near = min(points, key=lambda k: dist(points[k]["x"], points[k]["y"], int(p["x"]), int(p["y"])))
@@ -373,6 +382,8 @@ class Social:
         if self.busy():
             return
         for peer in near:
+            if self.quarrel(peer):                        # society: в ссоре — первым не заговаривать
+                continue
             last = self.st["pairs"].get(peer, 0)
             gap = self.pair_gap(peer, now)
             if self.me > peer and (now - self.near_since[peer] < 60 or now - last < gap + 60):
@@ -394,6 +405,16 @@ class Social:
     async def say(self, peer, topic, step, now=None):
         """Шёпот жителю: фраза темы + метка. Обычный чат — лимиты safety действуют."""
         now = now or self.clock()
+        if self.quarrel(peer) and step == 1:              # society: в ссоре — первым не пишу (и весточек нет)
+            return False
+        if self.quarrel(peer) and topic not in ("condolence", "thanks"):   # society: холодно, коротко, без продолжения
+            text, topic, step = self.mind.society.cold_phrase(peer), "cold", LAST_STEP
+            self.st["pairs"][peer] = now
+            await self.mind.execute([{"action": "whisper", "to": peer, "text": f"{text} [chat:cold:{step}]"}],
+                                    source="social", reason=f"общение: холодно жителю {peer} (ссора)")
+            self.mind.mem.add_event("social_said", {"peer": peer, "topic": "cold", "fact": False})
+            self.save()
+            return True
         facts = self.facts(peer, now)
         text = self.phrase(topic, facts)
         if text is None and topic not in ("hello", "bye", "weather"):
@@ -488,6 +509,8 @@ class Social:
         self.st["level_told"] = level
         await self.emote("level", now)
         for peer in sorted(self.mind.ctx.peers):
+            if self.quarrel(peer):                        # society: с ним в ссоре — не хвастаюсь
+                continue
             if self.react_due(f"level:{peer}", now):
                 await self.say(peer, "level", 3, now)
         self.save()
@@ -502,7 +525,7 @@ class Social:
             self.st["peer_lv"][name] = lv
             if old and lv > old:
                 self.mind.mem.remember(f"{name} дорос до {lv} уровня — видел сам.", 2)
-                if self.react_due(f"congrats:{name}", now):
+                if not self.quarrel(name) and self.react_due(f"congrats:{name}", now):   # society: в ссоре — молчу
                     if self.llm():
                         self.mind.trigger(f"{name} (житель) достиг {lv} уровня — можно поздравить",
                                           {"from": name}, kind="chat")
