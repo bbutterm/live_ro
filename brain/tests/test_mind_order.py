@@ -37,6 +37,7 @@ OPTIONAL = ("home", "mood", "calendar", "career", "routine", "economy", "party",
             "pets", "social", "society", "aims", "guild", "explorer", "strangers", "world", "rivalry", "crowd",
             "episodes", "tradition")
 OPTIONAL += ("gossip",)                       # gossip: ORG-056
+OPTIONAL += ("habits",)                       # habits: ORG-068
 
 
 class Ret(str):
@@ -225,10 +226,10 @@ def creation_table():
     configs = {"world=None": {"world": None}, "без жителей": {"peers": ()}}
     for feat in ("home", "mood", "calendar", "career", "routine", "economy", "party", "activity", "bonds", "crew",
                  "pets", "social", "society", "aims", "guild", "explore", "strangers", "world_bus", "rivalry",
-                 "crowd", "episodes", "tradition", "gossip"):   # gossip:
+                 "crowd", "episodes", "tradition", "gossip", "habits"):   # gossip: habits:
         configs[f"BRAIN_DISABLE={feat}"] = {"env": {"BRAIN_DISABLE": feat}}
     for key in ("mood", "calendar", "party", "pets", "social", "society", "strangers", "rivalry", "crowd",
-                "episodes", "tradition", "explore", "gossip"):   # gossip:
+                "episodes", "tradition", "explore", "gossip", "habits"):   # gossip: habits:
         configs[f"{key}.enabled=false"] = {"world": world_with(key, enabled=False)}
     configs["guild.enabled=true"] = {"world": world_with("guild", enabled=True)}
     configs["guild.enabled=true, BRAIN_DISABLE=guild"] = {"world": world_with("guild", enabled=True),
@@ -1194,6 +1195,7 @@ EXPECTED_TICK = {'все': ['needs.weighted',
          'world.tick',
          'rivalry.tick',
          'crowd.tick',
+         'habits.tick',
          'episodes.tick'],
  'без необязательных': ['needs.weighted', 'life.tick', 'plans.tick', 'rumors.tick']}
 
@@ -1218,6 +1220,7 @@ EXPECTED_PROMPT = {'все': [['я', '*'],
          ['занятие', 'activities.summary'],
          ['экспедиция', 'explorer.summary'],
          ['цели_недели', 'aims.summary'],
+         ['привычки', 'habits.summary'],
          ['соперник', 'rivalry.summary'],
          ['слухи_не_факты', 'rumors.summary'],
          ['репутация', 'gossip.summary'],
@@ -1252,6 +1255,7 @@ EXPECTED_PROMPT = {'все': [['я', '*'],
                         ['занятие', '*'],
                         ['экспедиция', '*'],
                         ['цели_недели', '*'],
+                        ['привычки', '*'],
                         ['соперник', '*'],
                         ['слухи_не_факты', 'rumors.summary'],
                         ['репутация', '*'],
@@ -1294,7 +1298,8 @@ EXPECTED_CREATE = {'база': {'plans': 'PlanExecutor',
           'crowd': 'Crowd',
           'episodes': 'Episodes',
           'tradition': 'Tradition',
-          'gossip': 'Gossip'},
+          'gossip': 'Gossip',
+          'habits': 'Habits'},
  'world=None': {'home': None,
                 'calendar': None,
                 'career': None,
@@ -1338,6 +1343,7 @@ EXPECTED_CREATE = {'база': {'plans': 'PlanExecutor',
  'BRAIN_DISABLE=episodes': {'episodes': None},
  'BRAIN_DISABLE=tradition': {'tradition': None},
  'BRAIN_DISABLE=gossip': {'gossip': None},
+ 'BRAIN_DISABLE=habits': {'habits': None},
  'mood.enabled=false': {'mood': None},
  'calendar.enabled=false': {'calendar': None},
  'party.enabled=false': {'party': None, 'crew': None},
@@ -1351,6 +1357,7 @@ EXPECTED_CREATE = {'база': {'plans': 'PlanExecutor',
  'tradition.enabled=false': {'tradition': None},
  'explore.enabled=false': {'explorer': None},
  'gossip.enabled=false': {'gossip': None},
+ 'habits.enabled=false': {'habits': None},
  'guild.enabled=true': {'guild': 'Guild'},
  'guild.enabled=true, BRAIN_DISABLE=guild': {},
  'guild.enabled=true, без жителей': {'party': None,

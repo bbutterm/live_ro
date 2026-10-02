@@ -35,7 +35,8 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
   тик:     (ядро: life, safety, plans) · 10 routine · 20 economy · 30 party · 40 career · 50 activities ·
            60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 120 rumors · 130 society ·
            140 strangers · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
-           210 episodes · 220 collection · 125 gossip (метка [gossip:] — 35, промпт — 245)
+           210 episodes · 220 collection · 125 gossip (метка [gossip:] — 35, промпт — 245) · 205 habits
+           (промпт — 225)
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
 """
 import inspect
@@ -51,6 +52,7 @@ from .economy import Economy
 from .episodes import Episodes
 from .explore import Explorer
 from .gossip import Gossip                # gossip: ORG-056
+from .habits import Habits                # habits: ORG-068
 from .guild import Guild
 from .home import Home
 from .mood import Mood
@@ -95,6 +97,7 @@ MODULES = (
     Tradition,
     Collection,        # после social: регистрирует тему card
     Gossip,            # gossip: ORG-056, после social (тема gossip) и rumors
+    Habits,            # habits: ORG-068 (activity.scores, social.pick_point читают mind.habits)
 )
 
 
