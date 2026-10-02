@@ -17,7 +17,9 @@
 | `bots/plugins/jobChange/jobChange.pl` | исполнитель одного этапа квеста в OpenKore (шаги присылает мозг) |
 | `bots/tests/job_change.t` | тест плагина на заглушках |
 | `brain/tests/test_newborn.py` | первые профессии: скрипты 1-1, маршруты по данным OpenKore против сервера, выбор пути по цели жителя (раздел 9) |
-| `scripts/okroute.py` | поиск пешего маршрута по полям и `portals.txt` OpenKore (им записаны `route.hops`) |
+| `scripts/okroute.py` | поиск маршрута по полям и `portals.txt` так, как их видит бот (`--profile bots/bot01`: таблицы профиля, `field_*`; `--zeny N` — с Kafra); им записаны `route.hops` |
+| `scripts/gen_portals.py` | генератор `bots/common/tables/portals.txt`: upstream `portals.txt` + переходы renewal-сервера (NB-1, NB-2, раздел 9) |
+| `bots/common/tables/portals.txt` | сгенерированная таблица переходов ботов; `bots/<bot>/tables/portals.txt` её включает (`!include`) |
 
 ```sh
 python3 scripts/gen_progression.py upstream/rathena > brain/world/jobs/catalog.json   # ~40 с, нужен PyYAML
@@ -283,11 +285,11 @@ Cecilia ответы одинаковые («Yes.» / «No.»), там вклю�
 
 | путь | NPC (карта x,y) | ответы: select «текст» | смена / награда | маршрут |
 |---|---|---|---|---|
-| swordman | Swordman#swd, izlude_in 74,172 (`swordman.txt:15`) | 2 «I want to be a Swordman.» (`:65`), 1 «Yes, I do.» (`:107`) | `:119` / N_Falchion 13415 (`:120`) | **blocked** — izlude |
+| swordman | Swordman#swd, izlude_in 74,172 (`swordman.txt:15`) | 2 «I want to be a Swordman.» (`:65`), 1 «Yes, I do.» (`:107`) | `:119` / N_Falchion 13415 (`:120`) | ok, 3 перехода (NB-1) |
 | acolyte | Cleric#aco, prt_church 184,41 (`acolyte.txt:16`) | 1 «Change your job to acolyte.» (`:65`) | `:89` / N_Mace 1545 | ok, 2 перехода |
 | merchant | Merchant#mer, alberta_in 53,43 (`merchant.txt:15`) | 1 «I want to be a merchant.» (`:59`) | `:93` / N_Battle_Axe 1381 | ok, 10 переходов (через Пайон) |
 | archer | Archer Guildsman#archer, payon_in02 64,71 (`archer.txt:15`) | 1 «I want to be an Archer.» (`:65`) | `:95` / N_Composite_Bow 1742 и колчаны | ok, 7 переходов |
-| thief | Thief Guide#thief 39,129 → Thief Guildsman#thief 42,133, moc_prydb1 (`thief.txt:15`, `:157`) | Guide: 1 «I want to be a Thief.» (`:92`), 1 «Yes.» (`:106`), 1 «Yes, I do.» (`:130`) → `q_job_thief 1` (`:153`); Guildsman без меню | `:167` / N_Main_Gauche 13041 | **blocked** — нет пешего пути в Морокко |
+| thief | Thief Guide#thief 39,129 → Thief Guildsman#thief 42,133, moc_prydb1 (`thief.txt:15`, `:157`) | Guide: 1 «I want to be a Thief.» (`:92`), 1 «Yes.» (`:106`), 1 «Yes, I do.» (`:130`) → `q_job_thief 1` (`:153`); Guildsman без меню | `:167` / N_Main_Gauche 13041 | ok, Kafra 1200 z + 4 перехода (NB-2) |
 | mage | Mage Guildsman#mage, geffen_in 164,124 (`mage.txt:15`) | 1 «I want to be a Mage» (`:67`), 1 «I want to be a Mage.» (`:81`) | `:106` / N_Rod 1639 | ok, 6 переходов |
 
 У Mage два меню, пункты которых отличаются только точкой. Ответ выбирается по точному тексту
@@ -295,28 +297,96 @@ Cecilia ответы одинаковые («Yes.» / «No.»), там вклю�
 
 ### Маршруты (`paths.*.route`)
 
-Плагин делает `move x y map`, маршрут строит OpenKore по своим полям (`fields/*.fld2.gz`) и
-`tables/portals.txt`. Найдены расхождения этих данных с renewal-сервером, поэтому для каждого пути записан
-маршрут от точки старта (prontera 156,180), найденный `scripts/okroute.py`. Тест `MapsTest.test_routes`
-проверяет каждый переход: он есть в `portals.txt` и как warp сервера (`npc/re/warps`, в пределах 3 клеток);
-размер карты в OpenKore совпадает с `db/re/map_cache.dat`; клетки между переходами связны по полю OpenKore
-(с клеткой прибытия по серверу). OpenKore может выбрать другой маршрут: проверено только, что хотя бы один
-существует. Опасность оценена только по атласу: монстры на полях маршрутов до 29 ур., агрессивные есть только на
-prt_fild04 (путь Mage, до 18 ур., 0,7 % монстров). Самый
-короткий путь в Алберту идёт через moc_fild03 (агрессивные до 47 ур.), поэтому у Merchant есть промежуточный
-`move` в payon 22,143. Длинные переходы получили `time_limit` 1800 с вместо 900 с по умолчанию: плагин берёт
-`time_limit` у любого шага.
+Плагин делает `move x y map`, маршрут строит OpenKore по своим полям (`fields/*.fld2.gz`) и таблице
+`portals.txt`. Upstream-данные OpenKore расходятся с renewal-сервером, поэтому бот получает свою таблицу
+(NB-1, NB-2, ниже) и для каждого пути записан маршрут от точки старта (prontera 156,180), найденный
+`scripts/okroute.py --profile bots/bot01`. Тест `MapsTest.test_routes` проверяет каждый переход: он есть в
+таблице бота и как warp сервера (`npc/re/warps`, в пределах 3 клеток), а переход Kafra — как телепорт,
+выведенный из скриптов; размер карты в поле бота (с учётом `field_*`) совпадает с `db/re/map_cache.dat`;
+клетки между переходами связны по полю бота (с клеткой прибытия по серверу), а `okroute` находит маршрут
+до NPC. OpenKore может выбрать другой маршрут: проверено только, что хотя бы один существует. Опасность
+оценена только по атласу: монстры на полях маршрутов до 29 ур., агрессивные есть только на prt_fild04 (путь
+Mage, до 18 ур., 0,7 % монстров). Самый короткий путь в Алберту идёт через moc_fild03 (агрессивные до 47 ур.),
+поэтому у Merchant есть промежуточный `move` в payon 22,143. Длинные переходы получили `time_limit` 1800 с
+вместо 900 с по умолчанию: плагин берёт `time_limit` у любого шага.
 
-- **Swordman: blocked.** В renewal izlude перестроен: у сервера `izlude` 268x300, у OpenKore поле 268x268, а
-  переходы в `portals.txt` старые (`izlude 52 140 → izlude_in`, `prt_fild08 371 212 → izlude 30 78`; у сервера
-  `npc/re/warps/cities/izlude.txt:27` izlude 52,172 и `:22` → izlude 24,98). Поле поправить можно строкой
-  `field_izlude izlude_a` в `servers.txt` (`src/Field.pm:856`, `izlude_a.fld2` совпадает с сервером с точностью
-  до 184 клеток). Переходы — только патчем `tables/portals.txt` (`server/patches/openkore`), это не сделано.
-- **Thief: blocked.** Пешего пути prontera → morocc по простым переходам `portals.txt` нет. Есть только
-  телепорт Kafra (`portals.txt`: `prontera 146 89 morocc 156 47` с диалогом и платой), а его сверка с
-  renewal-скриптом `npc/re/kafras` не делалась. От morocc до гильдии путь есть (`route.hops` от morocc 156,47),
-  но он идёт через подземелье moc_pryd01 (монстры 24–30 ур.).
-- Arkady и Vera уже Swordsman/Acolyte, им blocked не мешает.
+#### Таблицы бота: как OpenKore их находит
+
+`scripts/lab` запускает бота с `--tables=bots/<bot>/tables:<openkore>/tables`. Таблица ищется по папкам по
+порядку, берётся **первый найденный файл целиком**, без слияния (`src/Settings.pm:_findFileFromFolders`).
+`addTableFolders` из `servers.txt` ставит вперёд папки `tables/kRO`, `tables/translated/kRO_english`
+(`Settings.pm:addTablesFolders`), но `portals.txt` в них нет. Поэтому дописать в профиль только исправления
+нельзя: нужен полный файл. Его строит `scripts/gen_portals.py` в `bots/common/tables/portals.txt` (upstream
+строка в строку и правки), а `bots/<bot>/tables/portals.txt` состоит из одной строки
+`!include ../../common/tables/portals.txt`. `!include` разбирает `src/Utils/TextReader.pm:169-176`, путь
+берётся от включающего файла (`:80-81`). Шаблон нового жителя (`scripts/lib/roster.py`) копирует
+`tables/` из bot01, вместе с этой строкой. Сабмодуль не меняется, патч в `server/patches/openkore` не нужен.
+
+Поле карты выбирает `field_<карта> <поле>` в `servers.txt` (`src/Field.pm:854`). В `bots/bot0{1,2}/tables/servers.txt`:
+
+| строка | почему (поле upstream против `db/map_cache.dat` сервера) |
+|---|---|
+| `field_izlude izlude_a` | `izlude.fld2` 268x268 — старый город, у сервера 268x300; `izlude_a.fld2` 268x300, расходится в 184 клетках (180 из них у OpenKore проходимы лишние) |
+| `field_iz_int iz_int01` | `iz_int.fld2` 200x200 — старый полигон, у сервера 80x80; `iz_int01` совпадает клетка в клетку |
+| `field_morocc morocc-old` | у сервера старый Морокко: `morocc-old.fld2` расходится в 797 клетках, `morocc.fld2` (разрушенный) — в 5854 |
+
+Сверка: `scripts/gen_portals.py --report` (поля и все правки таблицы). Тесты: `MapsTest.test_bot_tables`
+(общий файл совпадает с генератором, у всех профилей одинаковые `!include` и `field_*`),
+`test_bot_portals_match_server`, `test_okroute_criteria`.
+
+#### Что меняет `gen_portals.py`
+
+1. **NB-1, izlude.** Карты izlude, izlude_a..d, izlude_in, iz_int, iz_int01..04, int_land, int_land01..04,
+   morocc: все простые переходы upstream с этих карт и на них убраны, вместо них добавлены warp-NPC из
+   файлов, которые грузит renewal (тот же обход, что `gen_atlas.loaded_files`). Клетка назначения — клетка
+   прибытия по серверу. Примеры: `prt_fild08 371 212 izlude 24 98` (`npc/re/warps/cities/izlude.txt:22`), в
+   upstream `… izlude 30 78`; `izlude 52 172 izlude_in 74 161` (`:27`), в upstream `izlude 52 140`. Убраны
+   внутренние переходы старого города (`izlude 149 39 → izlude 182 56` и др.).
+2. **Переходы учебного полигона.** Это OnTouch-скрипты, а не warp, поэтому они перечислены в генераторе
+   (`ACADEMY_TOUCH`), и генератор сверяет строки скрипта: `iz_int* 56 15 → int_land* 85 107`
+   (`izlude.txt:69-81`, warp `:75`), `int_land* 49 57 → izlude* 196 209` (`:83-113`, warp `:106`).
+3. **NPC-переходы.** Строки с диалогом с этих карт убираются, если на сервере нет NPC в этой клетке. OpenKore
+   ищет NPC по точной клетке (`src/Task/TalkNPC.pm:findTarget`). Так убраны старый лодочник izlude 201,181,
+   дирижабль izlude 206,55 и Kafra prontera 35,208 (у сервера она стоит на 29,207). Строки с диалогом НА эти
+   карты убираются, если клетка прибытия на сервере непроходима (izlu2dun/alberta → izlude 176,182).
+4. **NB-2, Kafra** на prontera, izlude, morocc пересобраны из скриптов. NPC с `callfunc "F_KafSet"` и
+   `"F_Kafra",5,0` (`npc/kafras/kafras.txt:233-300`; izlude — duplicate `kaf_izlude`,
+   `npc/re/kafras/kafras.txt:71`). Меню F_Kafra default: «Use Teleport Service» — третий пункт, r2
+   (`npc/kafras/functions_kafras.txt:142`). Список и цены — F_KafSet по карте NPC (`:613-616`: Izlude 600,
+   Geffen, Payon, Morocc 1200, Orc Dungeon 1700, Alberta 1800). Клетка прибытия — F_KafTele (`:287-334`,
+   Izlude в renewal 128,98, Morocc 156,46). `VIP_SCRIPT 0` (`src/config/core.hpp:58`), поэтому цена не
+   удваивается. Билет 7060 заменяет плату (`:297-298`), отсюда флаг билета 1. Диалог: `c r2 c r3` (next, меню,
+   next, меню). Upstream-строки были взяты с iRO: 2000 z, лишние пункты Aldebaran/Comodo/Umbala, Alberta на r4
+   (у сервера r4 — Orc Dungeon).
+5. **Стражи пустыни Сограт** (`NPC_WARPS`). В renewal переходы в moc_fild20 закомментированы
+   (`npc/re/warps/fields/morroc_fild.txt:18`). Вместо них стоят NPC «Continental Guard»
+   (`npc/re/quests/quests_morocc.txt:28-58`): диалог `c c r1` («Enter the Field.»), бесплатно, переносит в
+   moc_fild20 208,207. Стражи moc_fild20 (`npc/quests/quests_morocc.txt:894-1111`, ветка `rebirth_moc_edq == 0`)
+   переносят в morocc 160,61 после диалога `c r1 c c c c r1 c c r1`. Диалог генератор выводит из текста скрипта
+   (`walk_dialog`). В upstream у первых стражей были простые переходы с неверной клеткой, а ветки для квеста
+   (moc_fild21, сертификат) убраны.
+
+Итог: убрано 116 строк upstream, добавлено 99 переходов сервера, 17 NPC-переходов и 44 строки Kafra.
+
+- **Swordman — ok (NB-1).** `prontera 156,22 → prt_fild08`, `prt_fild08 371,212 → izlude 24,98`,
+  `izlude 52,172 → izlude_in 74,161`. Пешком, без NPC.
+- **Thief — ok (NB-2).** Пешего пути в Морокко нет ни по данным OpenKore, ни на сервере. В renewal пустыня
+  разделена: от Пронтеры по warp-ам достижимы только moc_fild01–03 и 13, а Морокко с окрестностями отрезан.
+  Проверено обходом warp-ов сервера, `scripts/okroute.py` без `--zeny`. Есть два пути с NPC:
+  - **Kafra, записан в `route.hops`:** `prontera 146 89 morocc 156 46 1200 1 c r2 c r3`, затем
+    `morocc 27,294 → moc_ruins → moc_pryd01 → moc_prydb1`. Поэтому `requirements.zeny` равен 1200
+    (`zeny_why`), а у этапа `needs.zeny` 1200. Без этих денег `stage_action` этап не запускает, и цель —
+    «накопить 1200 зени». Бюджет маршрута OpenKore — зени персонажа (`src/Task/CalcMapRoute.pm:96-106`), цена в
+    вес маршрута не входит: вес — шаги плюс штраф `routeWeights` (NPC/PORTAL, `:688-705`). Поэтому при
+    1200 z ближайшая Kafra короче пути через пустыню, если штраф NPC не поднят в `routeWeights`.
+  - **Бесплатно, через стражей:** prt_fild08 → moc_fild01 84,19 → moc_fild20 → morocc 160,61. В таблице он
+    есть, и при зени < 1200 OpenKore может выбрать его. На moc_fild20 атлас показывает 5 монстров 132–134 ур.,
+    по атласу не агрессивных. В записанный маршрут этот путь не взят.
+  Конец пути — подземелье moc_pryd01 (монстры 24–30 ур.).
+- **Выход из учебного полигона — ok** (`start.academy_exit.route`): `iz_int 27,30 → 51,30`,
+  `iz_int 56,15 → int_land 85,107`, `int_land 49,57 → izlude 196,209`; копии iz_int0N → int_land0N →
+  izlude_a..d → izlude_in → izlude. `okroute` находит путь из всех пяти полигонов в Пронтеру.
+- Arkady и Vera уже Swordsman/Acolyte, их это не касается.
 
 ### Выбор пути по жителю
 
@@ -325,7 +395,7 @@ prt_fild04 (путь Mage, до 18 ур., 0,7 % монстров). Самый
 шаблона). Функции `progression.target_job(name)`, `path_for(state, data, target)`, а у `plan`, `readiness`,
 `current_stage`, `stage_action`, `summary` есть параметр `target`. `career.py` один раз вычисляет `target` при
 загрузке данных и передаёт его дальше. `blocked(state, data, path)` даёт причину, по которой этап не
-запускается: учебный полигон или `route.status: blocked`. В этом случае `stage_action` возвращает None, а
+запускается: учебный полигон с несверенным выходом (`start.academy_exit.status` не ok, `academy_blocked`) или `route.status: blocked`. В этом случае `stage_action` возвращает None, а
 цель (`plan.next`, сводка в промпте) честно об этом сообщает.
 
 Id этапа — `first_job`, а не `apply`: `career` хранит пройденные этапы без пути (`done`), и `apply` Novice
@@ -337,11 +407,22 @@ Id этапа — `first_job`, а не `apply`: `career` хранит пройд
 - Archer получает колчаны (`archer.txt:97-99`), а не стрелы: тело их не открывает, боя луком без стрел нет.
 - После смены профессии combatProfile выбирает профиль по jobID. Профили Merchant/Archer/Thief/Mage есть в
   `bots/combat/classes.json`, в игре не проверялись.
-- `next_equipment` для Novice предлагает Knife из izlude_in — магазин на заблокированной карте.
-- **NB-1 · P1 — Патч izlude для OpenKore** (`server/patches/openkore`: переходы izlude в `portals.txt`,
-  `field_izlude izlude_a`). **Готово:** `okroute.py` находит путь prontera → izlude_in 73,172, а тест
-  `MapsTest` снимает blocked у swordman.
-- **NB-2 · P2 — Путь в Морокко.** Пеший маршрут или сверенный телепорт Kafra (renewal-диалог, цена).
-  **Готово:** thief route ok.
+- `next_equipment` для Novice предлагает Knife из izlude_in. После NB-1 путь туда есть по данным, но в игре
+  не проверен.
+- **NB-1 · P1 — izlude для OpenKore: сделано по данным.** Таблица `bots/common/tables/portals.txt`
+  (`scripts/gen_portals.py`) и `field_izlude izlude_a` / `field_iz_int iz_int01` в `servers.txt`. `okroute`
+  находит путь prontera → izlude_in 73,172 и iz_int* → izlude*, у swordman и `academy_exit` статус ok. **В игре
+  не проверено.**
+- **NB-2 · P2 — Морокко: сделано по данным.** Kafra сверена со скриптом (1200 z, `c r2 c r3`), стражи
+  moc_fild20 добавлены, у thief статус ok. **В игре не проверено:** как OpenKore ведёт Kafra-диалог при
+  `autoTalkCont 1` (плагин включает его на время этапа) и проходит стражей с OnTouch-сообщением.
+- **NB-4 · P2 — Проверить таблицы в лаборатории:** выход нового персонажа из iz_int0N, путь
+  prontera → izlude_in, Kafra → morocc. Критерий — переходы в логе OpenKore и карта в state.
+- `portalRecord 2` в `config.txt`: OpenKore дописывает найденные переходы в файл `portals.txt` профиля
+  (`src/AI/CoreLogic.pm:589-611`, `updatePortalLUT`), то есть в `bots/<bot>/tables/portals.txt` checkout-а. Раньше
+  он писал в `tables/portals.txt` OpenKore. Оставить так или выключить запись (`portalRecord 0`) — решает
+  владелец.
+- Kafra и переходы сверены только для prontera, izlude и morocc (`KAFRA_MAPS`, `SCOPE`). Kafra других городов
+  (geffen, payon, alberta…) остаются из upstream, со старыми iRO-ценами и меню.
 - **NB-3 · P2 — Прогон Novice → Acolyte в лаборатории** (самый короткий маршрут). **Готово:** профессия
   сменилась, событие `job_change_result ok` совпало с jobID.

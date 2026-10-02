@@ -25,7 +25,13 @@
       "why": "включает владелец: изменение сервера. Новичок появляется и возрождается в Пронтере (home_town реестра)"
     },
     "academy_exit": {
-      "status": "blocked",
+      "status": "ok",
+      "route": {"from": ["iz_int", 18, 26], "to": ["izlude", 128, 142], "hops": [
+        ["iz_int", 27, 30, "iz_int", 51, 30],
+        ["iz_int", 56, 15, "int_land", 85, 107],
+        ["int_land", 49, 57, "izlude", 196, 209]
+      ]},
+      "how": "отдельного сценария нет: таблицы профиля (bots/common/tables/portals.txt — переходы полигона из скриптов ниже, field_iz_int iz_int01 и field_izlude izlude_a в bots/<bot>/tables/servers.txt) дают OpenKore путь iz_int -> int_land -> izlude, и тело уходит в город обычным move (routine). Диалог #intro_to_izlude без меню (mes, close2) OpenKore закрывает сам: src/Misc.pm:6929-6948 autoNpcTalk -> Task::TalkNPC autotalk",
       "steps": [
         {"do": "walk", "map": "iz_int", "x": 27, "y": 30, "next_xy": [51, 30], "ref": "npc/re/warps/cities/izlude.txt:57 warp #room_out 1,1 -> iz_int 51,30"},
         {"do": "walk", "map": "iz_int", "x": 56, "y": 15, "next_map": "int_land", "ref": "npc/re/warps/cities/izlude.txt:69-77 #ship_out OnTouch: savepoint int_land 77,101; warp int_land 85,107"},
@@ -33,9 +39,9 @@
       ],
       "variants": "iz_int0N -> int_land0N -> izlude_a..d (izlude.txt:72-73, 105; дубликаты :78-81, :110-113)",
       "why": [
-        "OpenKore fields/iz_int.fld2.gz — старая карта 200x200, у rAthena db/map_cache.dat iz_int 80x80: клетки старта для OpenKore непроходимы. Обход: servers.txt field_iz_int iz_int01 (iz_int01.fld2 совпадает с картой rAthena клетка в клетку)",
-        "выход ведёт в izlude, а он в renewal перестроен: rAthena db/re/map_cache.dat izlude 268x300, OpenKore fields/izlude.fld2.gz 268x268; переходы izlude в tables/portals.txt старые (izlude 52,140 -> izlude_in; у rAthena npc/re/warps/cities/izlude.txt:27 izlude 52,172). Нужен патч tables/portals.txt OpenKore (server/patches/openkore) и field_izlude izlude_a",
-        "после выхода точка сохранения — izlude 128,142: смерть возвращает в тот же перестроенный город"
+        "было blocked (до NB-1): OpenKore fields/iz_int.fld2.gz — старая карта 200x200, у rAthena db/map_cache.dat iz_int 80x80; решено field_iz_int iz_int01 (iz_int01.fld2 совпадает с iz_int сервера клетка в клетку; iz_int01..04 совпадают со своими полями)",
+        "было blocked (до NB-1): izlude в renewal перестроен (rAthena izlude 268x300, OpenKore izlude.fld2 268x268, старые переходы portals.txt); решено field_izlude izlude_a и переходами rAthena в bots/common/tables/portals.txt (scripts/gen_portals.py)",
+        "после выхода точка сохранения — izlude 128,142 (копии — izlude_a..d): после смерти житель возвращается туда же, путь в Пронтеру есть (izlude 20,98 -> prt_fild08)"
       ]
     }
   },
@@ -878,14 +884,14 @@
       },
       "reward": {"items": {"13415": 1}, "ref": "npc/re/jobs/1-1/swordman.txt:120 getitem 13415,1 (N_Falchion)"},
       "route": {
-        "status": "blocked",
+        "status": "ok",
         "from": ["prontera", 156, 180],
-        "why": "izlude в renewal перестроен: OpenKore fields/izlude.fld2.gz 268x268 и старые переходы tables/portals.txt (prt_fild08 371,212 -> izlude 30,78; izlude 52,140 -> izlude_in), у rAthena db/re/map_cache.dat izlude 268x300, npc/re/warps/cities/izlude.txt:22 (-> izlude 24,98), :27 (izlude 52,172 -> izlude_in 74,161). Нужен патч portals.txt OpenKore и field_izlude izlude_a",
-        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "was_blocked": "до NB-1: izlude в renewal перестроен (OpenKore izlude.fld2 268x268, у rAthena db/re/map_cache.dat 268x300) и переходы upstream portals.txt старые (prt_fild08 371,212 -> izlude 30,78; izlude 52,140 -> izlude_in). Решено: field_izlude izlude_a в bots/<bot>/tables/servers.txt и переходы rAthena npc/re/warps/cities/izlude.txt:22, :27 в bots/common/tables/portals.txt",
+        "checked": "scripts/okroute.py --profile bots/bot01: поля и переходы таблиц профиля (bots/common/tables/portals.txt, field_* в servers.txt); соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
         "hops": [
           ["prontera", 156, 22, "prt_fild08", 170, 378],
-          ["prt_fild08", 371, 212, "izlude", 30, 78],
-          ["izlude", 52, 140, "izlude_in", 74, 158]
+          ["prt_fild08", 371, 212, "izlude", 24, 98],
+          ["izlude", 52, 172, "izlude_in", 74, 161]
         ]
       },
       "npcs": {
@@ -1106,7 +1112,8 @@
         "job_lv": 10,
         "base_lv": null,
         "skill_points": 0,
-        "zeny": 0,
+        "zeny": 1200,
+        "zeny_why": "не плата за профессию, а телепорт Kafra prontera -> morocc (пути по warp нет, бесплатный путь через стражей moc_fild20 опасен — route.alternative): npc/kafras/functions_kafras.txt:614-615 Morocc 1200, VIP_SCRIPT 0 (src/config/core.hpp:58)",
         "refs": [
           "npc/re/jobs/1-1/thief.txt:139 F_CanChangeJob -> отказ (нужен NV_BASIC 9 — все 9 очков Novice, то есть job 10)",
           "npc/other/Global_Functions.txt:626 F_CanChangeJob: !basicskillcheck() || NV_BASIC > 8"
@@ -1115,12 +1122,16 @@
       },
       "reward": {"items": {"13041": 1}, "ref": "npc/re/jobs/1-1/thief.txt:169 getitem 13041,1 (N_Main_Gauche)"},
       "route": {
-        "status": "blocked",
-        "from": ["morocc", 156, 47],
-        "why": "пешего пути prontera -> morocc по простым переходам tables/portals.txt OpenKore нет (scripts/okroute.py); есть только телепорт Kafra (portals.txt: prontera 146 89 morocc 156 47 с диалогом и платой), его диалог с renewal-скриптом npc/re/kafras не сверен. Последняя часть пути — подземелье moc_pryd01 (монстры 24-30 ур.)",
-        "checked": "scripts/okroute.py: поля и простые переходы OpenKore; соответствие warp rAthena и проходимость — brain/tests/test_newborn.py",
+        "status": "ok",
+        "from": ["prontera", 156, 180],
+        "was_blocked": "до NB-2: пути prontera -> morocc по warp нет ни у OpenKore, ни у сервера: в renewal пустыня Сограт разделена (npc/re/warps/fields/morroc_fild.txt:18 — переходы в moc_fild20 закомментированы, вместо них диалоговые NPC Continental Guard, npc/re/quests/quests_morocc.txt:28-58, и стражи moc_fild20, npc/quests/quests_morocc.txt:894), а телепорт Kafra в upstream portals.txt — с iRO (2000 z, другие пункты меню)",
+        "alternative": "бесплатно, два диалога: prt_fild08 -> moc_fild01 84,19 (Continental Guard, c c r1) -> moc_fild20 208,207 -> страж 38,174 (c r1 c c c c r1 c c r1) -> morocc 160,61; в таблице бота есть, в маршрут не взят: на moc_fild20 монстры 132-134 ур. (атлас)",
+        "kafra": "prontera 146,89 Kafra Employee::kaf_prontera5 (npc/kafras/kafras.txt:289, callfunc F_KafSet, F_Kafra 5,0): меню F_Kafra default — пункт 3 «Use Teleport Service» (r2, functions_kafras.txt:142); F_KafSet prontera — Izlude, Geffen, Payon, Morocc (r3), Orc Dungeon, Alberta; Morocc 1200 z (functions_kafras.txt:614-615); F_KafTele: warp morocc 156,46 (:325); билет 7060 вместо платы (:297-298). Строка таблицы: prontera 146 89 morocc 156 46 1200 1 c r2 c r3 (bots/common/tables/portals.txt, scripts/gen_portals.py). OpenKore пойдёт к Kafra сам, если зени >= 1200 (бюджет маршрута — зени персонажа, src/Task/CalcMapRoute.pm:96-106)",
+        "danger": "последняя часть пути — подземелье moc_pryd01 (монстры 24-30 ур.)",
+        "checked": "scripts/okroute.py --profile bots/bot01: поля и переходы таблиц профиля (bots/common/tables/portals.txt, field_* в servers.txt); соответствие warp rAthena и проходимость — brain/tests/test_newborn.py; Kafra — okroute.py --zeny 1200",
         "hops": [
-          ["morocc", 25, 294, "moc_ruins", 159, 37],
+          ["prontera", 146, 89, "morocc", 156, 46, {"cost": 1200, "steps": "c r2 c r3"}],
+          ["morocc", 27, 294, "moc_ruins", 156, 42],
           ["moc_ruins", 54, 161, "moc_pryd01", 195, 9],
           ["moc_pryd01", 90, 109, "moc_prydb1", 100, 191],
           ["moc_prydb1", 87, 115, "moc_prydb1", 59, 115]
@@ -1137,9 +1148,9 @@
           "_comment": "id не apply: career хранит пройденные этапы без пути (done), apply уже есть у Knight/Priest",
           "title": "Гильдия: смена профессии Novice -> Thief",
           "npc": "guide",
-          "needs": {"job_lv": 10, "skill_points": 0},
+          "needs": {"job_lv": 10, "skill_points": 0, "zeny": 1200},
           "steps": [
-            {"do": "move", "map": "moc_prydb1", "x": 39, "y": 126},
+            {"do": "move", "map": "moc_prydb1", "x": 39, "y": 126, "time_limit": 1800},
             {
               "do": "talk",
               "npc": "guide",

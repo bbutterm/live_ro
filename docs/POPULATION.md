@@ -190,7 +190,7 @@ scripts/lab new-resident bot04 swordsman Gerold --persona path/to/gerold.json
 Статус: данные и правила проверены тестами разбора (`brain/tests/test_newborn.py`, `bots/tests/job_change.t`).
 **В игре ни один шаг не проходился.**
 
-### 6.1. Где появляется новичок и почему он там застрянет
+### 6.1. Где появляется новичок и как он выходит
 
 rAthena renewal ставит нового персонажа случайно в одну из `iz_int`, `iz_int01`…`iz_int04` 18,26
 (`conf/char_athena.conf:115`; в renewal читается `start_point`, `src/char/char.cpp:3008-3012`). Эта же точка
@@ -200,23 +200,32 @@ rAthena renewal ставит нового персонажа случайно в
 
 1. iz_int 27,30 — warp `#room_out` → 51,30 (`npc/re/warps/cities/izlude.txt:57`);
 2. iz_int 56,15 — `#ship_out` (OnTouch): savepoint int_land 77,101, warp int_land 85,107 (`:69-77`);
-3. int_land 49,57 — `#intro_to_izlude` (OnTouch): без квеста 21008 меню нет, только `mes` и `close2` (OpenKore
-   закрывает такой диалог сам, `Task/TalkNPC.pm:348-353`); warp izlude 196,209, savepoint izlude 128,142 (`:83-109`).
+3. int_land 49,57 — `#intro_to_izlude` (OnTouch): без квеста 21008 меню нет, только `mes` и `close2`. Такой
+   диалог OpenKore закрывает сам: на диалог, начатый NPC, он создаёт задачу autotalk (`src/Misc.pm:6929-6948`,
+   `Task/TalkNPC.pm:348-353`). Затем warp izlude 196,209 и savepoint izlude 128,142 (`:83-109`).
    Копии: iz_int0N → int_land0N → izlude_a…d.
 
-Бот этого не сделает, и сценарий выхода **не добавлен**: на данных OpenKore он не работает.
+**Статус: путь есть по данным (NB-1), в игре не проверен.** Отдельного сценария нет. Тело уходит в город
+обычным `move` (routine), а маршрут OpenKore строит по таблицам профиля:
 
-- `fields/iz_int.fld2.gz` в OpenKore — старая карта 200x200, а у сервера iz_int 80x80 (`db/map_cache.dat`). Клетка
-  старта 18,26 для OpenKore непроходима, маршрут не строится. Обойти можно: `field_iz_int iz_int01` в `servers.txt`
-  (`src/Field.pm:856`), поле `iz_int01` совпадает с картой сервера клетка в клетку (проверено тестом).
-- Выход ведёт в izlude, а он в renewal перестроен: у сервера 268x300, поле OpenKore 268x268, переходы izlude в
-  `tables/portals.txt` старые. После выхода точка сохранения тоже izlude, поэтому после смерти житель вернётся в
-  город, где OpenKore не ориентируется. Нужен патч `portals.txt` (задача NB-1 в `docs/PROGRESSION.md`).
+- `bots/<bot>/tables/servers.txt`: `field_iz_int iz_int01` (`src/Field.pm:854`). Поле `iz_int.fld2.gz` в OpenKore —
+  старая карта 200x200, у сервера iz_int 80x80. Поле `iz_int01` совпадает с ней клетка в клетку, а iz_int01..04 —
+  со своими полями (тест `MapsTest.test_academy_field_mismatch`). `field_izlude izlude_a` — для
+  перестроенного izlude.
+- `bots/common/tables/portals.txt` (`scripts/gen_portals.py`, профиль включает его через `!include`): три перехода
+  полигона для всех пяти копий и переходы izlude/izlude_a..d по warp-ам сервера (подробности —
+  `docs/PROGRESSION.md`, раздел 9).
+- `start.academy_exit` в `brain/world/progression.json`: `status: ok`, `route` iz_int 18,26 → izlude 128,142.
+  `scripts/okroute.py --profile bots/bot01` находит путь из каждого iz_int0N в izlude_a..d и в Пронтеру (тест
+  `test_okroute_criteria`). На копиях путь в Пронтеру идёт izlude_a → izlude_in → izlude → prt_fild08.
+- Точка сохранения после выхода — izlude 128,142 (или izlude_a..d). Путь оттуда в Пронтеру тоже есть.
 - Старый полигон `new_1-1` в renewal не грузится (`npc/re/scripts_jobs.conf:37`, novice.txt закомментирован), поля
   `new_1-1` в OpenKore нет. Как стартовая точка он не подходит.
 
-Мозг это видит: `progression.blocked()` и `plan()` для жителя на картах `start.maps` (iz_int*, int_land*) честно
-сообщают «учебный полигон …: выход не автоматизирован», и этап смены профессии не запускается.
+Мозг: `progression.academy_blocked()` блокирует только при `academy_exit.status`, отличном от ok. Сейчас статус
+ok, поэтому житель на iz_int*/int_land* получает обычную цель (уровень профессии и т. д.). Если в лаборатории
+выход не сработает, верните `"status": "blocked"`, и мозг снова сообщит «учебный полигон …: выход не
+автоматизирован».
 
 ### 6.2. Решение владельца: стартовая точка в Пронтере
 
@@ -233,7 +242,8 @@ rAthena renewal ставит нового персонажа случайно в
 - existing: дописать ту же строку в `$RATHENA/conf/import/char_conf.txt` вручную (её импортирует
   `conf/char_athena.conf:305`, последнее значение побеждает).
 
-Без этого новичка придётся выводить вручную, и оба способа требуют решения владельца: GM-аккаунт оператора и
+После NB-1 это уже не обязательно: выход из полигона есть по данным, но в игре он не проверен. Если он не
+сработает, новичка придётся выводить вручную, и оба способа требуют решения владельца: GM-аккаунт оператора и
 `@warp`/`@recall` в нашей лаборатории или правка `last_map`/`save_map` персонажа в БД. Правка БД возможна только
 отдельной миграцией с бэкапом и при остановленном char-server.
 
@@ -247,8 +257,8 @@ rAthena renewal ставит нового персонажа случайно в
 | цель | путь | что мешает |
 |---|---|---|
 | Acolyte, Mage, Archer, Merchant | ok | ничего, кроме общего флага `progression.auto_job_change` (false) и того, что в игре не проверено |
-| Swordsman | blocked | izlude перестроен (как в 6.1); нужен патч OpenKore (NB-1) |
-| Thief | blocked | пешего пути в Морокко по таблицам OpenKore нет; телепорт Kafra не сверен (NB-2) |
+| Swordsman | ok (NB-1) | таблица переходов izlude и `field_izlude izlude_a` в профиле бота; в игре не проверено |
+| Thief | ok (NB-2) | пешего пути в Морокко нет и на сервере. Путь — телепорт Kafra prontera 146,89 (1200 z, сверен со скриптом), поэтому нужно 1200 зени: без них этап не запускается, цель — «накопить 1200 зени». Есть и бесплатный путь через стражей moc_fild20 (монстры 132–134 ур.). В игре не проверено |
 
 Порядок для нового жителя после включения 6.2: охота Novice до job 10 (NV_BASIC 9 ставит combatProfile) →
 `career` видит готовность → при `auto_job_change: true` (решение владельца) идёт в гильдию по шагам из
