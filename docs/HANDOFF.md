@@ -306,6 +306,8 @@ scripts/lab status
 
 ## Задание №4: запуск мозга bot01 (OpenRouter) — «живой» Arkady
 
+**Заменено заданием №5.** Платные вызовы только после согласования модели и бюджета; №4 не выполнять.
+
 **Ветка:** `claude/stage1-reproducible-delivery`
 **Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
 Включает задание №3 (gracefulStop v2). Отдельно его прогонять не нужно: шаг 4 проверяет выход тоже.
@@ -385,3 +387,84 @@ scripts/lab stop brain && scripts/lab start brain && sleep 3 && grep 'памят
 ### Что прислать
 Вывод команды запуска и проверок (без ключа), последние строки decisions.jsonl,
 `docs/qa/HERMES-<sha7>.md`.
+
+---
+
+## Задание №5: первый результат без LLM — событие из игры → правило → команда в игре
+
+**Ветка:** `claude/brain-coordinator`
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+Включает gracefulStop v2 (задание №3) и мозг из задания №4. **Платных вызовов нет.**
+
+### Что изменилось
+- `BRAIN_LLM=off` по умолчанию: даже с ключом в env к OpenRouter не уходит ни одного запроса.
+- Decision gate на правилах:
+  - при входе в игру Arkady один раз здоровается в общем чате (не чаще раза в 6 ч);
+  - на личное сообщение `!status` отвечает шёпотом: HP, SP, уровень, карта, занятие.
+- SafetyPolicy проверяет каждое действие без LLM.
+- Мост передаёт событие боя (`attack`) и текущее занятие тела (`activity`).
+- `start live` запускает сначала мозг, потом бота.
+
+### Какие процессы перезапускать
+- login/char/map — **не перезапускать**.
+- bot01 — один перезапуск (загрузить brainBridge). Мозг — новый процесс.
+
+### Шаги (от `ro-lab`)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa
+export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive
+git rev-parse HEAD
+grep -c '^BRAIN_LLM=openrouter' $LAB_ROOT/secrets/live_ro.env   # ожидается 0; если 1 — поставить BRAIN_LLM=off
+
+# 1. Статика и тесты (без сети)
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules)
+
+# 2. Доказательство, что платный вызов не делается
+scripts/lab brain-check; echo "код=$?"
+
+# 3. Запуск: мозг, затем бот
+scripts/lab stop bot01
+scripts/lab start live
+sleep 90
+scripts/lab status
+
+# 4. Результат
+grep -nE '\[brainBridge\]' $LAB_ROOT/logs/bot01/console.log | tail -5
+grep -n 'снова на поле' $LAB_ROOT/logs/bot01/console.log | tail -3
+tail -n 20 $LAB_ROOT/logs/bot01/brain.log
+tail -n 6 $LAB_ROOT/state/bot01/decisions.jsonl
+python3 -c "import sqlite3;d=sqlite3.connect('$LAB_ROOT/state/bot01/memory.sqlite');print(d.execute('select kind,count(*) from events group by kind').fetchall())"
+
+# 5. (если есть второй аккаунт) написать Arkady в личку: !status — через 1-5 с ответ
+tail -n 2 $LAB_ROOT/state/bot01/decisions.jsonl
+```
+
+### Ожидаемый результат (не проверен)
+| Шаг | Ожидание |
+|---|---|
+| 1 | `Repository checks OK`; unittest `OK` (16 тестов) |
+| 2 | `CHECK SKIP: BRAIN_LLM=off, платные вызовы не включены...`, `код=2` |
+| 3 | `status`: bot01 и brain запущены |
+| 4 console.log | `[brainBridge] подключён к мозгу`, затем `[brainBridge] решение мозга -> c Arkady снова на поле...`, и строка чата сервера с этим текстом |
+| 4 decisions.jsonl | `"source": "rule"` с `say`, затем `"type": "ack" ... "ok": true` |
+| 4 brain.log | `LLM ВЫКЛЮЧЕНА (BRAIN_LLM=off...)`, `тело на связи: Arkady`, `событие in_game` |
+| 4 memory | есть `attack`, `kill`, `loot` (реальные события из игры) |
+| 5 | `whisper` со статусом и `ack ok`; ответ виден в игре на втором аккаунте |
+
+Доказательство первого результата: `ack ok` в decisions.jsonl **и** строка `[brainBridge] решение мозга ->`
+в console.log **и** сообщение в чате игры. Одна строка `decision` — не доказательство.
+Если приветствие уже было меньше 6 часов назад (повторный запуск), используйте шаг 5.
+
+### Риски
+- БД игры не меняется. Память мозга: отдельный `state/bot01/memory.sqlite`.
+- Arkady пишет одну строку в общий чат при входе.
+- Если мозг упал, бот играет сам: плагин переподключается раз в 5 с.
+
+### Откат
+- Только мозг: `scripts/lab stop brain`.
+- Полностью: `git checkout --detach d24e12841f2d286b46c69c710b3e22cec391d9db`, `scripts/lab stop bot01`, `scripts/lab start bot01`.
+
+### Что прислать
+Вывод шагов 1–5 (без ключа), в `docs/qa/HERMES-<sha7>.md`.

@@ -647,7 +647,8 @@ cmd_start() {
     server) start_server ;;
     bot[0-9]*) start_bot "$what" ;;
     brain) start_brain ;;
-    live) start_bot bot01; start_brain ;;
+    # Сначала мозг: иначе событие входа в игру может прийти раньше, чем мозг слушает сокет.
+    live) start_brain; start_bot bot01 ;;
     *) die "start server|bot01|brain|live" ;;
   esac
 }

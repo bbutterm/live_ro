@@ -48,6 +48,10 @@
 | Мозг `brain/live_brain` (OpenRouter, память SQLite, лимит, fallback) | ✅ после d24e128 | ✅ 3 сквозных теста (фейковый OpenRouter); реальный плагин brainBridge + реальный мозг на заглушках OpenKore | ⏳ |
 | Плагин `brainBridge` (события наружу, действия внутрь) | ✅ после d24e128 | ✅ на заглушках OpenKore: `c ...` и `conf lockMap` исполнены, подтверждения в журнале | ⏳ |
 | `lab start live/brain`, `brain-check` | ✅ после d24e128 | ✅ песочница | ⏳ |
+| LLM выключен по умолчанию (`BRAIN_LLM=off`), платные вызовы только по флагу | ✅ ветка `claude/brain-coordinator` | ✅ тест: ключ есть, флага нет — 0 запросов | ⏳ |
+| Decision gate (`RuleGate`), место под JEV (не установлено) | ✅ ветка `claude/brain-coordinator` | ✅ модульные тесты | ⏳ |
+| SafetyPolicy без LLM (смерть, низкий HP, карты, лимиты чата, пауза ≤ 10 мин) | ✅ ветка `claude/brain-coordinator` | ✅ модульные тесты | ⏳ |
+| Первый результат без LLM: событие тела → правило → команда в игре | ✅ ветка `claude/brain-coordinator` | ✅ настоящие brainBridge + live_brain, OpenKore на заглушках | ⏳ задание №5 |
 
 ## Известные проблемы
 - Бот продолжал бой при низком HP и пытался телепортироваться без навыка/предмета.
