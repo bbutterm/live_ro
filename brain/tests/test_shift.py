@@ -18,6 +18,7 @@ from live_brain.gate import RuleGate
 from live_brain.memory import Memory
 from live_brain.mind import Mind
 from live_brain.routine import Routine
+from tests.worldtime import shift_time
 
 from tests.test_routine import WORLD, Clock, FakeMind
 
@@ -107,6 +108,7 @@ class InboxSleepTest(unittest.TestCase):
     """Команда сторожа sleep в run/brain/<bot>.inbox доходит до распорядка."""
 
     def test_sleep_command(self):
+        shift_time(self)                     # timefix: полдень мира — ночью распорядок сам уводит в сон
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             inbox = root / "bot01.inbox"

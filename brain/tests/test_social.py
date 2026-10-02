@@ -19,6 +19,7 @@ from live_brain.mind import Mind
 from live_brain.routine import Routine, load_world
 from live_brain.safety import SafetyPolicy
 from live_brain.social import TAG, Social
+from tests.worldtime import shift_time
 
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
@@ -423,6 +424,7 @@ class MindRoutingTest(unittest.TestCase):
     """mind.py: метка [chat:] идёт в social, а не в gate/LLM; эмоция проходит в тело."""
 
     def setUp(self):
+        shift_time(self)                     # timefix: полдень мира — ночью (1–7 ч) social не шлёт эмоции
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
         self.sent = []

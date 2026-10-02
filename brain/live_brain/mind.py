@@ -730,7 +730,7 @@ class Mind:
             delta = max(-2, min(2, int(delta)))
         except (TypeError, ValueError):
             return 0
-        day = time.strftime("%Y-%m-%d")
+        day = time.strftime("%Y-%m-%d", time.localtime(time.time()))   # timefix: сутки по time.time (реплей подменяет), не по стенным часам
         used = self.mem.get("llm_relation_used", {})
         if used.get("day") != day:
             used = {"day": day}

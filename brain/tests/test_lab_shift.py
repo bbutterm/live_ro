@@ -7,7 +7,6 @@ import json
 import shutil
 import subprocess
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
@@ -65,7 +64,9 @@ class LabShiftTest(unittest.TestCase):
         self.assertEqual(len(self.inbox("bot04")), 1, "повтор просьбы — не раньше чем через 30 мин")
 
     def test_asleep_flag_frees_process_and_blocks_start(self):
-        (self.root / "run" / "brain" / "bot03.asleep").write_text(f"{int(time.time()) + 3600}\n")
+        # timefix: час пробуждения сверяет bash (date +%s) — берём «сейчас» из тех же часов, что и скрипт
+        now = int(subprocess.run(["date", "+%s"], capture_output=True, text=True, check=True).stdout)
+        (self.root / "run" / "brain" / "bot03.asleep").write_text(f"{now + 3600}\n")
         r = self.lab("shift_balance", running="bot01 bot02 bot03",
                      states="bot01:awake bot02:awake bot03:limit")
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -73,7 +74,7 @@ class LabShiftTest(unittest.TestCase):
         self.assertEqual(self.inbox("bot03"), [], "уснул — просить не нужно")
         r = self.lab("may_start_bot", "bot03", "bot01 bot02 bot03", running="bot01", states="")
         self.assertNotEqual(r.returncode, 0, "спящего по флагу не будим")
-        (self.root / "run" / "brain" / "bot03.asleep").write_text(f"{int(time.time()) - 60}\n")
+        (self.root / "run" / "brain" / "bot03.asleep").write_text(f"{now - 60}\n")
         r = self.lab("may_start_bot", "bot03", "bot01 bot02 bot03", running="bot01", states="")
         self.assertEqual(r.returncode, 0, "час пробуждения прошёл — можно поднять")
 
