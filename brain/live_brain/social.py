@@ -384,7 +384,11 @@ class Social:
         self.st["used"][key] = used[-max(1, len(self.phrases.get(key) or []) - 1):]
         if self.grammar is not None:                       # grammar: ORG-065 шаблоны, род, карты, словечки
             recent = self.st.setdefault("said_recent", [])
-            text = self.grammar.say(key, choice, facts, recent)
+            try:
+                text = self.grammar.say(key, choice, facts, recent)
+            except Exception as e:                     # noqa: BLE001 — сбой грамматики: прежняя фраза персоны
+                log.warning("грамматика: %s — фраза персоны без слоя", e)
+                text = None
             if text is not None:
                 keep = int(self.grammar.cfg["recent"])
                 self.st["said_recent"] = (recent + [text])[-keep:] if keep > 0 else []

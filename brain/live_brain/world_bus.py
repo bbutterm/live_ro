@@ -316,6 +316,7 @@ TEXTS = {
     "tradition": lambda d: d.get("text") or f"вечерний круг: {d.get('label')}",   # tradition: ORG-058
     "healer_post_start": lambda d: "лечит у собора",                                 # healer: ORG-069
     "healer_shift": lambda d: f"лечил(а) у собора: Heal {d.get('heals')}, людей {d.get('patients')}",   # healer:
+    "place_name": lambda d: place_line(d),                                     # places: ORG-084 имя места
     "order": lambda d: f"ищет {d.get('name')} x{d.get('n')}, платит {d.get('reward')}z",            # orders: ORG-070
     "order_taken": lambda d: f"заказ взял(а) {d.get('by')}",                                       # orders:
     "order_closed": lambda d: f"заказ закрыт ({d.get('why')})",                                    # orders:
@@ -341,6 +342,16 @@ TEXTS = {
     "aim_result": lambda d: (f"итог недели: {d.get('text')} — "
                              + ("выполнено" if d.get("done") else f"{d.get('progress')}/{d.get('target')}")),
 }
+
+
+def place_line(d):                                                           # places: ORG-084
+    """«назвал(а) Южное поле Пронтеры «Гиблый холм»: там я погиб» — карта словарным именем, а не кодом."""
+    from .places import base_forms, load_names
+    forms = base_forms(load_names(), d.get("map"))
+    where = forms[0]["acc"] if forms else d.get("map")
+    if d.get("adopt"):
+        return f"зовёт {where} «{d.get('name')}» вслед за другими"
+    return f"назвал(а) {where} «{d.get('name')}»" + (f": {d['why']}" if d.get("why") else "")
 
 
 def describe(kind, data):

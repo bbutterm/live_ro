@@ -37,7 +37,8 @@ class ChronicleTest(unittest.TestCase):
         text = chronicle(root, ["bot01", "bot02", "bot03"], day=day, tz_hours=0)
         self.assertIn("Arkady: достиг 42 уровня", text)
         self.assertIn("Heal: Vera → Arkady +120 HP", text)
-        self.assertIn("Vera: погиб на prt_fild08 (бил Lunatic); неизвестно: вес", text)
+        self.assertIn("Vera: погиб на Южном поле Пронтеры (бил Lunatic); неизвестно: вес", text)   # places: ORG-084
+        self.assertNotIn("prt_fild08", text)                                                       # places:
         self.assertIn("побед 2", text)
         self.assertIn("bot03: памяти нет", text)
         self.assertIn("Vera: продал Arkady 10 × Jellopy за 30z", text)

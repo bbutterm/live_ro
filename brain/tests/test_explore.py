@@ -370,7 +370,7 @@ class StoriesTest(Base):
         f = self.mind.social.facts("Vera", self.clock.t)
         self.assertEqual(f["trip_map"], "prt_fild06")
         self.assertIn("trip", self.mind.social.available(f))
-        self.assertIn("prt_fild06", self.mind.social.phrase("trip", f))
+        self.assertIn("Восточн", self.mind.social.phrase("trip", f))   # places: prt_fild06 — «Восточное поле» (ORG-084)
 
     def test_bus_chronicle_metrics(self):
         self.assertEqual(world_bus.describe("place_found", {"map": "prt_fild06"}), "открыл(а) prt_fild06")

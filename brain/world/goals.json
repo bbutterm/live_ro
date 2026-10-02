@@ -87,6 +87,20 @@
     "limit": 60
   },
 
+  "places": {
+    "_comment": "ORG-084 (Т-25): имена мест (brain/live_brain/places.py, словарь brain/world/place_names.json — scripts/gen_place_names.py). Свои имена по фактам: спасение при HP ≤ rescue_hp, смертей (своих и из шины) ≥ death_min, первооткрытие, встреч ≥ meet_min, побед над монстром ≥ mob_min; закрепляется при min_users жителях через шину; поддерживает чужое имя, если знает место или дружит с автором (affinity ≥ friend_affinity). topic_chance — шанс темы place. Выключить: enabled=false или BRAIN_DISABLE=places.",
+    "enabled": true,
+    "check_minutes": 10,
+    "death_min": 3,
+    "meet_min": 2,
+    "mob_min": 150,
+    "rescue_hp": 0.35,
+    "min_users": 2,
+    "friend_affinity": 3,
+    "lookback_days": 30,
+    "topic_chance": 0.5
+  },
+
   "guild": {
     "_comment": "ORG-052, brain/live_brain/guild.py, docs/GUILD.md. ВЫКЛЮЧЕНО, пока не проверено в игре. emperium_check — как на сервере (rAthena guild_emperium_check: yes); false — только если владелец включил server/conf/optional/guild_no_emperium.txt. founder — имя основателя (иначе самый общительный онлайн), name — имя гильдии (латиница/цифры/пробел, до 23).",
     "enabled": false,

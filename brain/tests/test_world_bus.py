@@ -140,9 +140,9 @@ class MindBusTest(unittest.TestCase):
         day = time.strftime("%Y-%m-%d", time.gmtime())
         text = chronicle(self.root, ["bot01", "bot02"], day=day, tz_hours=0)
         self.assertIn("## События мира", text)
-        self.assertIn("Arkady: осваивает новое место охоты pay_fild01", text)
+        self.assertIn("Arkady: осваивает новое место охоты Южный лес Пайона", text)   # places: ORG-084
         self.assertIn("объявление сервера: «Ивент: нашествие порингов!»", text)
-        self.assertIn("Arkady: погиб на prt_fild08 (бил Lunatic) !", text, "важность 4 — отметка")
+        self.assertIn("Arkady: погиб на Южном поле Пронтеры (бил Lunatic) !", text, "важность 4 — отметка")   # places:
 
     def test_bus_error_does_not_break_tick(self):
         a = self.minds["Arkady"]
