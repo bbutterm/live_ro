@@ -24,10 +24,12 @@ from . import world_bus
 from . import episode as episode_mod                    # serial: серия недели (ORG-091)
 from .chronicle import LINES, day_bounds
 from .economy import metrics_from_rows
+from .bestiary import world_bestiary                    # bestiary: общий бестиарий (ORG-077)
 
 WORLD = Path(__file__).resolve().parents[1] / "world"
 KV_KEYS = ("last_state", "status", "needs", "aims", "activity", "mood", "pets", "party", "crew", "society",
            "career", "resources", "routine", "collection")   # collect: альбом карт (ORG-074) для метрик
+KV_KEYS += ("bestiary",)    # bestiary: ORG-077 — виды для метрики
 MAX_EVENTS = 400            # лента дня: последние N строк (файл остаётся < 1 МБ)
 MAX_CARD_TEXT = 160
 STATUS_RU = {"SLEEPING": "спит", "OFFLINE": "не в сети", "DEAD": "погиб", "ESCAPING": "спасается",
@@ -188,7 +190,11 @@ def collect(lab_root, bots, day=None, tz_hours=0, now=None):
         ep = episode_mod.build(lab_root, bots, day, tz_hours, now=now)    # serial: только правила, без LLM
     except (sqlite3.Error, ValueError, OSError):                          # serial:
         ep = None                                                         # serial:
-    return {"day": day, "tz_hours": tz_hours, "episode": ep, "generated": datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d %H:%M"),
+    try:                                                                  # bestiary: ORG-077
+        best = world_bestiary(lab_root, bots, now=now)                    # bestiary:
+    except (sqlite3.Error, ValueError, OSError):                          # bestiary:
+        best = None                                                       # bestiary:
+    return {"day": day, "tz_hours": tz_hours, "episode": ep, "bestiary": best, "generated": datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d %H:%M"),
             "today": day == datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d"),
             "residents": residents, "missing": missing, "relations": relations(residents),
             "events": events[cut:], "events_cut": cut}
@@ -361,6 +367,31 @@ def _episode(ep):
             f'<div class="feed">{scenes}{nxt}</div>')
 
 
+def _bestiary(best, tz_hours):                                          # bestiary: ORG-077
+    """Общий бестиарий: виды (побед всего, по жителям, кто первым) и места, открытые первыми."""
+    if not best or not (best["monsters"] or best["places"]):
+        return '<div class="tbl"><div class="empty">Бестиарий пока пуст.</div></div>'
+    tz = timezone(timedelta(hours=tz_hours))
+
+    def when(ts):
+        return datetime.fromtimestamp(ts, tz).strftime("%Y-%m-%d") if ts else "—"
+    rows = "".join(
+        f"<tr><th>{esc(m['monster'], 40)}{' <span class=imp>★</span>' if m.get('boss') else ''}</th>"
+        f"<td class=n>{esc(m['kills'])}</td>"
+        f"<td>{esc(', '.join(f'{w} {n}' for w, n in sorted(m['by'].items())), 120)}</td>"
+        f"<td>{esc(m['first_by'])}{' <span class=k>(по памяти)</span>' if m.get('guess') else ''}</td>"
+        f"<td>{esc(when(m['first_ts']))}</td></tr>" for m in best["monsters"][:200])
+    places = "".join(f"<tr><th>{esc(p['map'])}</th><td>{esc(p['name'], 60)}</td><td>{esc(p['by'])}</td>"
+                     f"<td>{esc(when(p['ts']))}</td></tr>" for p in best["places"][-100:])
+    out = (f'<div class="sub">видов {len(best["monsters"])} · открытых мест {len(best["places"])}</div>'
+           '<div class="tbl"><table><thead><tr><th>монстр</th><th>побед</th><th>по жителям</th><th>первым</th>'
+           f'<th>когда</th></tr></thead><tbody>{rows}</tbody></table></div>')
+    if places:
+        out += ('<div class="tbl" style="margin-top:10px"><table><thead><tr><th>место</th><th>имя</th>'
+                f'<th>первым</th><th>когда</th></tr></thead><tbody>{places}</tbody></table></div>')
+    return out
+
+
 def render(data):
     res = data["residents"]
     cards = "".join(_card(r) for r in res) or '<div class="empty">Нет ни одной памяти жителя.</div>'
@@ -385,6 +416,8 @@ def render(data):
 {_feed(data['events'], data['events_cut'])}
 <h2>Серия недели</h2>
 {_episode(data.get('episode'))}
+<h2>Бестиарий</h2>
+{_bestiary(data.get('bestiary'), data['tz_hours'])}
 <h2>Органичность <span class="sub">({esc(since)})</span></h2>
 {_table(res, 'organic', 'метрика')}
 <h2>Экономика <span class="sub">(за день)</span></h2>
