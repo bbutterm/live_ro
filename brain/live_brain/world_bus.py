@@ -54,7 +54,7 @@ PUBLISH = {
     "explore_found": ("place_found", 3),      # explore: житель открыл новое место (ORG-054)
     "rival_overtook": ("rival_overtook", 2),  # rivalry: ORG-060 обогнал соперника
 }
-QUIET = {"rival_score"}                       # rivalry: снимки состояния — не в летопись и не в дашборд
+QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS world_events (

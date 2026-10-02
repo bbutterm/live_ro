@@ -142,6 +142,7 @@ class Activities:
         mode = self.mode()
         current = self.st.get("name")
         now = self.clock()
+        crowd = getattr(self.mind, "crowd", None)               # crowd: ORG-089 толпа и повторы за день
         out = {}
         for name, a in self.catalog.items():
             if mode not in a["modes"]:
@@ -151,6 +152,8 @@ class Activities:
             if not self.requires_ok(a.get("requires") or {}, state, needs):
                 continue
             score = sum(w * needs.get(k, 0) for k, w in a["satisfies"].items())
+            if crowd:                                                                   # crowd:
+                score -= crowd.activity_penalty(name, mode, current)                    # crowd:
             if name == current:
                 score += self.cfg["inertia"]
             out[name] = round(score + noise * self.rng.uniform(-1, 1) * 0.3, 3)

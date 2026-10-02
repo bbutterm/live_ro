@@ -42,6 +42,7 @@ from .society import Society                    # society: эмоции, чат-
 from . import world_bus                                 # events: шина событий мира (ORG-045)
 from .explore import TAG as EXPLORE_TAG, Explorer       # explore: экспедиции (ORG-054)
 from .rivalry import Rivalry                            # rivalry: соперничество (ORG-060)
+from .crowd import Crowd                                # crowd: стигмергия занятий и карт (ORG-089)
 
 log = logging.getLogger("mind")
 
@@ -167,6 +168,8 @@ class Mind:
         self.world = world_bus.Feed(self, world_bus_db) if world_bus_db else None     # events:
         self.rivalry = (Rivalry(self, world) if self.ctx.peers and feat("rivalry")    # rivalry: ORG-060
                         and ((world or {}).get("rivalry") or {}).get("enabled", True) else None)  # rivalry:
+        self.crowd = (Crowd(self, world) if feat("crowd")                             # crowd: ORG-089
+                      and ((world or {}).get("crowd") or {}).get("enabled", True) else None)  # crowd:
 
     # ---------- входящие сообщения плагина ----------
 
@@ -610,6 +613,8 @@ class Mind:
             self.world.tick()                                  # events: публикация в шину мира и новости жителей
         if self.rivalry:                                       # rivalry: ORG-060
             await self.rivalry.tick()                          # rivalry:
+        if self.crowd:                                         # crowd: ORG-089 «где я и чем занят» в шину
+            self.crowd.tick()                                  # crowd:
         await self.read_inbox()
         now = time.time()
         self.peer_smalltalk(now)
