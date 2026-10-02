@@ -74,7 +74,7 @@ def encode(data):
 
 
 class WorldBus:
-    def __init__(self, path, bot, clock=time.time):
+    def __init__(self, path, bot, clock=None):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.path = str(path)
         self.db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
@@ -82,7 +82,7 @@ class WorldBus:
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA)
         self.bot = bot
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # review: время при вызове — реплей подменяет time.time
         self.pruned = 0.0
 
     def close(self):
@@ -160,10 +160,10 @@ def read_period(path, start, end):
 class Feed:
     """Связь жителя с шиной: публикация важных событий памяти и чтение новостей других жителей."""
 
-    def __init__(self, mind, bus, clock=time.time):
+    def __init__(self, mind, bus, clock=None):
         self.mind = mind
         self.bus = bus
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # review: время при вызове — реплей подменяет time.time
         self.next_pump = 0.0
         self.next_poll = 0.0
 

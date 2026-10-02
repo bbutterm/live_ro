@@ -63,6 +63,9 @@ class Career:
         ok, blocker = self.mind.may_move("plan")
         if not ok:
             return
+        econ = getattr(self.mind, "economy", None)
+        if econ and (econ.body_busy() or econ.mail_busy()):   # review: этап уводит тело к NPC — сделку не рвать
+            return
         try:
             action = progression.stage_action(state, self.data, done=tuple(self.st.get("done", [])))
         except (KeyError, TypeError, ValueError) as e:

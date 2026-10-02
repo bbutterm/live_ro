@@ -43,9 +43,9 @@ TEMPLATES = {
 
 
 class Aims:
-    def __init__(self, mind, clock=time.time, rng=None):
+    def __init__(self, mind, clock=None, rng=None):
         self.mind = mind
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # review: время при вызове — реплей подменяет time.time
         self.rng = rng or random.Random()
         self.next_tick = 0.0
 

@@ -255,7 +255,7 @@ class Routine:
                 self.note("routine_wake", "Проснулся — начинаю новый день.", 2)
                 self.last_sent = 0
                 return False
-            if now - self.st.get("sleep_sent", 0) >= SLEEP_RETRY:   # тело всё ещё в игре — не уснуло
+            if now - self.st.get("sleep_sent", 0) >= SLEEP_RETRY and not self.sleep_blocker():   # тело всё ещё в игре (review: не посреди сделки)
                 tries = self.st.get("sleep_tries", 0) + 1
                 self.st.update(sleep_tries=tries, sleep_sent=now)
                 if tries > 3:
@@ -272,12 +272,26 @@ class Routine:
             return False
         if not self.st.get("arrived") and now - win[0] < 1200:
             return False                                     # сначала дойти до города (не дольше 20 мин)
+        if self.sleep_blocker():                             # review: relog оборвал бы сделку/письмо — уснуть после
+            return False
         self.st.update(mode="sleep", mode_since=now, wake_at=win[1], sleep_sent=now, sleep_tries=0)
         hours = (win[1] - now) / 3600
         self.note("routine_sleep", f"Ложусь спать на {hours:.1f} ч.", 2)
         self.set_goal("сплю")
         await self.send({"action": "sleep", "seconds": int(win[1] - now)}, f"распорядок: сон {hours:.1f} ч")
         return True
+
+    def sleep_blocker(self):                                 # review: сон = relog, обрывает всё начатое телом
+        """Кто мешает уснуть сейчас: владелец тела выше распорядка (арбитр) или письмо RODEX в работе."""
+        may_move = getattr(self.mind, "may_move", None)
+        if may_move:
+            ok, blocker = may_move("routine")
+            if not ok:
+                return blocker
+        econ = getattr(self.mind, "economy", None)
+        if econ and econ.mail_busy():
+            return "economy"
+        return None
 
     # ---------- поездка по делам ----------
 
@@ -496,11 +510,14 @@ class Routine:
             self.note("routine_arrived", f"Я в городе {self.town['map']}, отдыхаю.", 1)
             if self.cfg.get("sit_in_town", True) and not vending:
                 await self.send({"action": "sit"}, "распорядок: сесть отдохнуть в городе")
+        econ = getattr(self.mind, "economy", None)
+        trading = bool(econ and econ.body_busy())             # review: лавка и поход к NPC рвут сделку жителей
         if (self.st["arrived"] and self.cfg.get("vend_in_town") and vend.get("can") and not vend.get("open")
-                and now - self.last_vend >= RESEND):
+                and now - self.last_vend >= RESEND and not trading):
             self.last_vend = now
             await self.send({"action": "shop_open"}, "распорядок: открыть лавку в городе")
-        await self.service_check(now, state)
+        if not trading:                                      # review:
+            await self.service_check(now, state)
         if not self.hp_ok(state):
             await self.check_recover_blocked(now, state)
         if own_schedule and self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
