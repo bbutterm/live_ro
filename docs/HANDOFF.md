@@ -1164,3 +1164,63 @@ grep -hE 'Selling|Auto-storaging|Buying' $LAB_ROOT/logs/bot0*/console.log | tail
 `docs/qa/HERMES-<sha7>.md`: вывод шагов 0–4 и таблица «AUT-ID — подтверждено / не наблюдалось / провал» для пунктов
 со статусом «код» в AUTONOMY_STATUS, которые затронуты наблюдениями.
 
+## Задание №14: органичный мир — сон, мотивы, город, речь без LLM, атлас, карьера; исправления ревизии
+
+**Ветка:** `claude/brain-routine`. **Commit:** из сообщения разработчика. Заменяет №13 (все его шаги актуальны, ниже — что
+добавить). Статусы: [`AUTONOMY_STATUS.md`](AUTONOMY_STATUS.md) и раздел «Статус» в [`ORGANIC_BACKLOG.md`](ORGANIC_BACKLOG.md).
+Правила те же: login/char/map не перезапускать, БД не трогать, без SQL/GM/ручного respawn, без провокаций.
+**Важно:** в env должно быть `LAB_BOTS="bot01 bot02"` — мозг теперь считает жителями только запущенных.
+
+### Что нового и что проверить в первую очередь
+1. **Исправление сидения (ORG-001, главный тупик QA №9).** Команда `sit` OpenKore блокировала продажу, склад и движение
+   (`sitAuto_forcedBySitCommand`). Теперь бот садится сам (`sitAuto_idle`), а перед движением встаёт.
+   Проверка: в городе при весе ≥ 48% — `Selling`/`Auto-storaging` в console.log; встреча из сидения — бот идёт к точке.
+2. **Прокачка навыков (все профили).** raiseSkill отключался на навыке с невыполненным требованием; у Vera Blessing стоял до
+   Divine Protection 5. Проверка: `grep -h 'raiseSkill\|Auto-adding skill' console.log | tail`; нет строки
+   «prerequisite not reached; disabling skillsAddAuto»; при свободных очках навыки растут.
+3. **Сон (ORG-012).** Arkady засыпает около 02:30, Vera около 23:30 (время мира UTC+3), 6.5–8.5 ч: распорядок уводит в город,
+   затем `relog <сек>`. Проверка (если окно сна попадает в проверку): `routine_sleep`/`routine_wake` в decisions,
+   `Relogging in N seconds` в console.log, `scripts/lab report` — состояние SLEEPING; персонаж офлайн на сервере.
+   Если окно не попадает — «не наблюдалось» (не ждать).
+4. **Город (social.py).** Прогулки между фонтаном, Kafra, торговцами и собором; разговор Arkady и Vera при встрече
+   (шёпот с меткой `[chat:...]`, эмоции `e ...`); реакции на уровень/лечение. Проверка за 30 мин отдыха:
+   `grep -h '"source": "social"\|"type": "social"' decisions.jsonl | tail`; в console.log шёпоты обоих и `e wav`/`e lv`.
+5. **Мотивы и характер.** `scripts/lab report` — строка «мотивы сейчас»; выбор карты охоты — `routine_map_choice` с причиной.
+6. **Поездка по делам (ORG-018).** Вес ≥ 40% или < 10 зелий в городе — `routine_service`, затем `autosell`/`autostorage`.
+7. **Атлас и рост.** Arkady (lv ~41) на полях 1–6 ур.: ожидается `routine_grow_advice` и оповещение `growth` с советом
+   (gef_fild02, prt_fild10, gef_fild09). Само освоение карт — только при `auto_hunt_maps: true` в goals.json и после
+   `scripts/lab doctor` (карты включены на сервере) — по решению владельца.
+8. **Карьера.** `report`/промпт: цель «путь Swordsman -> Knight ...». Сам квест профессии выключен (`auto_job_change: false`).
+9. **Хроника мира:** `scripts/lab chronicle` — один день всех жителей.
+
+### Шаг 0 — код и проверки (5 мин)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+grep -n '^LAB_BOTS' $LAB_ROOT/secrets/live_ro.env          # должно быть "bot01 bot02"
+python3 scripts/check.py
+(cd brain && python3 -m unittest discover -s tests)          # OK, 179 (PyYAML нужен для 2 тестов сверки, иначе skipped)
+for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # 1..40 1..29 1..35 1..28 1..39
+python3 scripts/check_skill_lists.py                          # порядок навыков OK
+scripts/lab doctor | sed -n '/карты мира/,/OpenKore/p'
+scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
+```
+
+### Шаги 1–4 — как в №13 (группа и Heal, выживание, состояния и команды, миссия пары), плюс пункты 1–9 выше
+Для каждого пункта 1–9: «подтверждено / не наблюдалось / провал» с выдержкой из console.log/decisions.jsonl.
+
+### Риски
+- Сон: `relog` разрывает соединение без пакета выхода — если сервер держит сессию, при входе возможен «still recognizes»;
+  OpenKore повторит вход сам. После трёх неудач уснуть — оповещение `sleep`.
+- Город: эмоции и шёпоты видны другим игрокам рядом. Отключить: `BRAIN_DISABLE=social`.
+- Изменённые списки навыков: при следующем уровне профессии бот может выучить Divine Protection/Provoke (раньше — нет).
+- Выключить новинки без отката: `BRAIN_DISABLE=social,party,economy,career,routine` (любые), `scripts/lab stop brain && scripts/lab start brain`.
+
+### Откат
+`scripts/lab down`, `git checkout --detach bd2ef50720c9dcbdce65a3fea97df85d3ed1c857` (задание №13) или
+`d2032a7f046dacf42129fb0e56ddd2f6fec88e7a`, `scripts/lab up`. Память: копии `memory.sqlite.bak-v1`.
+
+### Что прислать
+`docs/qa/HERMES-<sha7>.md`: вывод шага 0, итоги пунктов 1–9 и шагов №13, `scripts/lab chronicle` за день проверки,
+список ручных вмешательств (цель — 0).
+

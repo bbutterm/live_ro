@@ -113,6 +113,16 @@ class ReliabilityTest(unittest.TestCase):
         a.close()
         v.close()
 
+    def test_residents_are_running_bots(self):
+        """ORG-004: жители — только запущенные (LAB_BOTS), иначе лидер зовёт офлайн-жителя."""
+        from live_brain.__main__ import env_bots, peer_names
+        persona = BRAIN_DIR / "personas" / "bot01.json"
+        self.assertEqual(peer_names(persona, ["bot01"]), {"Arkady"})
+        self.assertEqual(peer_names(persona, ["bot01", "bot02"]), {"Arkady", "Vera"})
+        env = self.root / "live_ro.env"
+        env.write_text('LAB_BOTS="bot01 bot02"\n')
+        self.assertEqual(env_bots(env).split(), ["bot01", "bot02"])
+
     def test_rotate(self):
         p = self.root / "decisions.jsonl"
         p.write_text("x" * 100)
