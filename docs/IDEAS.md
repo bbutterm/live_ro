@@ -92,7 +92,7 @@
   («Месяц урожая») меняет тон фраз.
 - **Механика:** `brain/world/calendar.json`: дни недели → множители мотивов (`social +0.2`, `progress −0.1`…),
   сезоны (по месяцу реального календаря в часовом поясе мира), праздники (дата → id, название, теги), годовщины
-  (из `roster.born` и kv `world_born`). Модуль `calendar.py` — чистые функции `today(now, tz) -> {weekday, season,
+  (из `roster.born` и kv `world_born`). Модуль `world_calendar.py` — чистые функции `today(now, tz) -> {weekday, season,
   holidays[], anniversaries[]}`. Используют needs (множители), social (темы `holiday`, `season`) и летопись (заголовок дня).
 - **LLM:** не нужен.
 - **OpenKore/rAthena:** нет. Позже, по решению владельца, можно включать штатные праздничные скрипты rAthena
@@ -635,7 +635,7 @@ def weather(ts: float, tz_hours: int, seed: str = "live_ro") -> dict
 def stroll_factor(kind) -> float  # rain 0.8, clear 1.1, иначе 1.0
 ```
 - Тема `weather` при отсутствии других тем: ключ фраз `weather_<kind>`, иначе общий `weather` (обратная совместимость).
-- Без календаря Т-5 сезон берётся по месяцу. После Т-5 — `calendar.season` (TODO-метка в коде).
+- Без календаря Т-5 сезон берётся по месяцу. После Т-5 — `world_calendar.today(...)["season"]` (TODO-метка в коде).
 - Хеш — `hashlib.sha256` от `seed|YYYY-MM-DD|блок_3ч`, без `random` с глобальным состоянием.
 
 **Тесты.** Два вызова с одинаковым временем у «разных жителей» дают одну погоду; за 24 ч не больше 8 смен; распределение
@@ -685,7 +685,7 @@ class Episodes:
 
 **Цель.** Неделя и год мира: дни недели меняют мотивы, праздники и годовщины становятся темами и строкой летописи.
 
-**Файлы.** `brain/world/calendar.json` (новый), `brain/live_brain/calendar.py` (новый), `brain/live_brain/needs.py`
+**Файлы.** `brain/world/calendar.json` (новый), `brain/live_brain/world_calendar.py` (новый; не `calendar.py`, чтобы не затенять модуль stdlib), `brain/live_brain/needs.py`
 (множитель дня недели в `weighted()`, одна строка рядом с `aims.boost`), тема `holiday` через Т-1,
 `brain/live_brain/chronicle.py` (заголовок дня: «суббота, рыночный день; Праздник урожая»),
 `brain/tests/test_calendar.py`, `docs/WORLD_EVENTS.md`.
