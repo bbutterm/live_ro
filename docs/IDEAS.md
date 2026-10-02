@@ -810,6 +810,80 @@ def main(argv=None) -> int      # --lab-root --bots --day --out (по умолч
 
 **Готово.** Тесты зелёные; `scripts/lab dashboard` пишет файл и печатает путь; статус ORG-090 «код».
 
+### Т-9 · ORG-060 · Соперничество
+
+**Цель.** Дружеское соперничество двух жителей по фактам игры: кто впереди, подначка шёпотом или в чат группы,
+строка летописи «Arkady обогнал Vera по уровню». Без ссор: отношения не меняются.
+
+**Файлы.** `brain/live_brain/rivalry.py` (новый), `brain/live_brain/world_bus.py` (последний снимок жителя
+`replace/latest`, вид `rival_overtook` в `PUBLISH`/`TEXTS`, тихие виды не в летописи), `brain/live_brain/needs.py`
+(множитель progress, две строки рядом с `aims.boost`), `brain/live_brain/crew.py` (тема `rival` в `PHRASES`, одна
+строка), `brain/live_brain/chronicle.py` (`CHRONICLE_LINES` модуля), `brain/live_brain/mind.py` (создание и tick),
+`brain/tests/test_rivalry.py`, `docs/SOCIETY.md`.
+
+**Интерфейсы.**
+```python
+METRICS = ("level", "kills_week", "places", "aims")   # + kills_day — только для подначек дня
+class Rivalry:
+    def __init__(self, mind, cfg=None, clock=None, rng=None)
+    def trait(self) -> float          # persona.traits.rivalry, иначе (bravery + diligence) / 2
+    def score(self, now) -> dict      # {lv, job, kills_day, kills_week, places, aims, day, week} из памяти и state
+    def others(self, now) -> dict     # {житель: снимок} — последние rival_score других из шины (моложе 2 суток)
+    def pick(self, now) -> str | None # раз в неделю: |Δуровня| ≤ max_level_gap, affinity ≥ 0, не в ссоре; ближе по уровню, та же ветка
+    async def tick(self)              # публикация снимка (не чаще publish_minutes), сравнение, обгон, подначка
+    def boost(self, need) -> float    # progress: 1 + 0.2·trait, если отстаю по уровню или победам недели; иначе 1
+```
+- Снимок — в шину видом `rival_score` (важность 1, «затирание»: у жителя одна запись этого вида), в летопись и
+  новости не попадает.
+- Обгон: знак (моё − соперника) по метрике сменился с ≤ 0 на > 0 (первое сравнение только запоминается) →
+  событие памяти `rival_overtook` (в шину важность 2, летопись «обогнал(а) Vera по уровню (12 против 11)»).
+- Подначка: обгон → фраза `rival_overtake`; раз в день по победам дня (разница ≥ 10 % и ≥ 5) — `rival_lead` /
+  `rival_behind`. В группе с соперником — `crew.say("rival")` (чат группы), иначе шёпот с меткой
+  `[chat:rival:4]` (шаг 4 — без ответа и без петли). С LLM — повод `mind.trigger(kind="chat")`.
+- Не чаще `max_per_day` (3) сообщений в сутки; в ссоре — молчит; `update_relation` не вызывается вовсе.
+- Выключатель: `BRAIN_DISABLE=rivalry`, `"rivalry": {"enabled": false}`; черта < 0.2 — без соперника.
+
+**Тесты.** Соперник выбирается по уровню и не выбирается в ссоре и при Δ > 3; первый снимок без обгона; обгон по
+уровню → событие, строка летописи, шёпот с `[chat:rival:4]`; повторный обгон не дублируется; лимит в сутки;
+отстающему progress выше, впереди — ровно 1; affinity не меняется; снимок в шине один на жителя и не виден в
+`read_period`; в группе фраза уходит в чат группы.
+
+**Готово.** Тесты зелёные; раздел в SOCIETY.md; статус ORG-060 «код, в игре не проверено».
+
+### Т-10 · ORG-089 · Против одинаковости: стигмергия занятий и карт
+
+**Цель.** Жители не скучиваются на одной карте и не делают одно и то же: каждый видит, где и чем заняты другие,
+и слегка штрафует переполненные карты и занятия (кроме своей группы); повторы занятия за день тоже штрафуются.
+
+**Файлы.** `brain/live_brain/crowd.py` (новый), `brain/live_brain/maps.py` (штраф в `choose`), `brain/live_brain/
+activity.py` (штраф в `scores`), `brain/live_brain/world_bus.py` (вид `presence` — тихий), `brain/live_brain/
+__main__.py` (`organic_metrics`: «разнообразие занятий»), `brain/live_brain/mind.py`, `brain/tests/test_crowd.py`,
+`docs/SOCIETY.md`.
+
+**Интерфейсы.**
+```python
+class Crowd:
+    def __init__(self, mind, cfg=None, clock=None)
+    def tick(self)                            # раз в publish_minutes (5): presence {map, activity, mode} в шину (затирание)
+    def others(self, now) -> dict             # {житель: presence} моложе stale_minutes, без меня и своей группы
+    def map_share(self, hmap) -> float        # доля других жителей на карте (+ видимые игроки на моей карте), 0..1
+    def activity_share(self, name) -> float   # доля других жителей в занятии
+    def map_penalty(self, hmap) -> float      # share × weight × (0.5 + 0.5·bravery): осторожным толпа не мешает
+    def activity_penalty(self, name, mode, current) -> float
+        # share × weight × (1 − 0.5·sociability в городе) + repeat × min(повторов сегодня, repeat_cap); не для текущего
+```
+- `maps.choose`: оценка `s − |s|·penalty` (оценка бывает отрицательной), неисследованные — по возрастанию толпы;
+  причина выбора дополняется «(на X людно)».
+- `activity.scores`: `score −= crowd.activity_penalty(...)` одной строкой `# crowd:`.
+- Метрика ORG-046: «разнообразие занятий» = различных / всех начатых занятий за сутки (0..1).
+- Выключатель: `BRAIN_DISABLE=crowd`, `"crowd": {"enabled": false}`; нет шины — только видимые игроки и повторы.
+
+**Тесты.** presence в шине одна на жителя и не попадает в летопись; член своей группы не создаёт толпы; три жителя на
+карте A → выбор B при равном опыте; осторожный штрафует меньше смелого; занятие, которым заняты другие, теряет
+очки; повтор занятия сегодня — штраф, текущее — без штрафа; метрика разнообразия считается; без шины модуль не падает.
+
+**Готово.** Тесты зелёные; раздел в SOCIETY.md; статус ORG-089 «код, в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности
