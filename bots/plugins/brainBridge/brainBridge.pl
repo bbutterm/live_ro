@@ -9,7 +9,8 @@
 # Наружу: hello, state (каждые brainBridge_stateInterval с, по умолчанию 15),
 # события in_game, died, level_up, attack, kill, loot, chat_public, chat_private, ack.
 # В state: HP/SP, уровень, карта, координаты, lockMap, режим AI, текущее занятие (activity)
-# и до 10 игроков в зоне видимости (players).
+# и до 10 игроков в зоне видимости (players), класс/пол/уровень самого бота и игроков.
+# delivery: подтверждение сервером шёпота (результат отправки) и общего чата (эхо) или таймаут.
 # Внутрь (только эти действия, всё остальное отклоняется):
 #   say {text}            -> c <text>
 #   whisper {to, text}    -> pm "<to>" <text>
@@ -25,7 +26,7 @@ use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use JSON::PP;
 use Time::HiRes qw(time);
 use Plugins;
-use Globals qw($char $field $net $monstersList $playersList %config);
+use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm);
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -35,6 +36,9 @@ Plugins::register('brainBridge', 'мост OpenKore <-> live_brain (Unix-сок�
 
 my $json = JSON::PP->new->utf8->canonical;
 my ($sock, $inbuf, $lastTry, $lastState) = (undef, '', 0, 0);
+# Ожидают ответа сервера: шёпот (результат 0x9a/private_message_sent) и общий чат (эхо self_chat).
+my (@pendingPM, @pendingSay);
+my $DELIVERY_TIMEOUT = 15;
 
 my $hooks = Plugins::addHooks(
 	['mainLoop_post',      \&onTick],
@@ -46,6 +50,8 @@ my $hooks = Plugins::addHooks(
 	['item_gathered',      sub { event('loot', item => "$_[1]{item}", amount => $_[1]{amount} + 0) }],
 	['packet_pubMsg',      \&onPubMsg],
 	['packet_privMsg',     \&onPrivMsg],
+	['packet_pre/private_message_sent', \&onPMResult],
+	['packet_selfChat',    \&onSelfChat],
 );
 
 sub onUnload {
@@ -121,16 +127,69 @@ sub sendState {
 		x         => $pos->{x}, y => $pos->{y},
 		lock_map  => $config{lockMap},
 		ai        => (AI::state() == AI::AUTO() ? 'auto' : 'manual'),
+		%{identity($char)},
 		activity  => (AI::action() || 'idle'),
 		players   => nearbyPlayers(),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 	});
 }
 
+sub identity {
+	my ($actor) = @_;
+	return {
+		job => (defined $actor->{jobID} ? ($jobs_lut{$actor->{jobID}} || "job$actor->{jobID}") : undef),
+		sex => (defined $actor->{sex} ? $sex_lut{$actor->{sex}} : undef),
+		lv  => ($actor->{lv} ? $actor->{lv} + 0 : undef),
+	};
+}
+
 sub nearbyPlayers {
 	return [] unless $playersList;
-	my @names = grep { defined && length } map { $_->{name} } @{$playersList->getItems() || []};
-	return [@names[0 .. ($#names < 9 ? $#names : 9)]];
+	my @players = grep { defined $_->{name} && length $_->{name} } @{$playersList->getItems() || []};
+	@players = @players[0 .. 9] if @players > 10;
+	return [map { {name => $_->{name}, %{identity($_)}} } @players];
+}
+
+# ---------- подтверждение доставки сервером ----------
+
+sub delivery {
+	my ($p, $ok, $code, $reason) = @_;
+	sendMsg({type => 'delivery', id => $p->{id}, action => $p->{action}, to => $p->{to},
+	         ok => ($ok ? JSON::PP::true : JSON::PP::false), code => $code, reason => $reason});
+	my $what = $p->{to} ? "шёпот $p->{to}" : 'общий чат';
+	if ($ok) { message "[brainBridge] сервер подтвердил: $what\n", 'system'; }
+	else     { warning "[brainBridge] не доставлено ($what): $reason\n"; }
+}
+
+my %PM_RESULT = (0 => 'доставлено', 1 => 'адресат не в сети', 2 => 'адресат игнорирует', 3 => 'адресат не принимает сообщения');
+
+sub onPMResult {
+	my (undef, $args) = @_;
+	my $to = $lastpm[0] ? $lastpm[0]{user} : undef;
+	return unless defined $to;
+	my ($i) = grep { lc $pendingPM[$_]{to} eq lc $to } 0 .. $#pendingPM;
+	return unless defined $i;
+	my $p = splice(@pendingPM, $i, 1);
+	my $code = $args->{type} + 0;
+	delivery($p, $code == 0, $code, $PM_RESULT{$code} || "код $code");
+}
+
+sub onSelfChat {
+	my (undef, $args) = @_;
+	my $msg = defined $args->{msg} ? $args->{msg} : '';
+	$msg =~ s/^\s+|\s+$//g;
+	my ($i) = grep { $pendingSay[$_]{text} eq $msg } 0 .. $#pendingSay;
+	return unless defined $i;
+	delivery(splice(@pendingSay, $i, 1), 1, 0, 'эхо сервера');
+}
+
+sub expirePending {
+	my $now = time;
+	for my $list (\@pendingPM, \@pendingSay) {
+		while (@$list && $now - $list->[0]{ts} > $DELIVERY_TIMEOUT) {
+			delivery(shift @$list, 0, 'timeout', "сервер не подтвердил за $DELIVERY_TIMEOUT с");
+		}
+	}
 }
 
 sub onAttack {
@@ -203,6 +262,12 @@ sub handleLine {
 	if ($ok) {
 		message "[brainBridge] решение мозга -> $res\n", 'system';
 		Commands::run($res);
+		my $kind = $msg->{action} || '';
+		if ($kind eq 'whisper') {
+			push @pendingPM, {id => $msg->{id}, action => $kind, to => cleanText($msg->{to}), ts => time};
+		} elsif ($kind eq 'say') {
+			push @pendingSay, {id => $msg->{id}, action => $kind, text => cleanText($msg->{text}), ts => time};
+		}
 	} else {
 		warning "[brainBridge] действие отклонено: $res\n";
 	}
@@ -232,6 +297,7 @@ sub onTick {
 	tryConnect();
 	return unless $sock;
 	readIncoming();
+	expirePending();
 	my $interval = $config{brainBridge_stateInterval} || 15;
 	if ($sock && time - $lastState >= $interval) {
 		$lastState = time;

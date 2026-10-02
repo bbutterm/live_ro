@@ -98,7 +98,7 @@ class RuleGate:
         if text in STATUS_COMMANDS:
             return GateResult(
                 actions=[{"action": "whisper", "to": sender, "text": status_line(state)}],
-                note=f"правило: {sender} запросил статус")
+                note=f"правило: запрос статуса от {sender}")
         if not ctx.peer_reply_allowed(sender):
             return GateResult(note=f"лимит разговоров с {sender} ({ctx.peer_replies_per_hour}/ч)")
         who = "житель" if sender in ctx.peers else "игрок"

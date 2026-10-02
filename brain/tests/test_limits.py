@@ -75,3 +75,28 @@ class LiveLimitsTest(BrainHarness):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IdentityDeliveryTest(BrainHarness):
+    def test_identity_in_prompt_and_delivery_logged(self):
+        proc = self.start_brain(self.env_file())
+        plugin = self.connect()
+        plugin.send(dict(STATE, type="state", job="Swordman", sex="Male",
+                         players=[{"name": "Vera", "job": "Acolyte", "sex": "Female", "lv": 30}]))
+        plugin.send({"type": "event", "kind": "chat_private", "from": "Vera", "text": "Как ты, Arkady?"})
+        action = plugin.recv()
+        plugin.send({"type": "ack", "id": action["id"], "ok": True, "command": "c ..."})
+        plugin.send({"type": "delivery", "id": action["id"], "action": action["action"], "ok": True,
+                     "code": 0, "reason": "эхо сервера"})
+        plugin.send({"type": "delivery", "id": 99, "action": "whisper", "to": "Ghost", "ok": False,
+                     "code": 1, "reason": "адресат не в сети"})
+        time.sleep(1)
+        plugin.close()
+        self.stop(proc)
+        prompt = FakeOpenRouter.requests[0]["body"]["messages"]
+        user = json.loads(prompt[1]["content"])
+        self.assertEqual(user["собеседник_по_данным_игры"], "Acolyte, пол женский, уровень 30")
+        self.assertIn("Swordman, пол мужской", user["я"])
+        self.assertIn("не угадывай", prompt[0]["content"])
+        deliveries = [r for r in self.decisions() if r["type"] == "delivery"]
+        self.assertEqual([(d["ok"], d["code"]) for d in deliveries], [(True, 0), (False, 1)])
