@@ -12,11 +12,12 @@
     service — routine.service_now(); hunt_early — распорядок: отдых закончен (выход — по HP-правилу);
     end_hunt — routine.to_town(); change_map — другая карта по опыту (maps.choose без текущей);
     keep_hunting — ничего; check_rumor — карта слуха на сессию (rumors.to_check, ORG-032; итог — rumors.check);
-    explore — экспедиция на новую карту (explore.py, ORG-054).
+    explore — экспедиция на новую карту (explore.py, ORG-054);
+    gathering — вечерний круг у фонтана (tradition.py, ORG-058): social.visit к точке, вес × (0.5 + сила традиции).
 Факт завершения (proof) за proof_minutes — иначе занятие «не удалось» (activity_failed), а не «сделано»:
     moved — позиция сменилась; peer_near — житель рядом; supply_better — вес меньше или зелий больше;
     on_hunt_map — на карте охоты; in_town — на карте города; map_changed — карта охоты другая;
-    explore_arrived — дошёл до цели экспедиции.
+    explore_arrived — дошёл до цели экспедиции; gathered — у точки круга и рядом житель (ORG-058).
 Цепочки предусловий (ORG-018, GOAP-лайт; activities.json chains): если занятие с лучшей оценкой недоступно из-за
     requires (light — рюкзак не тяжёлый, potions_min, zeny_min, hp_ok, peer_visible…), а занятия текущего режима
     с provides этого условия есть — короткая цепочка (вместе с целью не больше chains.max_steps): исправители по
@@ -103,6 +104,9 @@ class Activities:
             elif key == "explore_target":                   # explore: ORG-054 есть цель экспедиции и её можно начать
                 explorer = getattr(self.mind, "explorer", None)     # explore:
                 ok = bool(explorer and explorer.available(state))   # explore:
+            elif key == "gathering_time":                   # tradition: ORG-058 вечернее окно круга у фонтана
+                tradition = getattr(self.mind, "tradition", None)          # tradition:
+                ok = bool(tradition and tradition.window_open(self.clock()))  # tradition:
             elif key == "rumor_to_check":                   # events: ORG-032 есть слух, который стоит проверить
                 rumors = getattr(self.mind, "rumors", None)     # events:
                 ok = bool(rumors and rumors.to_check(state))    # events:
@@ -151,6 +155,8 @@ class Activities:
             if not self.requires_ok(a.get("requires") or {}, state, needs):
                 continue
             score = sum(w * needs.get(k, 0) for k, w in a["satisfies"].items())
+            if name == "gathering" and getattr(self.mind, "tradition", None):   # tradition: × (0.5 + сила)
+                score *= 0.5 + self.mind.tradition.strength(now)                # tradition:
             if name == current:
                 score += self.cfg["inertia"]
             out[name] = round(score + noise * self.rng.uniform(-1, 1) * 0.3, 3)
@@ -232,6 +238,12 @@ class Activities:
             explorer = getattr(self.mind, "explorer", None)         # explore:
             if explorer:                                            # explore:
                 await explorer.start()                              # explore:
+        elif name == "gathering" and social:                    # tradition: ORG-058 к точке круга, сядет тело само
+            tradition = getattr(self.mind, "tradition", None)       # tradition:
+            if tradition:                                           # tradition:
+                p = tradition.point                                 # tradition:
+                if await social.visit(p["map"], p["x"], p["y"], p.get("label", "к фонтану")):   # tradition:
+                    social.next_walk = self.clock() + tradition.cfg["minutes"] * 60          # tradition: стоять в круге
         elif name == "check_rumor":                             # events: ORG-032 проверить слух на сессию
             rumors = getattr(self.mind, "rumors", None)             # events:
             rec = rumors.to_check(state) if rumors else None        # events:
@@ -412,6 +424,9 @@ class Activities:
         elif proof == "explore_arrived":                     # explore: дошёл до цели экспедиции (по state.map)
             explorer = getattr(self.mind, "explorer", None)
             ok = bool(explorer and explorer.st.get("arrived_at", 0) >= self.st.get("since", 0)) or None
+        elif proof == "gathered":                            # tradition: я у точки и рядом хоть один житель
+            tradition = getattr(self.mind, "tradition", None)
+            ok = bool(tradition and tradition.gathered(state)) or None
         elif proof == "map_changed":
             ok = (state.get("map") in self.mind.persona["hunt_maps"] and state.get("map") != b.get("map")) or None
         if ok:

@@ -44,6 +44,7 @@ class ActivityTest(unittest.TestCase):
         self.mind = Mind(Settings.from_env({}), persona, self.mem, send, root / "d.jsonl", RuleGate(),
                          peers={"Arkady", "Vera"}, world=load_world(BRAIN_DIR / "world" / "goals.json"))
         self.mind.calendar = None                    # calendar: выбор в тесте не зависит от дня недели и праздника
+        self.mind.tradition = None                   # tradition: вечерний круг (20–21 ч) не вмешивается в тест
         self.clock = Clock()
         self.a = Activities(self.mind, clock=self.clock, rng=random.Random(3))
         self.mind.activities = self.a

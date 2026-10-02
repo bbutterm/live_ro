@@ -33,6 +33,14 @@
     "enabled": true
   },
 
+  "tradition": {
+    "_comment": "ORG-058 вечерний круг (brain/live_brain/tradition.py, docs/SOCIETY.md): point — точка social.points, hours — окно [с, до) по часовому поясу мира, minutes — сколько стоять в круге. Выключить — enabled: false или BRAIN_DISABLE=tradition.",
+    "enabled": true,
+    "point": "fountain",
+    "hours": [20, 21],
+    "minutes": 40
+  },
+
   "economy": {
     "_comment": "Взаимопомощь в городе (brain/live_brain/economy.py). share — чем делятся: просят, когда меньше need_below; просят ask; отдающему остаётся не меньше keep. Продажа лута, закупка и склад — в bots/<bot>/control/config.txt.",
     "share": {

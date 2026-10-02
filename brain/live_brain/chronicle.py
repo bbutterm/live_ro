@@ -38,6 +38,7 @@ LINES = {
     "pet_hatched": lambda d: f"завёл(а) питомца: {d.get('name')}",
     "pet_gone": lambda d: "питомца больше нет рядом",
     "explore_found": lambda d: f"открыл(а) {d.get('map')}",              # explore: ORG-054 экспедиция
+    "tradition_stage": lambda d: d.get("text"),                           # tradition: ORG-058 вечерний круг
     **CHRONICLE_LINES,                                    # ORG-037: сделки и письма жителей
     **SOCIETY_LINES,                                      # society: ORG-026/027
     **GUILD_LINES,                                        # guild: ORG-052

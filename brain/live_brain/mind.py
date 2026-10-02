@@ -42,6 +42,7 @@ from .society import Society                    # society: эмоции, чат-
 from . import world_bus                                 # events: шина событий мира (ORG-045)
 from .explore import TAG as EXPLORE_TAG, Explorer       # explore: экспедиции (ORG-054)
 from .world_calendar import WorldCalendar               # calendar: календарь мира (ORG-059)
+from .tradition import Tradition                        # tradition: вечерний круг у фонтана (ORG-058)
 
 log = logging.getLogger("mind")
 
@@ -167,6 +168,8 @@ class Mind:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
             world_bus_db = world_bus.WorldBus(bus_path, persona["name"])              # events:
         self.world = world_bus.Feed(self, world_bus_db) if world_bus_db else None     # events:
+        self.tradition = (Tradition(self, world.get("tradition"), world=world) if world and feat("tradition")   # tradition:
+                          and (world.get("tradition") or {}).get("enabled", True) else None)                 # tradition:
 
     # ---------- входящие сообщения плагина ----------
 
@@ -606,6 +609,8 @@ class Mind:
             self.aims.tick()                                   # events: недельные цели
         if self.guild:                                         # guild: ORG-052
             await self.guild.tick()                            # guild:
+        if self.tradition:                                     # tradition: ORG-058 окно круга, сила традиции
+            self.tradition.tick()                              # tradition:
         if self.world:                                         # events:
             self.world.tick()                                  # events: публикация в шину мира и новости жителей
         await self.read_inbox()
@@ -809,6 +814,7 @@ class Mind:
             "рынок": self.economy.market_summary() if self.economy else None,   # market: оценка рюкзака, сделка
             "мотивы": dict(self.needs.top(4)),
             "день_мира": self.calendar.summary() if self.calendar else None,             # calendar:
+            "традиция": self.tradition.summary() if self.tradition else None,            # tradition:
             "карьера": (self.mem.get("career") or {}).get("text"),
             "занятие": self.activities.summary() if self.activities else None,
             "экспедиция": self.explorer.summary() if self.explorer else None,         # explore:

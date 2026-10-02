@@ -15,7 +15,8 @@
       "no_leader": "режим задаёт лидер группы",
       "other_maps": "других мест охоты нет",
       "rumor_to_check": "слуха для проверки нет",
-      "supply_min": "запасы и так в порядке — по делам незачем"
+      "supply_min": "запасы и так в порядке — по делам незачем",
+      "gathering_time": "вечерний круг — только в свои часы (tradition.hours)"
     }
   },
   "activities": {
@@ -74,6 +75,12 @@
       "requires": {"day": true, "hp_ok": true, "no_leader": true, "explore_target": true},
       "cooldown_minutes": 360, "proof": "explore_arrived", "proof_minutes": 45,
       "_comment": "ORG-054: цель — известная, но не посещённая карта не дальше explore.max_hops (explore.py: достижимость для OpenKore, риск по слабейшему, слухи); пауза между экспедициями — explore.gap_hours"
+    },
+    "gathering": {
+      "label": "вечерний круг у фонтана", "modes": ["town"],
+      "satisfies": {"social": 1.0, "rest": 0.4},
+      "requires": {"gathering_time": true}, "cooldown_minutes": 600, "proof": "gathered", "proof_minutes": 40,
+      "_comment": "ORG-058 (tradition.py): окно goals.json tradition.hours, житель не спит; вес × (0.5 + сила традиции); факт — у точки и рядом житель (≤ 4 клеток)"
     }
   }
 }
