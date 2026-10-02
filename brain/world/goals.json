@@ -108,6 +108,26 @@
     "caution_hours": 6
   },
 
+  "boss": {
+    "_comment": "ORG-079 мини-босс группой (brain/live_brain/boss.py, docs/WORLD_EVENTS.md). ВЫКЛЮЧЕНО: мини-босс опасен, в игре не проверено. Как включить: enabled: true (BRAIN_DISABLE не должен содержать boss; нужны включённые party, crew и explore). Лидер группы в городе днём зовёт участников рядом; идут только группой >= min_group, сумма уровней >= level_sum_factor x уровень босса, уровень каждого >= уровень босса - level_gap, HP всех >= min_hp, хилер или >= min_potions зелий у каждого, риск карты < max_risk; согласие — по смелости (>= min_bravery). Поход — экспедиция на карту (search_minutes на месте, респаун босса 30–50 мин), отступление при тревоге survival/danger/escape и HP < explore.abort_hp. Смерть — бан босса fail_ban_hours; походов не больше max_per_day, пауза gap_hours. Тело бьёт босса само (mon_control: attack_auto 1 по умолчанию), целиться по имени мост не умеет.",
+    "enabled": false,
+    "targets": [
+      {"mob": "Vocal", "id": 1088, "maps": ["prt_fild07", "prt_fild04"]},
+      {"mob": "Eclipse", "id": 1093, "maps": ["prt_fild02"]}
+    ],
+    "min_group": 2,
+    "level_sum_factor": 2.0,
+    "level_gap": 3,
+    "min_hp": 80,
+    "min_potions": 10,
+    "max_risk": 0.35,
+    "min_bravery": 0.3,
+    "search_minutes": [40, 55],
+    "gap_hours": 6,
+    "fail_ban_hours": 2,
+    "max_per_day": 1
+  },
+
   "explore": {
     "_comment": "ORG-054 экспедиции (brain/live_brain/explore.py, docs/EXPLORE.md). Цель — известная (слух, дорога с посещённой карты), но не посещённая карта не дальше max_hops переходов, достижимая для OpenKore (brain/world/explore_reach.json, scripts/gen_explore_reach.py), с риском atlas.danger_for ниже min(max_risk, смелость) для слабейшего. Не чаще gap_hours, днём, HP >= min_hp; на месте stay_minutes; прервать при тревоге или HP < abort_hp. deny/deny_prefix — полигон новичков, перестроенный izlude, гильдии.",
     "enabled": true,

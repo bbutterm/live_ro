@@ -314,6 +314,9 @@ class Explorer:
         crew, party = getattr(self.mind, "crew", None), getattr(self.mind, "party", None)
         if not (self.cfg.get("group") and crew and party and crew.active() and party.is_leader):
             return
+        boss = getattr(self.mind, "boss", None)                  # boss: поход на мини-босса (ORG-079) — зовёт
+        if boss and boss.leading(target["map"]):                 # boss: только согласившихся, меткой [boss:go:]
+            return                                               # boss:
         for mate in party.members():
             if mate.get("online") and mate.get("map") == self.mind.state.get("map"):
                 await self.mind.execute([{"action": "whisper", "to": mate["name"],

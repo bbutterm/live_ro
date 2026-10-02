@@ -291,6 +291,8 @@ class Feed:
 
 
 TEXTS = {
+    "boss_victory": lambda d: f"победа группой над {d.get('mob')} ({d.get('map')}): {', '.join(d.get('team') or [])}",  # boss:
+    "boss_failed": lambda d: f"поход на {d.get('mob')} ({d.get('map')}) не удался",                                 # boss:
     "director": lambda d: f"режиссёр: {d.get('label')} — {d.get('why')}",          # director: ORG-086 закулисье
     "pet_tamed": lambda d: f"приручил {d.get('name')}",                       # pets:
     "pet_hatched": lambda d: f"завёл питомца: {d.get('name')}",              # pets:

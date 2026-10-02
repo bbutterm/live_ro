@@ -33,7 +33,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
            [party:dead:]) · 80 social [chat:]
   события: 10 crew · 20 social · 30 party · 40 guild · 50 pets · 60 economy
   тик:     (ядро: life, safety, plans) · 10 routine · 20 economy · 30 party · 40 career · 50 activities ·
-           60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 120 rumors · 130 society ·
+           60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 115 boss · 120 rumors · 130 society ·
            140 strangers · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
            210 episodes · 220 collection · 230 director
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
@@ -44,6 +44,7 @@ import re
 from .activity import Activities
 from .aims import Aims
 from .bonds import Bonds
+from .boss import Boss                  # boss: ORG-079 мини-босс группой
 from .career import Career
 from .crew import Crew
 from .crowd import Crowd
@@ -87,6 +88,7 @@ MODULES = (
     Aims,
     Guild,
     Explorer,
+    Boss,              # boss: после party, crew, explorer (REQUIRES)
     Strangers,
     Feed,              # шина мира (world_bus.Feed): mind.world
     Rivalry,
