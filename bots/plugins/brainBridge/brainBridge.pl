@@ -28,6 +28,8 @@
 #   meet_point {map,x,y}  -> conf lockMap/lockMap_x/lockMap_y/randX 2/randY 2 (только исполнитель плана)
 #   clear_point {}        -> conf lockMap_x/_y/_randX/_randY none (вернуться к охоте)
 #   hunt {map} / sit / stand -> распорядок: охота на карте без точки / сесть / встать
+#   explore {map[,x,y]}   -> экспедиция (ORG-054): conf lockMap <map>; с x,y — точка lockMap_x/y (randX/Y 3),  # explore:
+#                            без — как hunt (ходит и охотится слегка); клетка проверяется, если бот на этой карте  # explore:
 #   unstuck {radius}      -> ai clear; move <случайная проходимая клетка в радиусе radius (5..30, по умолчанию 10)>
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
@@ -393,7 +395,7 @@ our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav
 # society: чат-комната (ORG-026). Действия, которые двигают тело (или нужны без комнаты: лавка), — перед ними
 # chat leave; AI OpenKore о комнате не знает и упрётся в отказ сервера — chatGuard закрывает и тогда.
 my %MOVES = map { $_ => 1 } qw(follow meet_point hunt unstuck service give offer_sell offer_buy job_change
-                               sleep shop_open);
+                               sleep shop_open explore);   # explore: экспедиция двигает тело
 my %CHAT_BUSY = map { $_ => 1 } qw(route move attack follow sellAuto buyAuto storageAuto take items_take
                                    NPC deal skill_use);
 sub inChat { return defined $currentChatRoom && $currentChatRoom ne ''; }
@@ -482,6 +484,19 @@ sub actionToCommand {
 		return (0, 'неверная карта') unless $map =~ /^[a-z0-9_]{3,16}$/;
 		return (1, ["conf lockMap $map", 'conf lockMap_x none', 'conf lockMap_y none',
 		            'conf lockMap_randX none', 'conf lockMap_randY none', 'stand']);
+	} elsif ($kind eq 'explore') {                                       # explore: экспедиция (ORG-054)
+		my ($map, $x, $y) = ($a->{map} || '', $a->{x}, $a->{y});
+		return (0, 'неверная карта') unless $map =~ /^[a-z0-9_]{3,16}$/;
+		if (!defined $x && !defined $y) {
+			return (1, [standFirst(), "conf lockMap $map", 'conf lockMap_x none', 'conf lockMap_y none',
+			            'conf lockMap_randX none', 'conf lockMap_randY none']);
+		}
+		return (0, 'неверные координаты') unless defined $x && defined $y && $x =~ /^\d{1,3}$/ && $y =~ /^\d{1,3}$/;
+		if ($field && $field->baseName eq $map && !$field->isWalkable($x, $y)) {
+			return (0, "клетка $x,$y на $map непроходима");
+		}
+		return (1, [standFirst(), "conf lockMap $map", "conf lockMap_x $x", "conf lockMap_y $y",
+		            'conf lockMap_randX 3', 'conf lockMap_randY 3']);
 	} elsif ($kind eq 'unstuck') {
 		# Застрял: сбросить очередь AI и шагнуть в случайную проходимую клетку в радиусе radius.
 		my $pos = $char && $char->{pos_to};

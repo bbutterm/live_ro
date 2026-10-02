@@ -46,6 +46,7 @@ PHRASES = {
     "town": ["Идём в город, передохнём.", "Перерыв — в город.", "Хватит пока, в город."],
     "decide": ["Решили: идём на {map}.", "Сегодня {map} — всем по силам.", "Голосуем за {map}, пошли."],
     "walk": ["Пройдусь с тобой, {who}.", "{who}, я с тобой.", "Подожди, {who}, я рядом."],
+    "explore": ["Дошли до {map}! Новое место.", "{map} — тут мы ещё не были.", "Вот он, {map}. Осмотримся."],  # explore:
 }
 
 
@@ -216,6 +217,9 @@ class Crew:
         p = self.party
         if p.is_leader:
             return
+        explorer = getattr(self.mind, "explorer", None)            # explore: в экспедиции за лидером по городу не гуляем
+        if explorer and explorer.busy():                           # explore:
+            return                                                 # explore:
         if self.walk_until and (now >= self.walk_until or mode == "hunt"):
             self.walk_until = 0.0
             if state.get("follow") == p.leader and mode != "hunt":

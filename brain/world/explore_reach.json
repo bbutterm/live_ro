@@ -1,0 +1,605 @@
+{
+ "_comment": "Сгенерировано scripts/gen_explore_reach.py (ORG-054): карты, куда OpenKore дойдёт пешком из города по portals.txt, подтверждённым варпами сервера (atlas.json), и откуда вернётся. Не править руками.",
+ "atlas_sha": "4313fe2cac3c0a48",
+ "max_hops": 5,
+ "portals_sha": "826899b38ba5ce76",
+ "towns": {
+  "prontera": {
+   "maps": {
+    "gef_fild00": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "prt_fild00",
+      "gef_fild00"
+     ],
+     "x": 381,
+     "y": 137
+    },
+    "gef_fild01": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "gef_fild01"
+     ],
+     "x": 382,
+     "y": 111
+    },
+    "gef_fild02": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild07",
+      "gef_fild02"
+     ],
+     "x": 380,
+     "y": 68
+    },
+    "gef_fild03": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "gef_fild01",
+      "gef_fild03"
+     ],
+     "x": 66,
+     "y": 382
+    },
+    "gef_fild09": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "gef_fild01",
+      "gef_fild09"
+     ],
+     "x": 368,
+     "y": 95
+    },
+    "gef_fild10": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "gef_fild01",
+      "gef_fild09",
+      "gef_fild10"
+     ],
+     "x": 251,
+     "y": 371
+    },
+    "gef_fild13": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "gef_fild01",
+      "gef_fild09",
+      "gef_fild13"
+     ],
+     "x": 380,
+     "y": 56
+    },
+    "geffen": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "prt_fild00",
+      "gef_fild00",
+      "geffen"
+     ],
+     "x": 217,
+     "y": 119
+    },
+    "mjolnir_03": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "prt_fild00",
+      "mjolnir_07",
+      "mjolnir_03"
+     ],
+     "x": 212,
+     "y": 18
+    },
+    "mjolnir_04": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "mjolnir_08",
+      "mjolnir_04"
+     ],
+     "x": 160,
+     "y": 47
+    },
+    "mjolnir_05": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "mjolnir_08",
+      "mjolnir_10",
+      "mjolnir_05"
+     ],
+     "x": 235,
+     "y": 16
+    },
+    "mjolnir_06": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "prt_fild00",
+      "gef_fild00",
+      "mjolnir_06"
+     ],
+     "x": 265,
+     "y": 29
+    },
+    "mjolnir_07": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "prt_fild00",
+      "mjolnir_07"
+     ],
+     "x": 156,
+     "y": 16
+    },
+    "mjolnir_08": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "mjolnir_08"
+     ],
+     "x": 185,
+     "y": 28
+    },
+    "mjolnir_09": {
+     "back": 2,
+     "hops": 2,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09"
+     ],
+     "x": 106,
+     "y": 28
+    },
+    "mjolnir_10": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "mjolnir_08",
+      "mjolnir_10"
+     ],
+     "x": 15,
+     "y": 258
+    },
+    "mjolnir_11": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild06",
+      "prt_fild02",
+      "mjolnir_11"
+     ],
+     "x": 174,
+     "y": 20
+    },
+    "moc_fild01": {
+     "back": 2,
+     "hops": 2,
+     "path": [
+      "prontera",
+      "prt_fild08",
+      "moc_fild01"
+     ],
+     "x": 239,
+     "y": 382
+    },
+    "moc_fild02": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild08",
+      "moc_fild01",
+      "pay_fild04",
+      "moc_fild02"
+     ],
+     "x": 350,
+     "y": 339
+    },
+    "moc_fild03": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild08",
+      "moc_fild01",
+      "pay_fild04",
+      "moc_fild02",
+      "moc_fild03"
+     ],
+     "x": 70,
+     "y": 341
+    },
+    "moc_fild13": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild08",
+      "moc_fild01",
+      "pay_fild04",
+      "moc_fild02",
+      "moc_fild13"
+     ],
+     "x": 146,
+     "y": 368
+    },
+    "monk_in": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild06",
+      "prt_fild02",
+      "prt_fild03",
+      "prt_monk",
+      "monk_in"
+     ],
+     "x": 98,
+     "y": 183
+    },
+    "monk_test": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild06",
+      "prt_fild02",
+      "prt_fild03",
+      "prt_monk",
+      "monk_test"
+     ],
+     "x": 329,
+     "y": 50
+    },
+    "pay_fild04": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild08",
+      "moc_fild01",
+      "pay_fild04"
+     ],
+     "x": 17,
+     "y": 165
+    },
+    "pay_gld": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild08",
+      "moc_fild01",
+      "pay_fild04",
+      "moc_fild02",
+      "pay_gld"
+     ],
+     "x": 16,
+     "y": 276
+    },
+    "prt_church": {
+     "back": 1,
+     "hops": 1,
+     "path": [
+      "prontera",
+      "prt_church"
+     ],
+     "x": 100,
+     "y": 56
+    },
+    "prt_fild00": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "prt_fild00"
+     ],
+     "x": 165,
+     "y": 18
+    },
+    "prt_fild01": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "prt_fild01"
+     ],
+     "x": 20,
+     "y": 292
+    },
+    "prt_fild02": {
+     "back": 2,
+     "hops": 2,
+     "path": [
+      "prontera",
+      "prt_fild06",
+      "prt_fild02"
+     ],
+     "x": 305,
+     "y": 17
+    },
+    "prt_fild03": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild06",
+      "prt_fild02",
+      "prt_fild03"
+     ],
+     "x": 16,
+     "y": 249
+    },
+    "prt_fild04": {
+     "back": 2,
+     "hops": 2,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04"
+     ],
+     "x": 378,
+     "y": 72
+    },
+    "prt_fild05": {
+     "back": 1,
+     "hops": 1,
+     "path": [
+      "prontera",
+      "prt_fild05"
+     ],
+     "x": 373,
+     "y": 205
+    },
+    "prt_fild06": {
+     "back": 1,
+     "hops": 1,
+     "path": [
+      "prontera",
+      "prt_fild06"
+     ],
+     "x": 23,
+     "y": 193
+    },
+    "prt_fild07": {
+     "back": 2,
+     "hops": 2,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild07"
+     ],
+     "x": 132,
+     "y": 381
+    },
+    "prt_fild08": {
+     "back": 1,
+     "hops": 1,
+     "path": [
+      "prontera",
+      "prt_fild08"
+     ],
+     "x": 170,
+     "y": 377
+    },
+    "prt_fild09": {
+     "back": 3,
+     "hops": 3,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild07",
+      "prt_fild09"
+     ],
+     "x": 87,
+     "y": 380
+    },
+    "prt_fild10": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild07",
+      "gef_fild02",
+      "prt_fild10"
+     ],
+     "x": 227,
+     "y": 299
+    },
+    "prt_fild11": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "gef_fild01",
+      "gef_fild03",
+      "prt_fild11"
+     ],
+     "x": 302,
+     "y": 301
+    },
+    "prt_gld": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "prt_fild01",
+      "prt_gld"
+     ],
+     "x": 159,
+     "y": 298
+    },
+    "prt_in": {
+     "back": 1,
+     "hops": 1,
+     "path": [
+      "prontera",
+      "prt_in"
+     ],
+     "x": 47,
+     "y": 29
+    },
+    "prt_monk": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "prontera",
+      "prt_fild06",
+      "prt_fild02",
+      "prt_fild03",
+      "prt_monk"
+     ],
+     "x": 22,
+     "y": 248
+    },
+    "prtg_cas01": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "prt_fild01",
+      "prt_gld",
+      "prtg_cas01"
+     ],
+     "x": 103,
+     "y": 32
+    },
+    "prtg_cas02": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "prt_fild01",
+      "prt_gld",
+      "prtg_cas02"
+     ],
+     "x": 43,
+     "y": 233
+    },
+    "prtg_cas03": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "prt_fild01",
+      "prt_gld",
+      "prtg_cas03"
+     ],
+     "x": 168,
+     "y": 8
+    },
+    "prtg_cas04": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "prt_fild01",
+      "prt_gld",
+      "prtg_cas04"
+     ],
+     "x": 86,
+     "y": 9
+    },
+    "prtg_cas05": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "prt_fild01",
+      "prt_gld",
+      "prtg_cas05"
+     ],
+     "x": 17,
+     "y": 231
+    },
+    "s_atelier": {
+     "back": 1,
+     "hops": 1,
+     "path": [
+      "prontera",
+      "s_atelier"
+     ],
+     "x": 13,
+     "y": 119
+    }
+   },
+   "x": 156,
+   "y": 185
+  }
+ }
+}

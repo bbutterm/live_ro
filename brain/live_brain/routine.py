@@ -249,6 +249,10 @@ class Routine:
                 await self.send({"action": "shop_close"}, "распорядок: закрыть лавку — иду на встречу")
             self.save(throttle=True)
             return                                    # план встречи важнее распорядка
+        explorer = getattr(self.mind, "explorer", None)                 # explore: экспедиция ведёт тело сама (ORG-054):
+        if explorer and explorer.busy():                                # explore: распорядок не шлёт hunt/meet_point,
+            self.save(throttle=True)                                    # explore: охота не считается; сон и смерть —
+            return                                                      # explore: выше (sleep_tick) и в explore.abort
 
         party = getattr(self.mind, "party", None)
         lead = party.leader_wants(now) if party else None     # участник группы: режим задаёт лидер

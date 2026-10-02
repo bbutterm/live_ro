@@ -229,4 +229,23 @@ is_deeply(\@ev, [], 'society: согласие — не событие');
 	$Globals::char->{party} = $saved;
 }
 
+# ---- explore: экспедиция (ORG-054) ----
+{
+	local $Globals::char->{sitting} = 0;
+	my ($oke, $re) = brainBridge::actionToCommand({action => 'explore', map => 'prt_fild06'});
+	is_deeply($re, ['conf lockMap prt_fild06', 'conf lockMap_x none', 'conf lockMap_y none',
+	                'conf lockMap_randX none', 'conf lockMap_randY none'], 'explore: поле — lockMap без точки');
+	($oke, $re) = brainBridge::actionToCommand({action => 'explore', map => 'geffen', x => 119, y => 63});
+	is_deeply($re, ['conf lockMap geffen', 'conf lockMap_x 119', 'conf lockMap_y 63', 'conf lockMap_randX 3',
+	                'conf lockMap_randY 3'], 'explore: город — к клетке прибытия');
+	ok(!(brainBridge::actionToCommand({action => 'explore', map => 'geffen; quit'}))[0], 'explore: неверная карта — отказ');
+	ok(!(brainBridge::actionToCommand({action => 'explore', map => 'geffen', x => 'a', y => 1}))[0],
+	   'explore: неверные координаты — отказ');
+	ok(!(brainBridge::actionToCommand({action => 'explore', map => 'geffen', x => 5}))[0], 'explore: только x — отказ');
+	no warnings 'redefine';
+	local *FakeField::isWalkable = sub { 0 };
+	my ($okw, $why) = brainBridge::actionToCommand({action => 'explore', map => 'prt_fild08', x => 10, y => 10});
+	ok(!$okw && $why =~ /непроходима/, 'explore: на этой карте клетка непроходима — отказ');
+}
+
 done_testing();

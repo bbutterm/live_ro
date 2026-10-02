@@ -38,6 +38,7 @@ from .safety import SafetyPolicy
 from .social import TAG as SOCIAL_TAG, Social   # social: общение без LLM
 from .society import Society                    # society: эмоции, чат-комнаты, ссоры (ORG-022/026/027)
 from . import world_bus                                 # events: шина событий мира (ORG-045)
+from .explore import TAG as EXPLORE_TAG, Explorer       # explore: экспедиции (ORG-054)
 
 log = logging.getLogger("mind")
 
@@ -150,6 +151,9 @@ class Mind:
         self.society = (Society(self, world) if self.ctx.peers and feat("society")    # society:
                         and ((world or {}).get("society") or {}).get("enabled", True) else None)  # society:
         self.aims = Aims(self) if feat("aims") else None                              # events:
+        ex_cfg = (world or {}).get("explore") or {}                                   # explore: ORG-054
+        self.explorer = (Explorer(self, ex_cfg) if self.routine and feat("explore")   # explore:
+                         and ex_cfg.get("enabled", False) else None)                  # explore:
         bus_path = world_bus.lab_path(decisions_path) if world_bus_db is None else None  # events:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
             world_bus_db = world_bus.WorldBus(bus_path, persona["name"])              # events:
@@ -243,6 +247,8 @@ class Mind:
         if self.routine and kind in ("attack", "kill"):
             self.routine.on_combat()
         self.life.on_event(kind)
+        if self.explorer:                               # explore: тревога/смерть в экспедиции — вернуться
+            self.explorer.on_event(kind, event)         # explore:
         if kind in ("attack", "survival", "danger"):
             self.postmortem.observe(kind, event)
         if kind == "kill":
@@ -280,6 +286,10 @@ class Mind:
                 and INFO_TAG.search(str(event.get("text", "")))):
             self.on_rumor(str(event["from"]), str(event["text"]))
             return
+        if (self.explorer and kind == "chat_private" and event.get("from") in self.ctx.peers   # explore: лидер зовёт
+                and EXPLORE_TAG.search(str(event.get("text", "")))):                               # explore:
+            await self.explorer.on_tag(str(event["from"]), str(event["text"]))                    # explore:
+            return                                                                                 # explore:
         if (self.crew and kind == "chat_private" and event.get("from") in self.ctx.peers     # crew: желание карты
                 and CREW_TAG.search(str(event.get("text", "")))):
             await self.crew.on_tag(str(event["from"]), str(event["text"]))
@@ -561,6 +571,8 @@ class Mind:
                        self.social, self.pets, self.crew):
             if module:
                 await module.tick()
+        if self.explorer:                                      # explore: экспедиция (ORG-054)
+            await self.explorer.tick()                         # explore:
         await self.rumors.tick()                               # events: проверка слухов опытом, пересказ при встрече
         if self.society:                                       # society: эмоции, вывески, ссоры по фактам памяти
             await self.society.tick()                          # society:
@@ -770,6 +782,7 @@ class Mind:
             "мотивы": dict(self.needs.top(4)),
             "карьера": (self.mem.get("career") or {}).get("text"),
             "занятие": self.activities.summary() if self.activities else None,
+            "экспедиция": self.explorer.summary() if self.explorer else None,         # explore:
             "цели_недели": self.aims.summary() if self.aims else None,                  # events:
             "слухи_не_факты": self.rumors.summary(),                                     # events:
             "новости_мира": self.world.summary() if self.world else None,               # events:

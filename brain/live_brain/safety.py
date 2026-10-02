@@ -27,6 +27,7 @@ PLAN_ACTIONS += ("offer_sell", "offer_buy", "offer_shop", "mail_send", "mail_che
 PLAN_ACTIONS += ("pet_setup", "pet_tame", "pet_hatch")   # pets: питомец (pets.py, ORG-051)
 PLAN_ACTIONS += ("party_say",)   # crew: чат группы (crew.py, ORG-053)
 PLAN_ACTIONS += ("chat_room",)   # society: чат-комната-вывеска (society.py, ORG-026)
+PLAN_ACTIONS += ("explore",)     # explore: экспедиция на карту атласа (explore.py, ORG-054)
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
 MAX_PRICE = 100_000_000          # market: цена лота между жителями
@@ -151,6 +152,8 @@ class SafetyPolicy:
             if not text or not state.get("party"):
                 return None, "пустой текст или нет группы"
             return {"action": "party_say", "text": text}, None
+        if kind == "explore":                                                                         # explore:
+            return self.check_explore(action, state)                                                 # explore:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":
@@ -228,6 +231,41 @@ class SafetyPolicy:
         clean = {k: action[k] for k in ("action", "text", "to", "map", "name") if k in action}
         if not protocol and kind in ("say", "whisper"):
             self.texts[(str(clean.get("to", "")) if kind == "whisper" else "", clean["text"].lower())] = now
+        return clean, None
+
+    def check_explore(self, action, state):                                                     # explore:
+        """explore: экспедиция (ORG-054) — карта из атласа, не pvp/gvg, не полигон новичков/перестроенный izlude
+        (explore.denied), риск по уровню ниже atlas.MAX_RISK, HP не ниже safe_hp; координаты — в пределах карты."""
+        from . import atlas
+        from .explore import DEFAULTS, denied
+        hmap = action.get("map")
+        if not isinstance(hmap, str) or not re.fullmatch(r"[a-z0-9_]{3,16}", hmap):
+            return None, "неверная карта"
+        try:
+            a = atlas.default()
+        except (OSError, ValueError):
+            return None, "атлас недоступен"
+        m = a.maps.get(hmap)
+        if not m:
+            return None, "карты нет в атласе"
+        if m.get("kind") == "pvp" or {"pvp", "gvg", "gvg_castle"} & set(m.get("flags", ())):
+            return None, "pvp/gvg-карта"
+        if denied(hmap, DEFAULTS):
+            return None, "карта запрещена для экспедиций (полигон/перестроена/гильдия)"
+        level = state.get("lv")
+        if isinstance(level, int) and level > 0:
+            risk, _ = a.danger_for(hmap, level)
+            if risk >= atlas.MAX_RISK:
+                return None, f"риск {risk:.2f} для уровня {level}"
+        hp = state.get("hp_pct")
+        if hp is not None and hp < self.safe_hp:
+            return None, f"HP {hp}% < {self.safe_hp}%"
+        clean = {"action": "explore", "map": hmap}
+        if action.get("x") is not None or action.get("y") is not None:
+            x, y = action.get("x"), action.get("y")
+            if not all(isinstance(v, int) and not isinstance(v, bool) and 0 < v < 1000 for v in (x, y)):
+                return None, "неверные координаты"
+            clean.update(x=x, y=y)
         return clean, None
 
     def check_pet(self, kind, action):  # pets: ID — целые из pets.json, списки короткие; мёртвому — отказ выше

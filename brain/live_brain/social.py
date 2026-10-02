@@ -46,6 +46,9 @@ log = logging.getLogger("social")
 TAG = re.compile(r"\[chat:([a-z]{3,12}):([1-4])\]")
 LAST_STEP = 4                         # 2 обмена: 1-2 и 3-4
 FACT_TOPICS = ("death", "level", "hunt", "loot", "tired")
+FACT_TOPICS += ("trip",)                    # explore: «где был» — факт экспедиции (ORG-054)
+TRIP_PHRASES = ["А я на днях до {trip_map} дошёл(дошла)!", "Был(а) на {trip_map} — интересное место.",
+                "Сходил(а) на {trip_map}, теперь знаю дорогу."]   # explore: если в персоне нет phrases.trip
 TOPICS = ("hello", "weather", "bye", "congrats", "condolence", "thanks") + FACT_TOPICS
 REPLY = {"level": "congrats", "death": "condolence"}       # на что отвечают особой фразой
 EMOTE = {"hello": 12, "bye": 12, "congrats": 21, "condolence": 28, "thanks": 15, "level": 2,
@@ -99,6 +102,8 @@ class Social:
         self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.rng = rng or random.Random()
         self.phrases = mind.persona.get("phrases") or {}
+        if "trip" not in self.phrases:                                         # explore: тема «где был»
+            self.phrases = dict(self.phrases, trip=TRIP_PHRASES)               # explore:
         self.st = mind.mem.get("social") or {}
         for key in ("pairs", "used", "together", "bonded", "peer_lv", "react", "told", "replies"):
             self.st.setdefault(key, {})
@@ -206,6 +211,10 @@ class Social:
                 f["map"] = r.hunt_map()
             except (AttributeError, KeyError, TypeError):
                 pass
+        explorer = getattr(self.mind, "explorer", None)                        # explore: последняя экспедиция за 2 суток
+        trip = explorer.last_trip(now - 2 * 86400) if explorer else None       # explore:
+        if trip:                                                               # explore:
+            f["trip_map"] = trip["map"]                                        # explore:
         if peer:
             heals = [e for e in self.events_since("heal_confirmed", start)
                      if e.get("from") == peer and e.get("to") == self.me]
@@ -227,6 +236,8 @@ class Social:
             topics.append("loot")
         if facts.get("hours"):
             topics.append("tired")
+        if facts.get("trip_map"):                                              # explore:
+            topics.append("trip")                                              # explore:
         return topics
 
     def choose_topic(self, peer, facts, now):
@@ -297,6 +308,9 @@ class Social:
     def may_walk(self, r):
         if self.mind.plans.store.active():
             return False
+        explorer = getattr(self.mind, "explorer", None)        # explore: в экспедиции по городу не гуляем
+        if explorer and explorer.busy():                       # explore:
+            return False                                       # explore:
         may_move = getattr(self.mind, "may_move", None)
         if may_move and not may_move("routine")[0]:
             return False

@@ -186,9 +186,12 @@ def organic_metrics(memory, since, now=None):
     st = memory.get("routine") or {}
     sleep_s = sleep_seconds(memory, since, now or time.time(), st.get("mode") == "sleep")
     sleep_h = round(sleep_s / 3600, 1)
+    found = memory.db.execute("SELECT COUNT(*) FROM events WHERE kind = 'explore_found' AND ts >= ?",   # explore:
+                              (since,)).fetchone()[0]                                                  # explore:
     return {"занятий": len(acts - {None}), "мест в городе": len(points - {None}),
             "реплик без LLM": said, "из них о событиях": fact_said, "сон, ч": sleep_h,
-            "вызовов моделей": calls, "дневников": diaries}
+            "вызовов моделей": calls, "дневников": diaries,
+            "открытых мест": found}                                                                     # explore: ORG-054
 
 
 def sleep_seconds(memory, since, now, sleeping_now):

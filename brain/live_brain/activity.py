@@ -11,10 +11,12 @@
     rest — ничего (тело садится само); stroll — social.walk_now(); socialize — social.visit(к жителю);
     service — routine.service_now(); hunt_early — распорядок: отдых закончен (выход — по HP-правилу);
     end_hunt — routine.to_town(); change_map — другая карта по опыту (maps.choose без текущей);
-    keep_hunting — ничего; check_rumor — карта слуха на сессию (rumors.to_check, ORG-032; итог — rumors.check).
+    keep_hunting — ничего; check_rumor — карта слуха на сессию (rumors.to_check, ORG-032; итог — rumors.check);
+    explore — экспедиция на новую карту (explore.py, ORG-054).
 Факт завершения (proof) за proof_minutes — иначе занятие «не удалось» (activity_failed), а не «сделано»:
     moved — позиция сменилась; peer_near — житель рядом; supply_better — вес меньше или зелий больше;
-    on_hunt_map — на карте охоты; in_town — на карте города; map_changed — карта охоты другая.
+    on_hunt_map — на карте охоты; in_town — на карте города; map_changed — карта охоты другая;
+    explore_arrived — дошёл до цели экспедиции.
 Не вмешивается: сон, восстановление, план встречи, арбитр не даёт двигать тело, участник группы
 (режим задаёт лидер — занятия, меняющие режим, недоступны: requires.no_leader).
 """
@@ -82,6 +84,9 @@ class Activities:
                 ok = not (party and party.leader_wants())
             elif key == "other_maps":
                 ok = len([m for m in self.mind.persona["hunt_maps"] if m not in r.bans()]) > 1
+            elif key == "explore_target":                   # explore: ORG-054 есть цель экспедиции и её можно начать
+                explorer = getattr(self.mind, "explorer", None)     # explore:
+                ok = bool(explorer and explorer.available(state))   # explore:
             elif key == "rumor_to_check":                   # events: ORG-032 есть слух, который стоит проверить
                 rumors = getattr(self.mind, "rumors", None)     # events:
                 ok = bool(rumors and rumors.to_check(state))    # events:
@@ -102,6 +107,9 @@ class Activities:
             return "сон/восстановление/тупик"
         if m.plans.store.active():
             return "план встречи"
+        explorer = getattr(m, "explorer", None)                 # explore: экспедиция идёт — других занятий нет
+        if explorer and explorer.busy():                        # explore:
+            return "экспедиция"                                 # explore:
         may_move = getattr(m, "may_move", None)
         if may_move and not may_move("routine")[0]:
             return "телом владеет другая задача"
@@ -199,6 +207,10 @@ class Activities:
                 r.st["prefer_map"] = choice
                 r.last_sent = 0
                 r.note("routine_map_choice", f"Сменю место охоты на {choice}: {why}.", 1)
+        elif name == "explore":                                 # explore: ORG-054 экспедиция
+            explorer = getattr(self.mind, "explorer", None)         # explore:
+            if explorer:                                            # explore:
+                await explorer.start()                              # explore:
         elif name == "check_rumor":                             # events: ORG-032 проверить слух на сессию
             rumors = getattr(self.mind, "rumors", None)             # events:
             rec = rumors.to_check(state) if rumors else None        # events:
@@ -230,6 +242,9 @@ class Activities:
         elif proof == "in_town":
             r = self.mind.routine
             ok = (r and state.get("map") == r.cfg["town"]["map"]) or None
+        elif proof == "explore_arrived":                     # explore: дошёл до цели экспедиции (по state.map)
+            explorer = getattr(self.mind, "explorer", None)
+            ok = bool(explorer and explorer.st.get("arrived_at", 0) >= self.st.get("since", 0)) or None
         elif proof == "map_changed":
             ok = (state.get("map") in self.mind.persona["hunt_maps"] and state.get("map") != b.get("map")) or None
         if ok:
