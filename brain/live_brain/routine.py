@@ -33,7 +33,9 @@
 """
 import json
 import logging
+import os
 import random
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -43,6 +45,10 @@ log = logging.getLogger("routine")
 RESEND = 60
 SLEEP_RETRY = 600
 SERVICE_GAP = 1800
+# ops: ключи сна, которые переживают смену дня (new_day)
+SLEEP_KEYS = ("wake_at", "sleep_sent", "sleep_tries", "sleep_night", "sleep_hours", "nap_since", "nap_until")
+NIGHT_KEYS = ("sleep_night", "sleep_hours", "nap_since", "nap_until")   # ops: переносятся в новый день всегда
+NAP_HOURS = 2.0           # ops: ORG-044 — «уснуть раньше» по просьбе сторожа, если часы не заданы
 SAVE_EVERY = 30
 MAX_TICK_GAP = 5          # не засчитывать охоту за время, когда мозг не работал
 STUCK_SEC = 300           # на охоте без движения и без боя дольше — «застрял»
@@ -67,6 +73,30 @@ def merged_routine(world, persona):
     routine = dict(world.get("routine", {}))
     routine.update(persona.get("routine", {}))
     return routine
+
+
+NUM = re.compile(r"\d+")
+LATIN_NAME = re.compile(r"\b[A-Z][A-Za-z0-9_]{2,}\b")
+
+
+def diary_only(decision, facts):
+    """ops: ORG-049 — ответ модели на повод diary: только одна запись дневника, без действий, целей и
+    отношений; в записи нет чисел и латинских имён, которых нет в фактах дня. Возвращает (решение, отказы)."""
+    allowed_nums = {int(n) for n in NUM.findall(facts or "")}
+    allowed_names = set(LATIN_NAME.findall(facts or ""))
+    kept, rejected = [], []
+    for m in decision.get("remember") or []:
+        text = str(m.get("text", "")).strip() if isinstance(m, dict) else ""
+        if not text:
+            continue
+        extra = sorted({n for n in NUM.findall(text) if int(n) not in allowed_nums}
+                       | (set(LATIN_NAME.findall(text)) - allowed_names))
+        if extra or kept:
+            rejected.append({"text": text[:300], "why": f"нет в фактах дня: {', '.join(extra)}" if extra
+                             else "больше одной записи"})
+            continue
+        kept.append({"text": text[:300], "importance": 3})
+    return {"remember": kept, "thought": decision.get("thought"), "actions": []}, rejected
 
 
 class Routine:
@@ -186,10 +216,14 @@ class Routine:
     def new_day(self, now, keep_mode=None):
         if self.st.get("day"):
             self.diary(self.st)
+        old = self.st
         self.st = {"day": self.today(now), "budget": self.minutes("hunt_hours_per_day") * 60,
                    "hunted": 0.0, "mode": keep_mode or "hunt", "mode_since": now,
                    "session_end": 0.0, "rest_until": 0.0, "arrived": False,
                    "prefer_map": self.st.get("prefer_map")}
+        # ops: смена дня во сне (граница — середина диапазона сна) не должна терять час пробуждения: без
+        # wake_at житель «просыпался» в момент смены дня, а не в своё время; ночь и дрёма — те же.
+        self.st.update({k: old[k] for k in SLEEP_KEYS if k in old and (keep_mode == "sleep" or k in NIGHT_KEYS)})
         self.st["session_end"] = min(self.st["budget"], self.minutes("session_minutes"))
         log.info("новый день %s: норма охоты %d мин", self.st["day"], self.st["budget"] / 60)
 
@@ -253,6 +287,7 @@ class Routine:
             if now >= self.st.get("wake_at", 0):
                 self.st.update(mode="town", mode_since=now, arrived=False, rest_until=now)
                 self.note("routine_wake", "Проснулся — начинаю новый день.", 2)
+                self.mark_awake()                            # ops: ORG-044
                 self.last_sent = 0
                 return False
             if now - self.st.get("sleep_sent", 0) >= SLEEP_RETRY:   # тело всё ещё в игре — не уснуло
@@ -264,6 +299,12 @@ class Routine:
                         alert("sleep", "житель не выходит из игры по команде relog")
                 await self.send({"action": "sleep", "seconds": int(self.st["wake_at"] - now)}, "распорядок: сон (повтор)")
             return True
+        nap = self.st.get("nap_until", 0)                    # ops: ORG-044 — сторож попросил уснуть раньше
+        if nap > now:
+            win = (self.st.get("nap_since", now), nap)
+        elif nap:
+            self.st.pop("nap_until", None)
+            self.st.pop("nap_since", None)
         if not win or not (win[0] <= now < win[1]) or self.mind.plans.store.active():
             return False
         if self.st.get("mode") == "hunt":
@@ -273,11 +314,65 @@ class Routine:
         if not self.st.get("arrived") and now - win[0] < 1200:
             return False                                     # сначала дойти до города (не дольше 20 мин)
         self.st.update(mode="sleep", mode_since=now, wake_at=win[1], sleep_sent=now, sleep_tries=0)
+        self.st.pop("nap_until", None)                       # ops:
+        self.st.pop("nap_since", None)                       # ops:
+        self.mark_asleep(win[1])                             # ops: ORG-044 флаг для сторожа
         hours = (win[1] - now) / 3600
         self.note("routine_sleep", f"Ложусь спать на {hours:.1f} ч.", 2)
         self.set_goal("сплю")
         await self.send({"action": "sleep", "seconds": int(win[1] - now)}, f"распорядок: сон {hours:.1f} ч")
         return True
+
+    # ---------- ops: ORG-044 смена — флаг сна для сторожа и «уснуть раньше» ----------
+
+    def sleep_flag(self):
+        """run/brain/<bot>.asleep рядом с inbox: одна строка — час пробуждения (unix). Нет inbox — нет флага."""
+        p = getattr(self.mind, "inbox_path", None)
+        return os.path.splitext(p)[0] + ".asleep" if p else None
+
+    def mark_asleep(self, wake_at):
+        path = self.sleep_flag()
+        if not path:
+            return
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(f"{int(wake_at)}\n")
+            os.replace(tmp, path)
+        except OSError as e:
+            log.warning("флаг сна не записан: %s", e)
+
+    def mark_awake(self):
+        path = self.sleep_flag()
+        if path:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    def request_sleep(self, hours=None):
+        """Сторож (LAB_MAX_ONLINE): онлайн больше лимита — уснуть раньше обычным путём (город, relog).
+        Своя ночь начнётся во время дрёмы — спать до её конца. None — принято, иначе причина отказа."""
+        now = self.clock()
+        if not self.st:
+            self.new_day(now)
+        if self.st.get("mode") == "sleep":
+            return "уже спит"
+        try:
+            hours = float(hours) if hours is not None else NAP_HOURS
+        except (TypeError, ValueError):
+            hours = NAP_HOURS
+        if not 0 < hours < 1e6:                              # nan, inf, отрицательные
+            hours = NAP_HOURS
+        until = now + min(max(hours, 0.5), 12.0) * 3600
+        win = self.sleep_window(now)
+        if win and win[0] <= until and win[1] > now:
+            until = max(until, win[1])
+        self.st.update(nap_since=now, nap_until=until)
+        self.note("routine_shift", "Смена: лягу спать раньше, до "
+                  + datetime.fromtimestamp(until, self.tz).strftime("%H:%M") + ".", 1)
+        self.save()
+        return None
 
     # ---------- поездка по делам ----------
 
@@ -441,7 +536,7 @@ class Routine:
         if getattr(self.mind, "s", None) and self.mind.s.llm_enabled:
             # ORG-049: один вызов в сутки — пересказ дня своим голосом; факты — только из text выше.
             self.mind.trigger("напиши в remember запись дневника (2-3 предложения, своим голосом, importance 3) "
-                              f"строго по фактам дня, ничего не добавляя: {text}", {"diary": day_state["day"]},
+                              f"строго по фактам дня, ничего не добавляя: {text}", {"diary": day_state["day"], "facts": text},
                               kind="diary")
         self.mind.write_decision({"type": "routine", "event": "diary", "text": text})
         log.info("%s", text)
@@ -588,6 +683,8 @@ class Routine:
         now = self.clock()
         if not self.st:
             self.new_day(now)
+        if self.st.get("mode") == "sleep":                   # ops: ORG-044 разбудил оператор — флаг сна снять
+            self.mark_awake()
         if what == "rest":
             if self.st["mode"] == "town":
                 return "уже отдыхает"

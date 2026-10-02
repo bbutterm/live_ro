@@ -21,8 +21,10 @@ from .gate import RuleGate, make_fast_gate
 from .routine import load_world
 from .memory import Memory
 from .mind import Mind
+from . import resources  # ops: ORG-047 замер ресурсов
 
 log = logging.getLogger("live_brain")
+RESOURCE_EVERY = 600      # ops: ORG-047 — замер RSS/CPU мозга раз в 10 мин
 
 
 def parse_args(argv):
@@ -141,6 +143,9 @@ def report(args, memory, state_dir):
     if party:
         print(f"   группа: {'подтверждена сервером' if party.get('confirmed') else 'нет'}; "
               f"лечений подтверждено за сутки {count('heal_confirmed')}")
+    res_line = resources.brain_line(memory.get("resources"))   # ops: ORG-047 RSS/CPU мозга из kv
+    if res_line:                                              # ops:
+        print(res_line)                                       # ops:
     for m in memory.db.execute("SELECT text FROM memories ORDER BY id DESC LIMIT 3"):
         print(f"   помнит: {m[0]}")
     return 0
@@ -160,7 +165,7 @@ def env_bots(env_path):
         return ""
 
 
-def organic_metrics(memory, since):
+def organic_metrics(memory, since, now=None):
     """ORG-046: разнообразие жизни по фактам памяти (не по словам модели)."""
     rows = memory.db.execute("SELECT kind, data FROM events WHERE ts >= ? AND kind IN "
                              "('activity', 'social_walk', 'social_said')", (since,)).fetchall()
@@ -176,12 +181,30 @@ def organic_metrics(memory, since):
             fact_said += 1 if d.get("fact") else 0
     diaries = memory.db.execute("SELECT COUNT(*) FROM events WHERE kind = 'diary' AND ts >= ?", (since,)).fetchone()[0]
     calls = memory.db.execute("SELECT COUNT(*) FROM llm_calls WHERE ts >= ?", (since,)).fetchone()[0]
+    # ops: сон — фактическое время между routine_sleep и routine_wake за период (раньше — плановая длина
+    # ночи из kv routine, она есть и у не уснувшего жителя)
     st = memory.get("routine") or {}
-    if st.get("mode") == "sleep" or st.get("sleep_hours"):
-        sleep_h = round(float(st.get("sleep_hours") or 0), 1)
+    sleep_s = sleep_seconds(memory, since, now or time.time(), st.get("mode") == "sleep")
+    sleep_h = round(sleep_s / 3600, 1)
     return {"занятий": len(acts - {None}), "мест в городе": len(points - {None}),
             "реплик без LLM": said, "из них о событиях": fact_said, "сон, ч": sleep_h,
             "вызовов моделей": calls, "дневников": diaries}
+
+
+def sleep_seconds(memory, since, now, sleeping_now):
+    """ops: ORG-046 — секунды сна в [since, now) по событиям routine_sleep/routine_wake."""
+    rows = memory.db.execute("SELECT ts, kind FROM events WHERE kind IN ('routine_sleep', 'routine_wake') "
+                             "AND ts >= ? AND ts < ? ORDER BY ts", (since - 86400, now)).fetchall()
+    total, start = 0.0, None
+    for ts, kind in rows:
+        if kind == "routine_sleep":
+            start = ts if start is None else start
+        elif start is not None:
+            total += max(0.0, ts - max(start, since))
+            start = None
+    if start is not None and sleeping_now:
+        total += max(0.0, now - max(start, since))
+    return total
 
 
 def roster_residents(persona_path):
@@ -223,6 +246,16 @@ def peer_names(persona_path, bots=None):
     return names
 
 
+async def sample_resources(memory, every=RESOURCE_EVERY):
+    """ops: ORG-047 — свой RSS/CPU в kv "resources" раз в every секунд (report читает без /proc)."""
+    while True:
+        try:
+            resources.brain_sample(memory)
+        except Exception as e:                                 # замер не должен ронять мозг
+            log.warning("замер ресурсов не удался: %s", e)
+        await asyncio.sleep(every)
+
+
 async def main_async(args, settings, persona, memory, state_dir):
     socket_path = os.path.join(args.lab_root, "run", "brain", f"{args.bot}.sock")
     mind = None
@@ -257,9 +290,11 @@ async def main_async(args, settings, persona, memory, state_dir):
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
     runner = asyncio.create_task(mind.run(lambda: bridge.connected))
+    sampler = asyncio.create_task(sample_resources(memory))   # ops: ORG-047
     await stop.wait()
     log.info("остановка мозга")
     runner.cancel()
+    sampler.cancel()                                          # ops:
     memory.add_event("brain_stopped", {})
     await bridge.close()
 
