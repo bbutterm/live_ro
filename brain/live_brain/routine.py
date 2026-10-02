@@ -163,6 +163,9 @@ class Routine:
 
         party = getattr(self.mind, "party", None)
         lead = party.leader_wants(now) if party else None     # участник группы: режим задаёт лидер
+        maps = getattr(self.mind, "maps", None)
+        if maps:
+            maps.tick(state, hunting=self.st["mode"] == "hunt" and state.get("map") in self.mind.persona["hunt_maps"])
         if self.st["mode"] == "hunt":
             if (0 < gap <= MAX_TICK_GAP and not state.get("dead")
                     and state.get("map") in self.mind.persona["hunt_maps"]):
@@ -307,6 +310,13 @@ class Routine:
             parts.append(f"достиг {max(l for l in levels if l is not None) if any(levels) else '?'} уровня")
         if met:
             parts.append("встречался с " + ", ".join(met))
+        heals = count("heal_confirmed")
+        if heals:
+            parts.append(f"лечение в группе подтверждено сервером {heals} раз")
+        for kind, label in (("gift_given", "отдал жителям"), ("gift_received", "получил от жителей")):
+            n = count(kind)
+            if n:
+                parts.append(f"{label} {n} раз")
         text = f"Дневник {day_state['day']}: " + ", ".join(parts) + "."
         mem.remember(text, 3)
         mem.add_event("diary", {"day": day_state["day"], "text": text})
@@ -379,6 +389,7 @@ class Routine:
             self.waiting_hp_noted = False
             self.st["recover"] = False
             self.st.pop("blocked", None)                 # новая сессия охоты — блокировка снята
+            self.pick_map()
             left = self.st["budget"] - self.st["hunted"]
             self.st.update(mode="hunt", mode_since=now, arrived=False,
                            session_end=self.st["hunted"] + min(left, self.minutes("session_minutes")))
@@ -474,11 +485,25 @@ class Routine:
 
     # ---------- модель ----------
 
+    def pick_map(self):
+        """AUT-045: карта на новую сессию — по опыту (maps.py), если модель не выбрала сама."""
+        maps = getattr(self.mind, "maps", None)
+        if not maps or self.st.get("prefer_source") == "llm":
+            self.st.pop("prefer_source", None)               # выбор модели действует одну сессию
+            return
+        pm = getattr(self.mind, "postmortem", None)
+        bans = pm.bans(self.clock()) if pm else {}
+        choice, why = maps.choose(self.mind.persona["hunt_maps"], bans)
+        if choice != self.st.get("prefer_map"):
+            self.note("routine_map_choice", f"На охоту пойду на {choice}: {why}.", 1)
+        self.st["prefer_map"] = choice
+
     def prefer(self, hunt_map):
         """Модель выбрала карту: в охоте — сразу, в городе — на следующую сессию."""
         if hunt_map not in self.mind.persona["hunt_maps"]:
             return "карта не из списка hunt_maps"
         self.st["prefer_map"] = hunt_map
+        self.st["prefer_source"] = "llm"
         self.last_sent = 0
         self.save()
         return None if self.st.get("mode") == "hunt" else "запомнил: пойду туда после отдыха"

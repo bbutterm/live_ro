@@ -12,5 +12,17 @@
     "prt_fild07",
     "prt_fild05"
   ],
-  "greeting": "Vera на месте. Arkady, как ты?"
+  "greeting": "Vera на месте. Arkady, как ты?",
+  "routine": {
+    "session_minutes": [
+      50,
+      80
+    ],
+    "break_minutes": [
+      40,
+      90
+    ],
+    "town_smalltalk_seconds": 480,
+    "_comment": "Vera осторожна: сессии короче, в городе дольше и чаще общается."
+  }
 }

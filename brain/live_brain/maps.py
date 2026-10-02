@@ -1,0 +1,109 @@
+"""Опыт по картам и знания о местах (AUT-030, 045, 073, 075, 076). Правила без LLM.
+
+Статистика карт (kv map_stats): минуты охоты (жив, на карте), победы, смерти, опыт (рост exp_pct),
+зени (изменение за время на карте). Выбор карты на сессию (AUT-045):
+    исключённые после смертей/застреваний — не выбираются;
+    карта с данными меньше EXPLORE_MIN минут — сначала попробовать (ограниченное исследование, AUT-075:
+    только из hunt_maps характера, с тем же распорядком и правилами отступления);
+    иначе — лучшая по очкам: победы/час − DEATH_PENALTY × смерти/час.
+    Модель может предложить карту (prefer), но опыт и исключения важнее догадки.
+Места (kv places): карта -> первый/последний раз, источник seen (был сам) или told (сказал житель,
+с автором и временем). Слух не становится фактом: told не исключает карту и не меняет выбор (AUT-076).
+"""
+import logging
+import time
+
+log = logging.getLogger("maps")
+
+EXPLORE_MIN = 20
+DEATH_PENALTY = 50           # смерть «стоит» 50 побед: две смерти за сессию перевешивают богатую карту
+MAX_GAP = 5
+
+
+class MapStats:
+    def __init__(self, mind, clock=time.time):
+        self.mind = mind
+        self.clock = clock
+        self.last = None            # (ts, map, exp_pct, zeny)
+
+    def stats(self):
+        return self.mind.mem.get("map_stats", {})
+
+    def save(self, st):
+        self.mind.mem.set("map_stats", st)
+
+    def tick(self, state, hunting):
+        """Каждый тик распорядка: накопить время/опыт/зени на карте охоты."""
+        now = self.clock()
+        cur = (now, state.get("map"), state.get("exp_pct"), state.get("zeny"))
+        prev, self.last = self.last, cur
+        self.seen(state.get("map"), now)
+        if not (hunting and prev and prev[1] == cur[1] and 0 < now - prev[0] <= MAX_GAP) or state.get("dead"):
+            return
+        st = self.stats()
+        m = st.setdefault(cur[1], {"minutes": 0.0, "kills": 0, "deaths": 0, "exp": 0.0, "zeny": 0})
+        m["minutes"] += (now - prev[0]) / 60
+        if prev[2] is not None and cur[2] is not None and cur[2] >= prev[2]:
+            m["exp"] += cur[2] - prev[2]                       # уровень-ап сбрасывает %, его не считаем
+        if prev[3] is not None and cur[3] is not None:
+            m["zeny"] += cur[3] - prev[3]
+        self.save(st)
+
+    def on_kill(self, hmap):
+        self._bump(hmap, "kills")
+
+    def on_death(self, hmap):
+        self._bump(hmap, "deaths")
+
+    def _bump(self, hmap, key):
+        if not hmap:
+            return
+        st = self.stats()
+        m = st.setdefault(hmap, {"minutes": 0.0, "kills": 0, "deaths": 0, "exp": 0.0, "zeny": 0})
+        m[key] += 1
+        self.save(st)
+
+    def score(self, hmap):
+        m = self.stats().get(hmap)
+        if not m or m["minutes"] < EXPLORE_MIN - 1e-6:           # допуск на сложение дробных минут
+            return None
+        hours = m["minutes"] / 60
+        return (m["kills"] - DEATH_PENALTY * m["deaths"]) / hours
+
+    def choose(self, maps, bans):
+        allowed = [m for m in maps if m not in bans] or list(maps)
+        for m in allowed:
+            if self.score(m) is None:
+                return m, "мало опыта на карте — попробую"
+        best = max(allowed, key=lambda m: self.score(m))
+        return best, f"лучшая по опыту: {self.score(best):.0f} очков/час"
+
+    def summary(self):
+        out = {}
+        for name, m in self.stats().items():
+            hours = max(m["minutes"] / 60, 1e-9)
+            out[name] = {"минут": int(m["minutes"]), "побед_в_час": round(m["kills"] / hours, 1),
+                         "смертей": m["deaths"], "опыт_%_в_час": round(m["exp"] / hours, 1),
+                         "зени_в_час": int(m["zeny"] / hours)}
+        return out
+
+    # ---------- места ----------
+
+    def seen(self, hmap, now=None):
+        if not hmap:
+            return
+        now = now or self.clock()
+        places = self.mind.mem.get("places", {})
+        p = places.get(hmap)
+        if p and p.get("source") == "seen" and now - p.get("last", 0) < 600:
+            return                                              # не писать в БД каждый тик
+        places[hmap] = {"source": "seen", "first": (p or {}).get("first", now), "last": now}
+        self.mind.mem.set("places", places)
+
+    def told(self, hmap, author, what):
+        """Слух от жителя: хранится с автором и временем, но не превращается в факт."""
+        places = self.mind.mem.get("places", {})
+        p = places.setdefault(hmap, {"source": "told"})
+        p.setdefault("rumors", [])
+        p["rumors"] = (p["rumors"] + [{"from": author, "what": what, "ts": self.clock()}])[-5:]
+        self.mind.mem.set("places", places)

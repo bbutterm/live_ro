@@ -36,6 +36,7 @@ class SafetyPolicy:
         self.said = []
         self.whispered = []          # [(время, кому)]
         self.paused_at = None
+        self.texts = {}              # (кому, текст) -> время: не повторять одно и то же (AUT-095)
 
     def _recent(self, items, now):
         return [x for x in items if now - (x[0] if isinstance(x, tuple) else x) < WINDOW]
@@ -93,6 +94,11 @@ class SafetyPolicy:
             if not text:
                 return None, "пустой текст"
             action = dict(action, text=text)
+        if not protocol and kind in ("say", "whisper"):
+            key = (str(action.get("to", "")) if kind == "whisper" else "", action["text"].lower())
+            self.texts = {k: t for k, t in self.texts.items() if now - t < 3600}
+            if key in self.texts:
+                return None, "та же реплика тому же адресату меньше часа назад"
         if protocol and kind in ("say", "whisper"):
             to = str(action.get("to", "")).strip()
             if kind == "whisper" and (not to or len(to) > 23 or '"' in to):
@@ -141,6 +147,8 @@ class SafetyPolicy:
         elif kind == "unfollow" and not state.get("follow"):
             return None, "никого не сопровождаю"
         clean = {k: action[k] for k in ("action", "text", "to", "map", "name") if k in action}
+        if not protocol and kind in ("say", "whisper"):
+            self.texts[(str(clean.get("to", "")) if kind == "whisper" else "", clean["text"].lower())] = now
         return clean, None
 
     def pause_expired(self, now=None):

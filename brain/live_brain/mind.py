@@ -13,14 +13,16 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 
 from . import llm
 from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
+from .lifecycle import STALE_SEC, Lifecycle
+from .maps import MapStats
 from .party import TAG as PARTY_TAG, Party
 from .plans import TAG, PlanExecutor, PlanStore
-from .lifecycle import STALE_SEC, Lifecycle
 from .postmortem import Postmortem
 from .routine import Routine
 from .safety import SafetyPolicy
@@ -28,6 +30,15 @@ from .safety import SafetyPolicy
 log = logging.getLogger("mind")
 
 MAX_ACTIONS = 2
+# AUT-091: обещание движения без плана — пустые слова («уже иду», а тело сидит в другом городе).
+PROMISE = re.compile(r"(уже\s+иду|иду\s+к\s+тебе|бегу\s+к|скоро\s+буду|буду\s+через|жди\s+меня|"
+                     r"встретимся\s+(у|в|на)|подожди\s+меня|on\s+my\s+way|coming\s+to\s+you)", re.I)
+# AUT-079/080: готовность ко второй профессии (job 40 у первой профессии). Квест смены
+# профессии — диалоги NPC; без проверенного сценария бот его не проходит, а сообщает владельцу.
+FIRST_JOBS = {"Swordsman": "Knight/Crusader", "Swordman": "Knight/Crusader", "Acolyte": "Priest/Monk",
+              "Mage": "Wizard/Sage", "Archer": "Hunter/Bard/Dancer", "Thief": "Assassin/Rogue",
+              "Merchant": "Blacksmith/Alchemist"}
+INFO_TAG = re.compile(r"\[info:(danger):([a-z0-9_]{3,16})\]")
 INBOX_TTL = 600           # команда оператора старше 10 минут не исполняется
 PLAN_LLM_ACTIONS = ("propose_meeting", "accept_meeting", "decline_meeting", "cancel_plan")
 
@@ -99,6 +110,7 @@ class Mind:
         self.plans = PlanExecutor(self, PlanStore(memory.db))
         self.postmortem = Postmortem(self)
         self.life = Lifecycle(self)
+        self.maps = MapStats(self)
         feat = settings.feature
         self.routine = Routine(self, world) if world and feat("routine") else None
         self.economy = Economy(self, world["economy"]) if world and world.get("economy") and feat("economy") else None
@@ -123,6 +135,7 @@ class Mind:
             self.notice_peers(self.state.get("players") or [])
             self.mem.set("last_state", self.state)
             self.postmortem.on_state(self.state)
+            self.check_job_ready()
             self.state_received = time.time()
             self.fresh_state = True
         elif kind == "event":
@@ -192,8 +205,13 @@ class Mind:
             self.postmortem.observe(kind, event)
         if kind == "kill":
             self.postmortem.on_kill(event.get("monster"))
+            self.maps.on_kill(event.get("map"))
         if kind == "died":
+            self.maps.on_death(event.get("map"))
+            banned_before = set(self.postmortem.bans())
             self.postmortem.report(event)
+            for hmap in set(self.postmortem.bans()) - banned_before:
+                await self.share_rumor(hmap, "danger")
             if self.party:
                 await self.party.on_my_death(event)
         if self.routine and kind == "died":
@@ -211,6 +229,10 @@ class Mind:
         if (self.economy and kind == "chat_private" and event.get("from") in self.ctx.peers
                 and ECON_TAG.search(str(event.get("text", "")))):
             await self.economy.on_tag(str(event["from"]), str(event["text"]))  # просьба/ответ жителя
+            return
+        if (kind == "chat_private" and event.get("from") in self.ctx.peers
+                and INFO_TAG.search(str(event.get("text", "")))):
+            self.on_rumor(str(event["from"]), str(event["text"]))
             return
         if (self.party and kind == "chat_private" and event.get("from") in self.ctx.peers
                 and PARTY_TAG.search(str(event.get("text", "")))):
@@ -344,6 +366,29 @@ class Mind:
         if self.safety.pause_expired():
             log.warning("пауза дольше %d с — продолжаю охоту по правилу", self.safety.max_pause)
             await self.execute([{"action": "resume"}], source="rule", reason="правило: пауза истекла")
+
+    def check_job_ready(self):
+        job, jlv = self.state.get("job"), self.state.get("job_lv")
+        if job not in FIRST_JOBS or not isinstance(jlv, int) or jlv < 40 or self.mem.get("job_ready_noted") == job:
+            return
+        self.mem.set("job_ready_noted", job)
+        self.mem.remember(f"Уровень профессии {jlv}: могу стать {FIRST_JOBS[job]}. Квест смены профессии "
+                          "сам пока не прохожу.", 4)
+        self.alert("job_ready", f"{job} job {jlv}: готов к смене профессии ({FIRST_JOBS[job]}); "
+                                "сценарий квеста не автоматизирован", every=86400)
+
+    async def share_rumor(self, hmap, what):
+        """AUT-076: рассказать жителям о месте; у них это слух с автором, а не факт."""
+        for peer in sorted(self.ctx.peers):
+            await self.execute([{"action": "whisper", "to": peer, "text": f"[info:{what}:{hmap}]"}],
+                               source="rule", reason=f"слух жителям: {what} {hmap}", protocol=True)
+
+    def on_rumor(self, sender, text):
+        m = INFO_TAG.search(text)
+        what, hmap = m.groups()
+        self.maps.told(hmap, sender, what)
+        self.mem.remember(f"{sender} говорит, что на {hmap} опасно (слух, сам не проверял).", 2, kind="note")
+        self.write_decision({"type": "rumor", "from": sender, "what": what, "map": hmap})
 
     def reconnected(self):
         """AUT-003/106: новое подключение тела — старый снимок не текущий, незавершённое сверить."""
@@ -586,6 +631,7 @@ class Mind:
             "глобальные_цели": self.routine.goals() if self.routine else None,
             "хозяйство": self.economy.summary() if self.economy else None,
             "опасные_монстры": self.postmortem.risky_monsters(),
+            "опыт_по_картам": self.maps.summary(),
             "закрытые_карты_до": {m: time.strftime("%H:%M", time.localtime(t))
                                   for m, t in self.postmortem.bans().items()},
             "группа": ({"имя": self.party.name, "лидер": self.party.leader,
@@ -664,7 +710,15 @@ class Mind:
                 self.write_decision({"type": "plan_decision", "source": "llm", "action": a, "result": why or "ok"})
             else:
                 game_actions.append(a)
-        actions = game_actions
+        planned = any(a.get("action") in ("propose_meeting", "accept_meeting") for a in d.get("actions") or []
+                      if isinstance(a, dict)) or self.plans.store.active()
+        actions = []
+        for a in game_actions:
+            if a.get("action") in ("say", "whisper") and not planned and PROMISE.search(str(a.get("text", ""))):
+                self.write_decision({"type": "rejected_promise", "action": a,
+                                     "why": "обещание прийти без плана встречи — тело никуда не идёт"})
+                continue
+            actions.append(a)
         await self.execute(actions, source="llm", reason=reason, extra={
             "model": self.s.model, "latency": round(latency, 2), "usage": usage,
             "thought": str(d.get("thought", ""))[:300], "goal": d.get("goal"), "mood": d.get("mood")})

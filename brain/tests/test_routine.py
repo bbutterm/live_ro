@@ -86,17 +86,18 @@ class RoutineTest(unittest.TestCase):
     def test_daily_budget_between_4_and_5_hours(self):
         self.run_for(2)
         self.assertTrue(4 * HOUR <= self.r.st["budget"] <= 5 * HOUR)
-        self.assertTrue(60 * 60 <= self.r.st["session_end"] <= 100 * 60)
+        lo, hi = self.r.cfg["session_minutes"]                  # с учётом привычек характера
+        self.assertTrue(lo * 60 <= self.r.st["session_end"] <= hi * 60)
 
     def test_session_tired_town_sit_then_hunt_again(self):
-        self.run_for(101 * 60, step=5, on_tick=self.walk_to_town)
+        self.run_for((self.r.cfg["session_minutes"][1] + 1) * 60, step=5, on_tick=self.walk_to_town)
         self.assertEqual(self.r.st["mode"], "town")
         # фейковый бот «охотится» неподвижно — правило застревания тоже срабатывает, здесь оно не важно
         kinds = [d["event"] for d in self.mind.decisions if d["type"] == "routine" and d["event"] != "routine_stuck"]
         self.assertEqual(kinds[:2], ["routine_town", "routine_arrived"])
         self.assertIn({"action": "sit"}, self.mind.sent)
         self.assertEqual(self.mind.state["lock_map"], "prontera")
-        self.run_for(91 * 60, step=5, on_tick=self.walk_to_town)       # перерыв не больше 90 мин
+        self.run_for((self.r.cfg["break_minutes"][1] + 1) * 60, step=5, on_tick=self.walk_to_town)  # перерыв не дольше нормы
         self.assertEqual(self.r.st["mode"], "hunt")
         self.assertEqual(self.mind.state["lock_map"], "prt_fild08")
         self.assertIsNone(self.mind.state["lock_x"])
@@ -130,7 +131,7 @@ class RoutineTest(unittest.TestCase):
         self.assertEqual(self.r.st["mode"], "hunt")                  # не ушёл в город посреди встречи
 
     def test_restart_reconciles_body_config(self):
-        self.run_for(101 * 60, step=5, on_tick=self.walk_to_town)
+        self.run_for((self.r.cfg["session_minutes"][1] + 1) * 60, step=5, on_tick=self.walk_to_town)
         self.assertEqual(self.r.st["mode"], "town")
         # перезапуск бота: OpenKore снова с профилем из Git (охота, без точки); мозг перезапущен
         self.mind.state.update(lock_map="prt_fild08", lock_x=None, lock_y=None)

@@ -12,5 +12,16 @@
     "prt_fild07",
     "prt_fild05"
   ],
-  "greeting": "Arkady снова на поле. Кто тут по мою душу?"
+  "greeting": "Arkady снова на поле. Кто тут по мою душу?",
+  "routine": {
+    "session_minutes": [
+      70,
+      110
+    ],
+    "break_minutes": [
+      30,
+      60
+    ],
+    "_comment": "Arkady упрям: охотится дольше, отдыхает меньше (норма 4-5 ч общая)."
+  }
 }

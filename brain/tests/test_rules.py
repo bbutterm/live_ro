@@ -82,11 +82,22 @@ class SafetyTest(unittest.TestCase):
 
     def test_chat_limits(self):
         now = 1000.0
-        ok = [self.p.check({"action": "say", "text": "a"}, STATE, now)[1] is None for _ in range(3)]
+        ok = [self.p.check({"action": "say", "text": f"a{i}"}, STATE, now)[1] is None for i in range(3)]
         self.assertEqual(ok, [True, True, False])
         self.assertIsNone(self.p.check({"action": "whisper", "to": "A", "text": "x"}, STATE, now)[1])
-        self.assertIsNotNone(self.p.check({"action": "whisper", "to": "A", "text": "x"}, STATE, now + 1)[1])
-        self.assertIsNone(self.p.check({"action": "whisper", "to": "A", "text": "x"}, STATE, now + 11)[1])
+        self.assertIsNotNone(self.p.check({"action": "whisper", "to": "A", "text": "y"}, STATE, now + 1)[1])
+        self.assertIsNone(self.p.check({"action": "whisper", "to": "A", "text": "z"}, STATE, now + 11)[1])
+
+    def test_no_repeat_same_text(self):
+        """AUT-095: та же реплика тому же адресату — не раньше чем через час; протокол не ограничен."""
+        now = 1000.0
+        self.assertIsNone(self.p.check({"action": "whisper", "to": "A", "text": "Привет"}, STATE, now)[1])
+        self.assertIn("та же реплика", self.p.check({"action": "whisper", "to": "A", "text": "привет"}, STATE, now + 60)[1])
+        self.assertIsNone(self.p.check({"action": "whisper", "to": "B", "text": "Привет"}, STATE, now + 60)[1])
+        self.assertIsNone(self.p.check({"action": "whisper", "to": "A", "text": "Привет"}, STATE, now + 3700)[1])
+        for i in range(3):
+            self.assertIsNone(self.p.check({"action": "whisper", "to": "A", "text": "[party:hunt:x]"}, STATE,
+                                           now + i, protocol=True)[1])
 
     def test_pause_expires(self):
         self.p.check({"action": "pause"}, STATE, 100.0)
