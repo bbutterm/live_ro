@@ -312,4 +312,52 @@ is_deeply(\@ev, [], 'society: согласие — не событие');
 	ok(!$okw && $why =~ /непроходима/, 'explore: на этой карте клетка непроходима — отказ');
 }
 
+# ---- healer: Heal/Blessing/AGI на игрока (ORG-069) ----
+package FakeList; sub new { my ($c, @p) = @_; bless {items => [@p]}, $c } sub getItems { [@{$_[0]{items}}] }
+sub find { my ($s, $x) = @_; for my $i (0 .. $#{$s->{items}}) { return $i if $s->{items}[$i] == $x } -1 }
+sub getByID { undef }
+package main;
+{
+	local $Globals::char->{name} = 'Vera';
+	local $Globals::char->{dead} = 0;
+	local $Globals::char->{pos_to} = {x => 237, y => 310};
+	local $Globals::char->{skills} = {AL_HEAL => {lv => 10}, AL_BLESSING => {lv => 0}, AL_INCAGI => {lv => 3},
+	                                   AL_DP => {lv => 5}, MG_FIREBOLT => {lv => 4}};
+	my $savedPlayers = $Globals::playersList;             # local не виден через импорт Globals — присваиваю
+	$Globals::playersList = FakeList->new({name => 'Somebody', pos_to => {x => 1, y => 1}},
+		{name => 'Arkady', pos_to => {x => 240, y => 305}}, {name => 'Far Away', pos_to => {x => 237, y => 330}},
+		{name => 'Ghost', dead => 1, pos_to => {x => 237, y => 311}});
+	is_deeply(brainBridge::supportSkills(), {AL_HEAL => 10, AL_INCAGI => 3}, 'healer: support_skills — выученные из списка');
+	my ($okh, $rh) = brainBridge::actionToCommand({action => 'skill_on_player', skill => 'AL_HEAL', to => 'Arkady'});
+	ok($okh, 'healer: Heal на видимого жителя принят');
+	is($rh, 'sp 28 1', 'healer: sp <id навыка> <номер игрока> (Commands.pm cmdUseSkill sp)');
+	is((brainBridge::actionToCommand({action => 'skill_on_player', skill => 'AL_INCAGI', to => 'Arkady'}))[1], 'sp 29 1',
+	   'healer: Increase AGI');
+	my @no = (
+		[{skill => 'MG_FIREBOLT', to => 'Arkady'}, qr/не из списка/, 'атакующий навык'],
+		[{skill => 'AL_DP', to => 'Arkady'}, qr/не из списка/, 'навык вне allowlist'],
+		[{skill => 'AL_BLESSING', to => 'Arkady'}, qr/не выучен/, 'не выученный Blessing'],
+		[{skill => 'AL_HEAL', to => 'Nobody'}, qr/не виден/, 'невидимая цель'],
+		[{skill => 'AL_HEAL', to => 'Far Away'}, qr/дальше 9/, 'дальше 9 клеток'],
+		[{skill => 'AL_HEAL', to => 'Ghost'}, qr/мёртв/, 'мёртвая цель'],
+		[{skill => 'AL_HEAL', to => 'Vera'}, qr/себя/, 'на себя'],
+		[{skill => 'AL_HEAL', to => 'Ar"kady'}, qr/неверный/, 'кавычка в имени'],
+	);
+	for my $c (@no) {
+		my ($okn, $why) = brainBridge::actionToCommand({action => 'skill_on_player', %{$c->[0]}});
+		ok(!$okn && $why =~ $c->[1], "healer: отказ — $c->[2]");
+	}
+	$Globals::currentChatRoom = 'R9';
+	%Globals::chatRooms = (R9 => {title => 'Лечу у собора'});
+	@Commands::ran = ();
+	brainBridge::handleLine('{"type":"action","id":91,"action":"skill_on_player","skill":"AL_HEAL","to":"Arkady"}');
+	is_deeply(\@Commands::ran, ['chat leave', 'sp 28 1'], 'healer: в чат-комнате — сначала chat leave (rAthena chatID)');
+	undef $Globals::currentChatRoom;
+	%Globals::chatRooms = ();
+	local $Globals::char->{dead} = 1;
+	ok(!(brainBridge::actionToCommand({action => 'skill_on_player', skill => 'AL_HEAL', to => 'Arkady'}))[0],
+	   'healer: мёртвый не лечит');
+	$Globals::playersList = $savedPlayers;
+}
+
 done_testing();

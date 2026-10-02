@@ -16,7 +16,8 @@
       "other_maps": "других мест охоты нет",
       "rumor_to_check": "слуха для проверки нет",
       "supply_min": "запасы и так в порядке — по делам незачем",
-      "gathering_time": "вечерний круг — только в свои часы (tradition.hours)"
+      "gathering_time": "вечерний круг — только в свои часы (tradition.hours)",
+      "healer_role": "лечить у собора может только лекарь (healer.py: Acolyte-ветка и щедрость)"
     }
   },
   "activities": {
@@ -81,6 +82,12 @@
       "satisfies": {"social": 1.0, "rest": 0.4},
       "requires": {"gathering_time": true}, "cooldown_minutes": 600, "proof": "gathered", "proof_minutes": 40,
       "_comment": "ORG-058 (tradition.py): окно goals.json tradition.hours, житель не спит; вес × (0.5 + сила традиции); факт — у точки и рядом житель (≤ 4 клеток)"
+    },
+    "healer_post": {
+      "label": "полечить жителей у собора", "modes": ["town"],
+      "satisfies": {"care": 1.0, "social": 0.8},
+      "requires": {"day": true, "healer_role": true}, "cooldown_minutes": 180, "proof": "at_post", "proof_minutes": 15,
+      "_comment": "ORG-069 (healer.py): только лекарь (Acolyte-ветка, generosity ≥ 0.6, Heal выучен); стоит у собора post_minutes, вывеска «Лечу у собора», лечит по просьбе жителей ([heal:ask:]) и людей (слово heal/лечи)"
     }
   }
 }

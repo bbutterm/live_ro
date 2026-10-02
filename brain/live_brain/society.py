@@ -414,6 +414,9 @@ class Society:
         social = self.social()
         if social and social.next_walk and social.next_walk - now < 60:
             return "пора гулять"
+        healer = getattr(self.mind, "healer", None)                                    # healer: ORG-069
+        if healer and self.room and self.room.get("title") == healer.cfg["sign"] and not healer.on_post(state, now):
+            return "смена лекаря окончена"                                             # healer:
         return None
 
     def title(self, state):
@@ -473,13 +476,15 @@ class Society:
                 self.next_room = now + self.interval()
                 self.save()
             return
-        if self.next_room is None:
+        healer = getattr(self.mind, "healer", None)                    # healer: ORG-069 вывеска лекаря на посту
+        sign = None if why or not healer else healer.sign(state, now)  # healer: — сразу, без шанса и интервала
+        if self.next_room is None and not sign:                        # healer:
             self.next_room = now + self.interval()      # отсчёт — с запуска / прибытия
             return
-        if why or now < self.next_room:
+        if why or (now < (self.next_room or 0) and not sign):          # healer:
             return
         self.next_room = now + self.interval()
-        if self.rng.random() >= self.cfg["room_chance"]:
+        if not sign and self.rng.random() >= self.cfg["room_chance"]:  # healer:
             return
         lo, hi = self.cfg["room_minutes"]
         stay = self.rng.uniform(lo, hi) * 60
@@ -488,7 +493,7 @@ class Society:
             stay = min(stay, social.next_walk - now - 60)
         if stay < 5 * 60:
             return                                        # прогулка слишком скоро — не стоит открывать
-        title = self.title(state)
+        title = sign or self.title(state)                              # healer:
         self.room = {"title": title, "since": now, "until": now + stay, "confirmed": False}
         self.save()
         self.mind.write_decision({"type": "society", "event": "room_open", "title": title,

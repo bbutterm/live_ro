@@ -425,3 +425,48 @@
 `whim_minutes`, `whim_bonus`, `stale_days`. Выключатель: `BRAIN_DISABLE=habits`. Тесты: `brain/tests/test_habits.py`.
 Ограничения: карты охоты в привычки и скуку не входят (там уже опыт карт и толпа crowd); после перезапуска скука
 пересчитывается из памяти на первом тике. В игре не проверено.
+
+## Лекарь у собора (ORG-069) — `brain/live_brain/healer.py`
+
+Ремесло-роль: житель-Acolyte (Priest, Monk…) со щедростью ≥ 0.6 и выученным Heal (Vera) иногда работает лекарем у
+собора Пронтеры. Остальные жители — пациенты. Платы нет: лекарь ничего не просит и не продаёт лечение. Без LLM.
+
+- **Почему по просьбе.** HP чужого игрока клиент не знает: OpenKore видит HP только участников группы
+  (`AI/CoreLogic.pm:3132-3147` smartHeal, `Misc.pm:6057-6067`), а их уже лечит `partySkill` профиля
+  (`bots/combat/classes.json`). `state.players` моста — без HP. Поэтому житель (знает свой HP) шепчет
+  «Vera, подлечишь? HP 45% `[heal:ask:45]`», человек пишет шёпотом или в общий чат рядом слово
+  heal/хил/лечи/вылечи/подлечи. Слово выбирает только «лечить отправителя»: навык и цель фиксированы, текст не хранится.
+- **Пост** — занятие `healer_post` (`activities.json`: town, care 1.0 / social 0.8, `day`, `healer_role`, факт
+  `at_post` за 15 мин, перезарядка 180 мин). Исполнитель — `social.visit` к точке `social.points.church` (237,310),
+  стоять `post_minutes` (20–40). На посту — тихий снимок шины `healer_post {map, x, y, open, until}` (затирание, не в
+  летописи); начало — `healer_post_start` (шина 2, летопись), конец — `healer_shift {heals, blesses, patients,
+  minutes}` (память, шина 2, летопись).
+- **Вывеска** «Лечу у собора» — комната society (ORG-026): на посту `society.rooms` открывает её без шанса и интервала,
+  если safety разрешит (не чаще 10 мин), очередь пуста и минуту не было каста; закрывает, когда смена кончилась.
+- **Каст** — действие моста `skill_on_player {skill, to}` → OpenKore `sp <id> <номер игрока>` (`Commands.pm:639`,
+  `cmdUseSkill`; уровень — максимальный выученный, встать — `Task::UseSkill`). Только Heal (28), Blessing (34),
+  Increase AGI (29) — список `%CAST` моста и `safety.SUPPORT_CASTS`; навык выучен (`state.support_skills`), цель видна,
+  жива, не дальше 9 клеток (Range 9 в `db/pre-re/skill_db.yml`), не я. В чат-комнате rAthena навык не примет
+  (`clif.cpp:12916` chatID) — мост сначала делает `chat leave`. Safety: только исполнитель правил, SP ≥ 10 %,
+  не больше 40 кастов за 10 мин.
+- **Правила лекаря** (`goals.json → healer`): просьба — в очередь, если я на посту, цель видна не дальше `range`,
+  жителю — HP по его словам < `heal_below` (70); каст раз в `cast_gap_seconds` (5), одному — раз в
+  `person_gap_seconds` (60), человеку — `stranger_gap_seconds` (120); SP ≥ `min_sp` (30 %); `heals_per_day` (150).
+  Не на посту/HP в порядке/далеко — шёпот с `[heal:no]`.
+- **Факт** — событие `support` (пакет `skilluse`, `brainBridge onSkillUse`) с моим именем источником: `healer_heal
+  {to, amount, who}`; после Heal при SP ≥ `bless_sp` (60 %) — Blessing и Increase AGI тому же (выученные; одному раз
+  в `bless_gap_minutes` 30), факт — `healer_bless`. Heal вне поста (бой, partySkill) сменой не считается.
+- **Пациент**: город (распорядок town, дошёл), HP < `ask_below` (70), открытый пост по шине (снимок ≤ 10 мин), не в
+  ссоре: лекарь виден не дальше 9 клеток — шёпот-просьба (раз в `ask_gap_seconds` 180); не виден и HP < `visit_below`
+  (60) — прогулка к посту (раз в `visit_gap_minutes` 30, событие `healer_visit`). `[heal:no]` — пауза 30 мин.
+  Вылечила у собора — `healer_healed_me` (память, летопись) и отношение +1 раз в сутки; «спасибо» говорит social.
+- **Чаевые**: не просит; сделки OpenKore принимает только от жителей (`dealAuto_names`), поэтому чаевые людей сейчас
+  не принимаются.
+
+Настройки: `enabled`, `role` (`auto`|`healer`|`patient`), `min_generosity`, `post`, `post_minutes`, `post_cells`, `sign`,
+`range`, `heal_below`, `min_sp`, `bless_sp`, `cast_gap_seconds`, `person_gap_seconds`, `stranger_gap_seconds`,
+`bless_gap_minutes`, `heals_per_day`, `ask_below`, `visit_below`, `ask_gap_seconds`, `visit_gap_minutes`,
+`no_backoff_minutes`. Выключатель: `BRAIN_DISABLE=healer`. Тесты: `brain/tests/test_healer.py`, `bots/tests/brain_bridge.t`.
+Ограничения: в игре не проверено (нужна Vera с выученными навыками и `support_skills` в state); клетка 237,310 и
+вывеска рядом с NPC (rAthena `min_npc_vendchat_distance 3`) не проверены на сервере; чаевые не реализованы;
+пациент-человек должен знать слово.

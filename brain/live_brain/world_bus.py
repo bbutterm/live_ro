@@ -56,9 +56,12 @@ PUBLISH = {
     "tradition_stage": ("tradition", 3),      # tradition: смена ступени вечернего круга (ORG-058)
     "card_found": ("card_found", 3),          # collect: ORG-074 новая карта (первая в жизни — 5)
     "trophy_rare": ("trophy_rare", 3),        # collect: первая добыча редкости
+    "healer_post_start": ("healer_post_start", 2),   # healer: ORG-069 лекарь встал у собора
+    "healer_shift": ("healer_shift", 2),             # healer: итог смены лекаря
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 BACKSTAGE = {"director"}                      # director: решения режиссёра (ORG-086) — в дашборд, не в летопись/серию
+QUIET |= {"healer_post"}                      # healer: снимок поста лекаря (затирание)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS world_events (
@@ -303,6 +306,12 @@ TEXTS = {
     "card_found": lambda d: f"нашёл(шла) карту {d.get('name')}" + (" — первая карта!" if d.get("first") else ""),  # collect:
     "trophy_rare": lambda d: f"добыл(а) редкость: {d.get('name')}",                                       # collect:
     "tradition": lambda d: d.get("text") or f"вечерний круг: {d.get('label')}",   # tradition: ORG-058
+    "healer_post_start": lambda d: "лечит у собора",                                 # healer: ORG-069
+    "healer_shift": lambda d: f"лечил(а) у собора: Heal {d.get('heals')}, людей {d.get('patients')}",   # healer:
+    "order": lambda d: f"ищет {d.get('name')} x{d.get('n')}, платит {d.get('reward')}z",            # orders: ORG-070
+    "order_taken": lambda d: f"заказ взял(а) {d.get('by')}",                                       # orders:
+    "order_closed": lambda d: f"заказ закрыт ({d.get('why')})",                                    # orders:
+    "order_done": lambda d: f"выполнил(а) заказ {d.get('for')}: {d.get('name')} x{d.get('n')}",   # orders:
     "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
                                      f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)
     "level_up": lambda d: f"достиг {d.get('level')} уровня",

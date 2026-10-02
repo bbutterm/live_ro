@@ -22,6 +22,8 @@ from .guild import CHRONICLE_LINES as GUILD_LINES       # guild: основан�
 from .rivalry import CHRONICLE_LINES as RIVAL_LINES     # rivalry: обгоны соперника (ORG-060)
 from .collection import CHRONICLE_LINES as COLLECT_LINES   # collect: карты и трофеи (ORG-074)
 from .boss import CHRONICLE_LINES as BOSS_LINES             # boss: мини-босс группой (ORG-079)
+from .healer import CHRONICLE_LINES as HEALER_LINES     # healer: лекарь у собора (ORG-069)
+from .orders import CHRONICLE_LINES as ORDER_LINES      # orders: заказы между жителями (ORG-070)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 
 LINES = {
@@ -48,6 +50,8 @@ LINES = {
     **RIVAL_LINES,                                        # rivalry: ORG-060
     **COLLECT_LINES,                                      # collect: ORG-074
     **BOSS_LINES,                                         # boss: ORG-079
+    **HEALER_LINES,                                       # healer: ORG-069
+    **ORDER_LINES,                                        # orders: ORG-070
 }
 
 

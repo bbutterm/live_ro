@@ -38,6 +38,8 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
            210 episodes · 220 collection · 125 gossip (метка [gossip:] — 35, промпт — 245) · 205 habits
            (промпт — 225) · 230 director
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
+Новые после таблицы: healer (ORG-069) — метка [heal:] 65, события support/chat_* 25, тик 135.  # healer:
+orders (ORG-070) — метка [order:] 25, тик 25.  # orders:
 """
 import inspect
 import re
@@ -68,6 +70,8 @@ from .strangers import Strangers
 from .tradition import Tradition
 from .collection import Collection
 from .director import Director          # director: ORG-086 рассказчик мира
+from .healer import Healer           # healer: ORG-069 лекарь у собора
+from .orders import Orders           # orders: ORG-070 заказы между жителями
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -101,6 +105,8 @@ MODULES = (
     Collection,        # после social: регистрирует тему card
     Gossip,            # gossip: ORG-056, после social (тема gossip) и rumors
     Habits,            # habits: ORG-068 (activity.scores, social.pick_point читают mind.habits)
+    Healer,            # healer: ORG-069 (тик 135, метка [heal:] 65, события support/чат 25)
+    Orders,            # orders: ORG-070 после economy и шины (тик 25, метка [order:] 25)
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
