@@ -156,6 +156,84 @@ NPC-продажи с его Overcharge + 1z; не больше `slots` (MC_VEND
 атомарна — не используется); OpenKore `sellAuto` может продать NPC собранное под заказ (предмет из
 `items_control.txt` с флагом продажи) — модуль это не запрещает; дроп по атласу не проверяется; в игре не проверено.
 
+## Рыночный день (ORG-071) — `brain/live_brain/market.py`
+
+Раз в неделю — в день недели мира из `goals.json market_day.weekdays` (по умолчанию 6: суббота календаря ORG-059,
+`calendar.json` «рыночный день») — модуль `MarketDay` на один день мягчит пороги уже существующих механизмов.
+Новых протоколов сделки нет: торгуют `[offer:]` ORG-033, лавка ORG-034, вывески ORG-026, заказы ORG-070.
+
+| Что | Обычный день | Рыночный день |
+|---|---|---|
+| `economy.market.offer_gap_minutes` (предложить лот жителю) | 30 | × 0.5 |
+| `economy.market.trades_per_day` | 4 | + 4 |
+| `economy.market.shop_hours` (лавка Merchant) | 6 | 2 |
+| `prices.valuable_lot` («лишнее» для продажи) | 500z | × 0.5 |
+| `orders.post_gap_hours` (новый заказ) | 6 | × 0.5 |
+| `society.room_sign_chance` (вывеска «Продаю/Куплю») | 0.7 | 0.9 |
+| вес точки `market` в прогулке `social` | 0 | 6 (фонтан 2, остальные 1) |
+
+Исходные значения снимаются при создании модуля и возвращаются в первый такт обычного дня. Тик модуля — 15:
+после распорядка, до экономики, поэтому в этом же такте экономика уже торгует по порогам дня.
+
+**Площадь** `market` — `prontera 155,180` («к рыночной площади у фонтана»): клетки ±2 проходимы (`db/re/map_cache.dat`),
+ближайший NPC из загружаемых скриптов (`npc/re/scripts_main.conf`) — дальше 5 клеток (лавке и комнате мешает NPC
+ближе `min_npc_vendchat_distance: 3`, `conf/battle/player.conf:191`), варпы `prt03`/`prt06` — дальше 20 клеток.
+Модуль кладёт её в копию `social.cfg.points`; общий словарь мира не меняется.
+
+**Сбор.** В рыночный день житель в режиме `town`, дошедший до отдыха, один раз за день начинает прогулку сразу
+(`social.walk_now()`), точку выбирают обычные веса — чаще всего площадь. Запись `market_day_open`.
+**Лавка.** Merchant с `vend.can`, лавка закрыта, тело у площади (≤ 3 клеток) — один раз за день сбрасывается
+`econ_shop_ts`, и `economy.maybe_shop` в том же такте готовит лавку прямо на площади.
+**Итог.** В первый такт после рыночного дня — событие `market_day_summary {date, deals, sold, bought, vend, zeny}`
+по фактам памяти (`trade_sold`, `trade_bought`, `vend_sold` за тот день по часовому поясу мира), строка летописи
+«рыночный день: N сделок (продал X, купил Y, из лавки Zz)». Сделка двух жителей видна у каждого со своей стороны.
+Выключить — `goals.json market_day.enabled: false` или `BRAIN_DISABLE=market_day`; без календаря модуль не создаётся.
+Не проверено в игре: сколько сделок реально прибавляется, не мешает ли толпа у площади открыть лавку
+(`min_npc_vendchat_distance` касается только NPC, другие лавки не мешают).
+
+## Заточка у кузнеца (ORG-072) — `brain/live_brain/refine.py`, плагин `refine`
+
+**Выключено по умолчанию** (`goals.json refine.enabled: false`): путь через Refine UI на живом сервере не проверен.
+
+**Что в скриптах rAthena.** Vestri (`npc/re/merchants/refine.txt:25`) точит только +10 и выше — для обычной заточки
+он не нужен. Кузнец +0..+10 в Пронтере — **Hollgrehenn** `prt_in,63,60` (`npc/merchants/refine.txt:526`). При
+`feature.refineui: on` (`conf/battle/feature.conf:85`, PACKETVER 20180620 ≥ 20161012) он после `mes`/`close2` открывает
+**Refine UI** (`refineui()`): предмет и руда выбираются пакетами, сервер присылает список руды с шансом
+(0AA2, `clif_refineui_info`: `chance = Rate / 100`), итог — пакет 0188 (`item_upgrade`: OpenKore сам меняет `upgrade`
+предмета). Безопасный предел renewal (`db/re/refine.yml`, `Rate: 10000`; совпадает с `.@safe` в `refinemain`):
+
+| Оружие | Предел без риска | Руда | Плата за попытку | Руда у Vurewell |
+|---|---|---|---|---|
+| ур. 1 | +7 | Phracon 1010 | 50z | 200z |
+| ур. 2 | +6 | Emveretarcon 1011 | 200z | 1000z |
+| ур. 3 / 4 | +5 / +4 | Oridecon 984 | 5000z / 20000z | не продаётся — не точим |
+
+Руда — у **Vurewell** `prt_in,56,68` (`refine.txt:970`, функция `phramain`: меню «Phracon - 200 Zeny», ввод количества
+до 500). Dietrich `prt_in,63,69` в renewal — два NPC в одной клетке (`refine.txt:1084` и `re/merchants/refine.txt:646`),
+поэтому не используется. Данные — `brain/world/refine.json` (`scripts/gen_refine.py upstream/rathena`).
+
+**Плагин `refine`** (`bots/plugins/refine/refine.pl`, действие моста `refine`, в state — `refine {running, phase,
+weapon, ores}`): докупить руду (`talknpc 56 68 c r~/^Phracon/ c d<N> n`, готово — руды стало больше) → к кузнецу,
+`talknpc 63 60`, ждать `$refineUI` (пакет 0AA0) → надетое оружие снять (`uneq`; OpenKore не выбирает надетый предмет в
+Refine UI — «Cannot select equipped», `Commands.pm:8168`) → `refineui select <inv>` → **только если у руды шанс 100** —
+`refineui refine <inv> <руда> 0` (без Blacksmith Blessing), ждать роста `upgrade` → повтор до цели; шанс < 100 —
+стоп «дальше риск» без попытки → `refineui cancel`, `eq <inv>`, событие `refine_result {item, inv, from, to, done, ok,
+reason}`. Тайм-ауты шагов, смерть, пропажа предмета, снижение `upgrade` — провал. Пока плагин работает, арбитр
+(`lifecycle.quest_busy`) считает тело занятым — распорядок и прогулки его не уводят.
+
+**Мозг.** Раз в 30 мин, в Пронтере на отдыхе, без плана, этапа квеста, сделки, почты, экспедиции и лавки, с прошлой
+попытки ≥ 3 дней, с шансом 0.3: оружие ур. 1–2 из state, шагов — до предела, не больше 3; стоимость (плата + докупка)
+≤ 25 % излишка зени сверх `economy.keep_zeny` и копилки мечты. Ритуал: эмоция «хм» и реплика в общий чат («Ну, с
+богом… Несу Knife к Hollgrehenn. Только до +7, без риска.»), после подтверждения — радость («Knife теперь +7! Руки до
+сих пор дрожат.»). «Заточил» — только `refine_result ok` **и** `upgrade` того же оружия в state ≥ итога за 60 с
+(`refine_done`, память 3, летопись, шина мира 2); иначе `refine_unverified`; провал — `refine_failed`.
+Safety: только от правил, руда 1010/1011, цель 1..10, докупка 0..20, точки — карта и координаты, из города или `prt_in`.
+
+**Не проверено.** Всё — только на заглушках (`bots/tests/refine.t`, `brain/tests/test_refine.py`). Не проверены на
+нашем сервере: открытие Refine UI после `close2` при `autoTalkCont`, отправка «talk cancel» OpenKore (нужна, чтобы
+скрипт дошёл до `refineui()`), формат 0AA2 для PACKETVER 20180620 (2-байтный ID руды), `uneq`/`eq` по индексу,
+ввод количества у Vurewell (`d<N>`). Броня (Elunium) и оружие ур. 3–4 не точатся: руду не продают.
+
 ## Метрики (ORG-037)
 
 `economy.economy_metrics(memory, since)` → dict (для report; `__main__.py` не изменён):

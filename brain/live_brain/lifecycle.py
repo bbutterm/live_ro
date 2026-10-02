@@ -37,7 +37,8 @@ QUEST_SENT_SEC = 30       # review2: этап jobChange отправлен, а s
 def quest_busy(mind, state, now):
     """review2: плагин jobChange занят — арбитр жизненного цикла (с окном отправки) или, без него, state."""
     life = getattr(mind, "life", None)
-    return life.quest_busy(now) if life else bool((state.get("job_change") or {}).get("running"))
+    return life.quest_busy(now) if life else bool((state.get("job_change") or {}).get("running")
+                                                  or (state.get("refine") or {}).get("running"))   # refine:
 
 
 class Lifecycle:
@@ -108,6 +109,7 @@ class Lifecycle:
         экспедиция успевают переставить lockMap под уже начатым этапом."""
         now = now or self.clock()
         return bool((self.mind.state.get("job_change") or {}).get("running")
+                    or (self.mind.state.get("refine") or {}).get("running")      # refine: заточка ведёт тело (ORG-072)
                     or now - (getattr(self.mind, "job_change_sent", 0) or 0) < QUEST_SENT_SEC)
 
     def active_owners(self, now=None):

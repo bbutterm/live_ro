@@ -33,6 +33,35 @@
     "enabled": true
   },
 
+  "market_day": {
+    "_comment": "ORG-071 рыночный день (brain/live_brain/market.py, docs/ECONOMY.md): в день недели weekdays (6 — суббота календаря) пороги рынка, лавки, заказов и вывесок мягче, жители сходятся к точке point (prontera 155,180: клетки ±2 проходимы, NPC не ближе 5, варпы не ближе 20); итог дня — market_day_summary в летописи. Выключить — enabled: false или BRAIN_DISABLE=market_day.",
+    "enabled": true,
+    "weekdays": [6],
+    "point": {"map": "prontera", "x": 155, "y": 180, "label": "к рыночной площади у фонтана"},
+    "point_weight": 6,
+    "offer_gap_factor": 0.5,
+    "trades_bonus": 4,
+    "shop_hours": 2,
+    "valuable_factor": 0.5,
+    "orders_gap_factor": 0.5,
+    "sign_chance": 0.9
+  },
+  "refine": {
+    "_comment": "ORG-072 заточка своего оружия у Hollgrehenn (prt_in,63,60) только до безопасного предела (brain/live_brain/refine.py, плагин bots/plugins/refine, данные brain/world/refine.json; docs/ECONOMY.md). ВЫКЛЮЧЕНО: Refine UI на живом сервере не проверен. Включить — enabled: true.",
+    "enabled": false,
+    "check_minutes": 30,
+    "gap_days": 3,
+    "chance": 0.3,
+    "max_steps": 3,
+    "spare_share": 0.25
+  },
+  "gaze": {
+    "_comment": "ORG-067 взгляд на собеседника (brain/live_brain/gaze.py, docs/SOCIETY.md): при разговоре и встрече житель поворачивается к собеседнику (действие моста look_at -> lookp), в городе, не чаще gap_seconds, к одному — не чаще peer_gap_seconds. Выключить — enabled: false или BRAIN_DISABLE=gaze.",
+    "enabled": true,
+    "near": 9,
+    "gap_seconds": 20,
+    "peer_gap_seconds": 60
+  },
   "tradition": {
     "_comment": "ORG-058 вечерний круг (brain/live_brain/tradition.py, docs/SOCIETY.md): point — точка social.points, hours — окно [с, до) по часовому поясу мира, minutes — сколько стоять в круге. Выключить — enabled: false или BRAIN_DISABLE=tradition.",
     "enabled": true,
