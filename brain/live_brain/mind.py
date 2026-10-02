@@ -123,6 +123,7 @@ class Mind:
         self.last_chat_decision = 0.0
         self.backoff_until = 0.0
         self.sent = {}                 # id действия -> действие
+        self.job_change_sent = 0.0     # review2: когда отправлен этап jobChange (дом или карьера) — арбитр до state.running
         self.jev_inflight = 0          # вызовы JEV в полёте: учитываются в лимите сразу
         self.fresh_state = False       # есть ли свежее (моложе STALE_SEC) состояние от тела
         self.state_received = 0.0
@@ -466,6 +467,8 @@ class Mind:
                 self.ctx.last[f"talk:{a['to']}"] = time.time()
             if a.get("action") == "resume":
                 self.ctx.last["resume_sent"] = time.time()
+            if a.get("action") == "job_change":       # review2: state.job_change.running придёт позже
+                self.job_change_sent = time.time()
         if self.economy:
             for r in rejected:
                 if isinstance(r["action"], dict):

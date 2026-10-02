@@ -13,6 +13,8 @@
 import logging
 import time
 
+from .lifecycle import quest_busy                 # review2: один плагин jobChange на дом и карьеру
+
 log = logging.getLogger("career")
 
 SUMMARY_EVERY = 600
@@ -61,7 +63,7 @@ class Career:
                 log.warning("сводка прогрессии: %s", e)
         if not self.cfg.get("auto_job_change") or now < self.st.get("next_try", 0):
             return
-        if (state.get("job_change") or {}).get("running"):
+        if quest_busy(self.mind, state, now):                   # review2: и этап дома (Kafra), отправленный только что
             return
         r = self.mind.routine
         if not (r and r.in_town_mode and r.st.get("arrived")) or self.mind.plans.store.active():

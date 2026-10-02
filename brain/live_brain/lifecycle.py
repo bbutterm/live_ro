@@ -31,6 +31,13 @@ FIGHT_SEC = 10
 SERVICE = ("storageAuto", "sellAuto", "buyAuto", "NPC", "deal", "items_take", "take")
 TRAVEL = ("route", "mapRoute", "move", "follow")
 PRIORITY = ("survival", "plan", "economy", "party", "routine")
+QUEST_SENT_SEC = 30       # review2: этап jobChange отправлен, а state.job_change.running ещё не пришёл
+
+
+def quest_busy(mind, state, now):
+    """review2: плагин jobChange занят — арбитр жизненного цикла (с окном отправки) или, без него, state."""
+    life = getattr(mind, "life", None)
+    return life.quest_busy(now) if life else bool((state.get("job_change") or {}).get("running"))
 
 
 class Lifecycle:
@@ -95,13 +102,21 @@ class Lifecycle:
 
     # ---------- арбитр ----------
 
+    def quest_busy(self, now=None):
+        """review2: плагин jobChange занят (дом: Kafra, карьера: квест) — по state или только что отправлен этап.
+        Один плагин на оба модуля: без окна отправки дом и карьера в одном такте шлют по этапу, а распорядок и
+        экспедиция успевают переставить lockMap под уже начатым этапом."""
+        now = now or self.clock()
+        return bool((self.mind.state.get("job_change") or {}).get("running")
+                    or now - (getattr(self.mind, "job_change_sent", 0) or 0) < QUEST_SENT_SEC)
+
     def active_owners(self, now=None):
         now = now or self.clock()
         m, s = self.mind, self.mind.state
         owners = set()
         if s.get("dead") or now - self.last_alarm < ESCAPE_SEC:
             owners.add("survival")
-        if m.plans.store.active() or (s.get("job_change") or {}).get("running"):
+        if m.plans.store.active() or self.quest_busy(now):   # review2: и только что отправленный этап
             owners.add("plan")                       # встреча или этап квеста профессии
         econ = getattr(m, "economy", None)
         if (econ and econ.body_busy()) or s.get("give") or s.get("buy"):   # review: и торговля (offer_sell/offer_buy)

@@ -187,8 +187,8 @@ class IntegrationTest(unittest.TestCase):
 
 
 
-class BodyOwnershipTest(unittest.TestCase):
-    """Стыки «за тело»: сделка между жителями держит тело; сон (relog), квест профессии и чужие модули ждут."""
+class BodyMixin:
+    """Один житель (Arkady) в Пронтере на часах теста; send копит действия в self.sent."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -225,6 +225,10 @@ class BodyOwnershipTest(unittest.TestCase):
 
     def moves(self):
         return [a for a in self.sent if a["action"] in replay.MOVES + ("meet_point", "sleep")]
+
+
+class BodyOwnershipTest(BodyMixin, unittest.TestCase):
+    """Стыки «за тело»: сделка между жителями держит тело; сон (relog), квест профессии и чужие модули ждут."""
 
     def test_trade_holds_body_against_routine(self):
         """Продажа жителю (offer_sell идёт, тело подходит к покупателю) — распорядок не уводит тело на охоту."""
@@ -325,6 +329,72 @@ class BodyOwnershipTest(unittest.TestCase):
         self.state()
         asyncio.run(econ.tick())
         self.assertEqual(takes(), [11, 12], "второе письмо забрано после первого")
+
+
+class NewModulesJointsTest(BodyMixin, unittest.TestCase):
+    """review2: стыки новых модулей за тело — дом (Kafra через jobChange), экспедиция, карьера, сон."""
+
+    def town_rest(self):
+        self.state()
+        r = self.mind.routine
+        r.new_day(self.clock.t, keep_mode="town")
+        r.st.update(arrived=True, rest_until=self.clock.t + 3600)
+        return r
+
+    def trip(self):
+        t = self.clock.t
+        self.mind.explorer.st["trip"] = {"map": "prt_fild01", "x": None, "y": None, "kind": "field", "hops": 1,
+                                         "phase": "go", "started": t, "deadline": t + 2400, "stay": 600,
+                                         "led_by": None, "new": True}
+
+    def jobs(self):
+        return [a for a in self.sent if a["action"] == "job_change"]
+
+    def test_home_waits_for_expedition(self):
+        """Экспедиция вышла из города (ещё в Пронтере): дом не уводит тело к Kafra посреди неё."""
+        self.town_rest()
+        self.trip()
+        asyncio.run(self.mind.home.tick())
+        self.assertEqual(self.jobs(), [], "Kafra посреди экспедиции")
+        self.mind.explorer.st["trip"] = None
+        asyncio.run(self.mind.home.tick())
+        self.assertEqual([a["path"] for a in self.jobs()], ["home"], "после экспедиции — сохраниться")
+
+    def test_one_job_change_per_tick(self):
+        """Карьера и дом — один плагин jobChange: в одном такте (state ещё без running) уходит один этап."""
+        self.town_rest()
+        career = self.mind.career
+        career.cfg = dict(career.cfg, auto_job_change=True)
+        stage = {"action": "job_change", "path": "knight", "stage": "s1", "steps": [{"do": "wait"}]}
+        with mock.patch("live_brain.progression.stage_action", return_value=stage):
+            asyncio.run(career.tick())
+        asyncio.run(self.mind.home.tick())
+        self.assertEqual([a["path"] for a in self.jobs()], ["knight"], "второй этап отклонит плагин")
+
+    def test_job_change_sent_holds_body(self):
+        """Этап отправлен, а state ещё без job_change.running: арбитр уже не даёт тело распорядку/экспедиции."""
+        self.town_rest()
+        asyncio.run(self.mind.home.tick())
+        self.assertEqual(len(self.jobs()), 1)
+        self.assertFalse(self.mind.may_move("routine")[0], "тело у этапа Kafra")
+        self.clock.t += 120
+        self.state()
+        self.assertTrue(self.mind.may_move("routine")[0], "этап так и не начался — тело свободно")
+
+    def test_nap_waits_for_expedition(self):
+        """Сторож просит уснуть раньше посреди экспедиции: сначала вернуться (экспедиция прервана), не relog в поле."""
+        r = self.town_rest()
+        self.trip()
+        self.state(map="prt_fild01", x=200, y=200, lock_map="prt_fild01", lock_x=None, lock_y=None)
+        self.assertIsNone(r.request_sleep(2))
+        asyncio.run(r.tick())
+        self.assertNotIn("sleep", [a["action"] for a in self.sent], "relog посреди экспедиции")
+        asyncio.run(self.mind.explorer.tick())
+        self.assertIsNone(self.mind.explorer.trip, "экспедиция прервана: пора спать")
+        self.clock.t += 1
+        asyncio.run(r.tick())
+        self.assertNotIn("sleep", [a["action"] for a in self.sent], "сначала дойти до города")
+        self.assertIn("meet_point", [a["action"] for a in self.sent], "распорядок ведёт в город")
 
 
 class ProtocolSurfaceTest(unittest.TestCase):

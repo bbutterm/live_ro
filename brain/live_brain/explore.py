@@ -398,6 +398,8 @@ class Explorer:
             return "пора спать"
         if r and r.st and r.st.get("mode") == "sleep":
             return "сон"
+        if r and r.st and r.st.get("nap_until", 0) > now:      # review2: сторож попросил уснуть раньше (request_sleep)
+            return "пора спать"
         if trip.get("led_by"):
             party = getattr(self.mind, "party", None)
             lead = party.member(trip["led_by"]) if party else None

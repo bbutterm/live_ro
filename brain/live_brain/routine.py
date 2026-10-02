@@ -342,6 +342,9 @@ class Routine:
         econ = getattr(self.mind, "economy", None)
         if econ and econ.mail_busy():
             return "economy"
+        explorer = getattr(self.mind, "explorer", None)      # review2: relog посреди экспедиции — уснуть в поле;
+        if explorer and explorer.busy():                     # review2: экспедиция прервётся (explore.abort_reason)
+            return "explore"
         return None
 
     # ---------- ops: ORG-044 смена — флаг сна для сторожа и «уснуть раньше» ----------
