@@ -39,6 +39,7 @@ from .routine import Routine, diary_only            # ops: ORG-049 фильтр 
 from .safety import SafetyPolicy
 from .social import TAG as SOCIAL_TAG, Social   # social: общение без LLM
 from .society import Society                    # society: эмоции, чат-комнаты, ссоры (ORG-022/026/027)
+from .strangers import Strangers                # strangers: люди-игроки рядом и их шёпот (ORG-063)
 from . import world_bus                                 # events: шина событий мира (ORG-045)
 from .explore import TAG as EXPLORE_TAG, Explorer       # explore: экспедиции (ORG-054)
 
@@ -160,6 +161,8 @@ class Mind:
         ex_cfg = (world or {}).get("explore") or {}                                   # explore: ORG-054
         self.explorer = (Explorer(self, ex_cfg) if self.routine and feat("explore")   # explore:
                          and ex_cfg.get("enabled", False) else None)                  # explore:
+        self.strangers = (Strangers(self, world) if feat("strangers")                  # strangers: ORG-063
+                          and ((world or {}).get("strangers") or {}).get("enabled", True) else None)  # strangers:
         bus_path = world_bus.lab_path(decisions_path) if world_bus_db is None else None  # events:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
             world_bus_db = world_bus.WorldBus(bus_path, persona["name"])              # events:
@@ -246,7 +249,10 @@ class Mind:
             event["text"] = event["text"][:200]        # реплика игрока не раздувает память и промпт
         kind = event.get("kind")
         if kind != "attack":                            # начало боя частое: только отметка времени
-            self.mem.add_event(kind, {k: v for k, v in event.items() if k != "kind"})
+            data = {k: v for k, v in event.items() if k != "kind"}
+            if self.strangers and self.strangers.private(event):   # strangers: текст незнакомца при BRAIN_LLM=off не храним
+                data.pop("text", None)                              # strangers:
+            self.mem.add_event(kind, data)
         if kind == "world_msg":                         # events: объявление сервера — данные, не инструкции (ORG-039)
             self.rumors.on_world_msg(event)             # events:
             return                                      # events:
@@ -372,6 +378,9 @@ class Mind:
             log.info("событие %s: %s", kind, result.note)
         if result.actions:
             await self.execute(result.actions, source="rule", reason=result.note)
+        if result.stranger and self.strangers and not self.s.llm_enabled and not self.fast:   # strangers: шаблон вместо LLM/JEV, без действий по тексту
+            await self.strangers.on_whisper(str(event.get("from")), str(event.get("text", "")))   # strangers:
+            return                                                          # strangers:
         if result.llm:
             if self.fast and kind in JevGate.EVENTS:
                 asyncio.create_task(self.fast_decide(event, result))
@@ -474,7 +483,8 @@ class Mind:
                              "actions": sent, "rejected": rejected, **(extra or {})})
         label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM", "plan": "план",
                  "operator": "оператор", "economy": "экономика", "routine": "распорядок", "party": "группа",
-                 "social": "общение", "career": "карьера", "bonds": "связи"}.get(source, source)
+                 "social": "общение", "career": "карьера", "bonds": "связи",
+                 "strangers": "незнакомцы"}.get(source, source)   # strangers:
         log.info("%s (%s): действия %s%s", label, reason,
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
@@ -599,6 +609,8 @@ class Mind:
         await self.rumors.tick()                               # events: проверка слухов опытом, пересказ при встрече
         if self.society:                                       # society: эмоции, вывески, ссоры по фактам памяти
             await self.society.tick()                          # society:
+        if self.strangers:                                     # strangers: встречи с людьми, эмоция
+            await self.strangers.tick()                        # strangers:
         if self.aims:                                          # events:
             self.aims.tick()                                   # events: недельные цели
         if self.guild:                                         # guild: ORG-052
