@@ -431,7 +431,9 @@ class Social:
             here = min(points, key=lambda k: dist(points[k]["x"], points[k]["y"], int(state["x"]), int(state["y"])))
         weights = self.cfg.get("point_weights") or {}
         names = [k for k in sorted(points) if k != here] or sorted(points)
-        w = [max(0.0, float(weights.get(k, 1))) for k in names]
+        habits = getattr(self.mind, "habits", None)                                    # habits: ORG-068
+        w = [max(0.0, float(weights.get(k, 1))) * (habits.point_factor(k) if habits else 1)   # habits:
+             for k in names]
         if not any(w):
             w = [1.0] * len(names)
         return self.rng.choices(names, weights=w)[0], "по настроению"

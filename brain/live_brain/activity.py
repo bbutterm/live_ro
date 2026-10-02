@@ -165,6 +165,8 @@ class Activities:
             score = sum(w * needs.get(k, 0) for k, w in a["satisfies"].items())
             if crowd:                                                                   # crowd:
                 score -= crowd.activity_penalty(name, mode, current)                    # crowd:
+            if getattr(self.mind, "habits", None):                                      # habits: ORG-068
+                score = self.mind.habits.adjust(name, score, current, now)              # habits: неделя, не сегодня
             score *= weather.stroll_factor(weather.kind_now(self.mind, now)) if name == "stroll" else 1   # talk: ORG-085
             if name == "gathering" and getattr(self.mind, "tradition", None):   # tradition: × (0.5 + сила)
                 score *= 0.5 + self.mind.tradition.strength(now)                # tradition:

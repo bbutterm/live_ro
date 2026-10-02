@@ -16,6 +16,8 @@ from pathlib import Path
 SCHEMA_VERSION = 2
 MAX_MEMORIES = 2000
 KEEP_EVENTS = ("diary", "death_report", "level_up", "meeting_confirmed", "party_confirmed", "map_banned")
+KEEP_EVENTS += ("society_quarrel", "society_reconciled", "job_changed", "pet_hatched", "gift_received")  # gossip: W6
+RELATION_LOG = 40                     # gossip: W5 — записей истории на пару (kv relation_log, prune не чистит)
 KINDS = ("fact", "thought", "note")
 
 SCHEMA = """
@@ -136,6 +138,30 @@ class Memory:
         if note:
             self.db.execute("UPDATE relations SET note = ? WHERE name = ?", (str(note)[:200], name))
         self.db.commit()
+        if delta or note:                                                    # gossip: W5 — причина не теряется
+            self.log_relation(name, delta, note)                             # gossip:
+
+    # gossip: W5 — история пары: каждое изменение отношения с причиной; остывание без касания last_seen
+    def log_relation(self, name, delta, note):
+        log = self.get("relation_log") or {}
+        rows = log.get(name) or []
+        rel = self.relation(name) or {}
+        rows.append({"ts": round(time.time(), 1), "delta": int(delta), "note": str(note or "")[:120],
+                     "affinity": rel.get("affinity", 0)})
+        log[name] = rows[-RELATION_LOG:]
+        self.set("relation_log", log)
+
+    def relation_log(self, name):
+        return list((self.get("relation_log") or {}).get(name) or [])
+
+    def adjust_affinity(self, name, delta, why):
+        """Сдвиг отношения без «встречи» (last_seen не трогается): остывание, первое впечатление."""
+        if not self.relation(name):
+            return
+        self.db.execute("UPDATE relations SET affinity = MAX(-10, MIN(10, affinity + ?)) WHERE name = ?",
+                        (max(-2, min(2, int(delta))), name))
+        self.db.commit()
+        self.log_relation(name, delta, why)
 
     def relation(self, name):
         row = self.db.execute("SELECT name, affinity, note, first_seen, last_seen FROM relations "
