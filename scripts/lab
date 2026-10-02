@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # Управление лабораторией live_ro. Подробности: docs/SETUP.md, docs/RELEASES.md.
 #
-# Раскладка $LAB_ROOT (по умолчанию /opt/ro-bot-lab):
-#   secrets/lab.env      локальные секреты (600), вне Git
-#   releases/<sha12>/    собранные неизменяемые версии кода
+# Два режима (определяются env-файлом):
+#   existing — уже собранный и работающий runtime оператора (задан RATHENA_DIR).
+#              deploy/activate/db-init запрещены, conf/import rAthena
+#              не перезаписывается (RENDER_SERVER_CONF=0 по умолчанию).
+#   release  — версии собираются в $LAB_ROOT/releases/<sha12>, current/previous.
+#
+# Раскладка $LAB_ROOT (по умолчанию /opt/ro-bot-lab), создаётся без перезаписи:
+#   secrets/live_ro.env  локальные секреты (600), вне Git
+#   releases/<sha12>/    собранные версии (режим release)
 #   current, previous    symlink на активную и предыдущую версию
-#   run/                 pid-файлы и runtime-конфиги бота (пересоздаются)
-#   state/               постоянные данные ботов (память и т.п.), не трогается
-#   logs/                логи серверов и ботов
-#   backups/             дампы БД
+#   run/                 pid-файлы и runtime-конфиги ботов (пересоздаются)
+#   state/ logs/ backups/
 # Ни одна команда не делает миграций БД и не перезапускает процессы сама.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAB_ROOT="${LAB_ROOT:-/opt/ro-bot-lab}"
-LAB_ENV="$LAB_ROOT/secrets/lab.env"
+LAB_ENV="${LAB_ENV:-$LAB_ROOT/secrets/live_ro.env}"
 PIDS="$LAB_ROOT/run/pids"
 SERVERS=(login char map)
 declare -A PORT=([login]=6900 [char]=6121 [map]=5121)
@@ -25,24 +29,33 @@ warn() { printf 'lab: ВНИМАНИЕ: %s\n' "$*" >&2; }
 
 usage() {
   cat <<'EOF'
-Использование: scripts/lab <команда> [аргументы]   (LAB_ROOT=/opt/ro-bot-lab)
+Использование: scripts/lab <команда> [аргументы]
+Переменные: LAB_ROOT (/opt/ro-bot-lab), LAB_ENV ($LAB_ROOT/secrets/live_ro.env)
 
-  prepare               проверить зависимости, создать каталоги и secrets/lab.env
-  check                 статическая проверка репозитория (scripts/check.py)
-  build [DIR]           собрать rAthena и OpenKore XSTools в DIR (по умолч. этот checkout)
-  deploy <commit>       собрать commit в отдельный releases/<sha12> (без активации)
-  activate <release>    переключить current на release (только при остановленном стеке)
-  rollback              переключить current на previous (только при остановленном стеке)
-  releases              список версий, отметить current/previous
-  db-init               первичная загрузка схемы rAthena в пустую БД + аккаунты
-  db-backup             дамп БД в backups/
-  start [server|BOT]    запустить login/char/map и/или бота (по умолчанию server)
+Только чтение:
+  doctor                проверка окружения, конфигов, БД (только SELECT), процессов
+  status                процессы, порты, режим и активная версия
+  check                 статическая проверка репозитория
+  releases              список версий (режим release)
+Изменяющие:
+  prepare               создать недостающие каталоги и env-файл (ничего не перезаписывает)
+  start [server|BOT]    запустить login/char/map или бота (по умолчанию server)
   stop  [server|BOT|all] [--force]   остановить (по умолчанию all)
-  status                процессы, порты, активная версия
+  db-backup             дамп основной и лог-БД в backups/
+Только режим release:
+  build [DIR] | deploy <commit> | activate <release> | rollback | db-init
 EOF
 }
 
-# ---------- общие функции ----------
+# ---------- окружение ----------
+
+guard_user() {
+  [[ $(id -u) != 0 ]] || die "не запускайте от root: runtime-файлы должны принадлежать пользователю лаборатории (sudo -u ro-lab ...)"
+  if [[ -d "$LAB_ROOT" ]]; then
+    local owner; owner=$(stat -c %U "$LAB_ROOT")
+    [[ "$owner" == "$(id -un)" ]] || die "$LAB_ROOT принадлежит $owner; запускайте от него: sudo -u $owner scripts/lab ..."
+  fi
+}
 
 load_env() {
   [[ -f "$LAB_ENV" ]] || die "нет $LAB_ENV; выполните: scripts/lab prepare"
@@ -55,16 +68,51 @@ load_env() {
     key="${line%%=*}"; val="${line#*=}"
     key="${key//[[:space:]]/}"
     [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || die "$LAB_ENV: неверное имя $key"
-    [[ "$key" == LAB_ROOT ]] && continue
+    [[ "$key" == LAB_ROOT || "$key" == LAB_ENV ]] && continue
     printf -v "$key" '%s' "$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<<"$val")"
   done < "$LAB_ENV"
 }
 
+is_set() { [[ -n "${!1:-}" && "${!1}" != CHANGE_ME ]]; }
+
 need_var() {
   local v
-  for v in "$@"; do
-    [[ -n "${!v:-}" && "${!v}" != CHANGE_ME ]] || die "заполните $v в $LAB_ENV"
-  done
+  for v in "$@"; do is_set "$v" || die "заполните $v в $LAB_ENV"; done
+}
+
+# Логины/пароли rAthena: буфер 24 байта -> не длиннее 23 ASCII-символов.
+cred_ok()    { [[ "${!1:-}" =~ ^[!-~]{1,23}$ ]]; }
+check_cred() {
+  local val="${!1:-}"
+  cred_ok "$1" || die "$1: нужно 1-23 печатных ASCII-символа без пробелов (сейчас длина ${#val})"
+}
+
+existing_mode() { [[ -n "${RATHENA_DIR:-}" ]]; }
+
+require_release_mode() {
+  if existing_mode; then
+    die "команда '$1' отключена в режиме existing (задан RATHENA_DIR): рабочий стек и БД не пересоздаются"
+  fi
+}
+
+current_release() {
+  [[ -L "$LAB_ROOT/current" ]] || die "нет активной версии; выполните deploy и activate (или задайте RATHENA_DIR для режима existing)"
+  readlink -f "$LAB_ROOT/current"
+}
+
+rathena_dir() {
+  if existing_mode; then readlink -f "$RATHENA_DIR"; else echo "$(current_release)/upstream/rathena"; fi
+}
+openkore_dir() {
+  if [[ -n "${OPENKORE_DIR:-}" ]]; then readlink -f "$OPENKORE_DIR"
+  else echo "$(current_release)/upstream/openkore"; fi
+}
+# Откуда брать профили ботов, плагины и шаблоны: в existing — из этого checkout.
+profile_root() { if existing_mode; then echo "$REPO"; else current_release; fi; }
+
+render_server_conf() {
+  local def=1; existing_mode && def=0
+  [[ "${RENDER_SERVER_CONF:-$def}" == 1 ]]
 }
 
 build_conf() { # читает server/build.conf из каталога $1
@@ -76,33 +124,86 @@ build_conf() { # читает server/build.conf из каталога $1
   [[ "$PACKETVER" =~ ^[0-9]{8}$ ]] || die "$f: неверный PACKETVER"
 }
 
-current_release() {
-  [[ -L "$LAB_ROOT/current" ]] || die "нет активной версии; выполните deploy и activate"
-  readlink -f "$LAB_ROOT/current"
+# ---------- БД ----------
+
+conf_value() { # conf_value FILE KEY -> последнее значение ключа rAthena
+  sed -n "s/^[[:space:]]*$2:[[:space:]]*//p" "$1" 2>/dev/null | sed 's/[[:space:]]*$//' | tail -n1
+}
+
+# Реквизиты БД: из env-файла, а если DB_PASS там не задан и conf/import не
+# рендерится — из уже существующего conf/import/inter_conf.txt рабочего rAthena.
+resolve_db() {
+  if is_set DB_PASS; then
+    need_var DB_HOST DB_PORT DB_NAME DB_USER
+    LOG_DB_NAME="${LOG_DB_NAME:-$DB_NAME}"
+    DB_SOURCE="$LAB_ENV"
+    return
+  fi
+  render_server_conf && die "заполните DB_* в $LAB_ENV"
+  local f; f="$(rathena_dir)/conf/import/inter_conf.txt"
+  [[ -r "$f" ]] || die "DB_PASS не задан, и нет доступа к $f"
+  DB_HOST=$(conf_value "$f" char_server_ip); DB_PORT=$(conf_value "$f" char_server_port)
+  DB_USER=$(conf_value "$f" char_server_id); DB_PASS=$(conf_value "$f" char_server_pw)
+  DB_NAME=$(conf_value "$f" char_server_db); LOG_DB_NAME=$(conf_value "$f" log_db_db)
+  DB_HOST=${DB_HOST:-127.0.0.1}; DB_PORT=${DB_PORT:-3306}; LOG_DB_NAME=${LOG_DB_NAME:-$DB_NAME}
+  [[ -n "$DB_USER" && -n "$DB_PASS" && -n "$DB_NAME" ]] || die "в $f нет char_server_id/pw/db"
+  DB_SOURCE="$f"
 }
 
 mysql_bin() { command -v mariadb || command -v mysql || die "нет клиента mariadb/mysql"; }
 
-write_mycnf() { # временный defaults-file, пароль не попадает в argv/ps
-  need_var DB_HOST DB_PORT DB_NAME DB_USER DB_PASS
-  MYCNF="$LAB_ROOT/run/my.cnf"
-  ( umask 077; printf '[client]\nhost=%s\nport=%s\nuser=%s\npassword=%s\n' \
-      "$DB_HOST" "$DB_PORT" "$DB_USER" "$DB_PASS" > "$MYCNF" )
-}
+mycnf() { printf '[client]\nhost=%s\nport=%s\nuser=%s\npassword=%s\n' "$DB_HOST" "$DB_PORT" "$DB_USER" "$DB_PASS"; }
 
-sql() { "$(mysql_bin)" --defaults-extra-file="$MYCNF" "$DB_NAME" "$@"; }
+# sql DBNAME args... — пароль передаётся через /dev/fd: не в argv и не на диск.
+sql() { local db="$1"; shift; "$(mysql_bin)" --defaults-extra-file=<(mycnf) "$db" "$@"; }
 
 sql_quote() { local s=${1//\\/\\\\}; s=${s//\'/\\\'}; printf "'%s'" "$s"; }
 
-pid_alive() { # pid_alive NAME -> 0, если процесс из pid-файла жив и это он
-  local f="$PIDS/$1.pid" pid
-  [[ -f "$f" ]] || return 1
-  pid=$(<"$f")
-  [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null || return 1
-  tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q -- "$(proc_pattern "$1")"
+# ---------- процессы ----------
+
+proc_cwd()  { readlink "/proc/$1/cwd" 2>/dev/null || true; }
+proc_args() { { tr '\0' ' ' < "/proc/$1/cmdline"; } 2>/dev/null || true; }
+proc_user() { stat -c %U "/proc/$1" 2>/dev/null || echo '?'; }
+
+# find_procs NAME -> строки "pid owner [пометка]": процессы сервера/бота
+# лаборатории, включая запущенные не этим скриптом (без pid-файла).
+find_procs() {
+  local name="$1" p args argv0 cwd want_dir
+  case "$name" in
+    login|char|map) want_dir=$(rathena_dir 2>/dev/null || true) ;;
+    *)              want_dir="" ;;
+  esac
+  local -a okore=()
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    [[ "$p" == "$$" || "$p" == "$BASHPID" ]] && continue
+    args=$(proc_args "$p"); [[ -n "$args" ]] || continue
+    argv0=${args%% *}
+    case "$name" in
+      login|char|map)
+        [[ "$(basename -- "$argv0")" == "$name-server" ]] || continue
+        cwd=$(proc_cwd "$p")
+        # cwd чужого процесса недоступен: тогда для отчёта достаточно совпадения имени.
+        [[ -z "$cwd" || -z "$want_dir" || "$cwd" == "$want_dir" ]] || continue
+        echo "$p $(proc_user "$p")" ;;
+      *)
+        [[ "$(basename -- "$argv0")" == perl* && "$args" == *openkore.pl* ]] || continue
+        if [[ "$args" == *"/$name/"* || "$args" == *"/$name "* ]]; then
+          echo "$p $(proc_user "$p")"
+        else
+          okore+=("$p")
+        fi ;;
+    esac
+  done
+  # Профиль не виден в аргументах (ручной запуск): единственный OpenKore считаем bot01.
+  if [[ "$name" == bot01 && ${#okore[@]} == 1 ]]; then
+    echo "${okore[0]} $(proc_user "${okore[0]}") без-метки-профиля"
+  fi
 }
 
-proc_pattern() { case "$1" in login|char|map) echo "$1-server" ;; *) echo "openkore.pl" ;; esac; }
+running_pid() { # первый найденный pid или пусто
+  local line; line=$(find_procs "$1" | head -n1); echo "${line%% *}"
+}
 
 port_open() { (exec 3<>"/dev/tcp/${BIND_IP:-127.0.0.1}/$1") 2>/dev/null; }
 
@@ -113,46 +214,102 @@ rotate_log() { # одна предыдущая копия, если лог бо�
 
 stack_running() {
   local n
-  for n in "$PIDS"/*.pid; do
-    [[ -e "$n" ]] || continue
-    pid_alive "$(basename "$n" .pid)" && return 0
-  done
+  for n in "${SERVERS[@]}" bot01; do [[ -n "$(running_pid "$n")" ]] && return 0; done
   return 1
 }
 
-# ---------- prepare / check ----------
+# ---------- prepare / check / doctor ----------
 
 cmd_prepare() {
   local missing=() c
-  for c in git python3 perl g++ make; do command -v "$c" >/dev/null || missing+=("$c"); done
+  for c in git python3 perl; do command -v "$c" >/dev/null || missing+=("$c"); done
   command -v mariadb >/dev/null || command -v mysql >/dev/null || missing+=("mariadb-client")
-  command -v mariadb_config >/dev/null || command -v mysql_config >/dev/null || missing+=("libmariadb-dev")
-  [[ -f /usr/include/zlib.h ]] || missing+=("zlib1g-dev")
-  if command -v perl >/dev/null; then
-    [[ -f "$(perl -MConfig -e 'print $Config{archlibexp}')/CORE/perl.h" ]] || missing+=("libperl-dev")
-    perl -MTime::HiRes -MCompress::Zlib -e1 2>/dev/null || missing+=("perl: Time::HiRes/Compress::Zlib")
-  fi
-  if ((${#missing[@]})); then
-    warn "не хватает: ${missing[*]}"
-    warn "Debian/Ubuntu: sudo apt-get install build-essential git python3 perl libperl-dev \\"
-    warn "  libmariadb-dev libmariadb-dev-compat zlib1g-dev libpcre3-dev mariadb-client libreadline-dev"
-  else
-    info "зависимости найдены"
-  fi
-  ( umask 077; mkdir -p "$LAB_ROOT"/{secrets,releases,run/pids,state,backups} )
+  if ((${#missing[@]})); then warn "не хватает: ${missing[*]}"; fi
+  ( umask 077; mkdir -p "$LAB_ROOT"/{secrets,run/pids,state,backups} )
   mkdir -p "$LAB_ROOT"/logs/rathena
   if [[ -e "$LAB_ENV" ]]; then
     info "$LAB_ENV уже существует — не трогаю"
   else
-    install -m 600 "$REPO/lab.env.example" "$LAB_ENV"
-    info "создан $LAB_ENV — заполните значения CHANGE_ME"
+    install -m 600 "$REPO/live_ro.env.example" "$LAB_ENV"
+    info "создан $LAB_ENV — заполните его (см. docs/SETUP.md)"
   fi
-  info "каталоги готовы в $LAB_ROOT"
+  info "каталоги проверены в $LAB_ROOT (существующие файлы не изменялись)"
 }
 
 cmd_check() { python3 "$REPO/scripts/check.py" "${1:-$REPO}"; }
 
-# ---------- сборка ----------
+DOC_FAIL=0
+ok()   { printf '  [OK]   %s\n' "$*"; }
+bad()  { printf '  [FAIL] %s\n' "$*"; DOC_FAIL=1; }
+note() { printf '  [INFO] %s\n' "$*"; }
+
+cmd_doctor() {
+  echo "== окружение"
+  note "пользователь $(id -un), LAB_ROOT=$LAB_ROOT, checkout $(git -C "$REPO" rev-parse --short=12 HEAD)"
+  if [[ -z "$(git -C "$REPO" status --porcelain --ignore-submodules=none)" ]]; then
+    ok "checkout чистый"
+  else
+    bad "checkout грязный (git status)"
+  fi
+  load_env; ok "$LAB_ENV читается, права $(stat -c %a "$LAB_ENV")"
+  if existing_mode; then note "режим existing: RATHENA_DIR=$(rathena_dir)"; else note "режим release"; fi
+  if render_server_conf; then
+    note "conf/import rAthena рендерится из шаблонов при start"
+  else
+    note "conf/import rAthena НЕ перезаписывается (RENDER_SERVER_CONF=0)"
+  fi
+  local v
+  for v in INTER_USER INTER_PASS BOT01_USER BOT01_PASS; do
+    is_set "$v" || continue
+    if cred_ok "$v"; then ok "$v: формат допустим"; else bad "$v: нужно 1-23 ASCII без пробелов"; fi
+  done
+
+  echo "== rAthena"
+  local rd s f; rd=$(rathena_dir)
+  for s in "${SERVERS[@]}"; do
+    if [[ -x "$rd/$s-server" ]]; then ok "$s-server"; else bad "нет $rd/$s-server"; fi
+  done
+  for f in inter_conf char_conf map_conf login_conf; do
+    if [[ -r "$rd/conf/import/$f.txt" ]]; then ok "conf/import/$f.txt читается"
+    elif render_server_conf; then note "conf/import/$f.txt будет создан при start"
+    else bad "нет доступа к conf/import/$f.txt"; fi
+  done
+
+  echo "== OpenKore"
+  local od pr; od=$(openkore_dir); pr=$(profile_root)
+  if [[ -f "$od/openkore.pl" ]]; then ok "openkore.pl в $od"; else bad "нет $od/openkore.pl"; fi
+  if [[ -e "$od/src/auto/XSTools/XSTools.so" ]]; then ok "XSTools.so собран"; else bad "нет XSTools.so"; fi
+  if [[ -f "$pr/bots/bot01/control/config.txt" ]]; then ok "профиль bot01 из $pr"; else bad "нет профиля bot01"; fi
+  if [[ -f "$pr/bots/plugins/lowHpGuard/lowHpGuard.pl" ]]; then ok "плагин lowHpGuard"; else bad "нет плагина lowHpGuard"; fi
+  if is_set BOT01_CONTROL_DIR; then
+    note "bot01 использует готовый control: $BOT01_CONTROL_DIR (профиль и fallback из Git НЕ применяются)"
+  fi
+
+  echo "== БД (только SELECT)"
+  if ( resolve_db ) 2>/dev/null; then
+    resolve_db
+    note "реквизиты из $DB_SOURCE"
+    if sql "$DB_NAME" -N -e 'SELECT 1' >/dev/null 2>&1; then
+      ok "подключение к $DB_NAME"
+      # shellcheck disable=SC2016
+      note "аккаунтов: $(sql "$DB_NAME" -N -e 'SELECT COUNT(*) FROM login'), персонажей: $(sql "$DB_NAME" -N -e 'SELECT COUNT(*) FROM `char`')"
+      if is_set BOT01_USER; then
+        sql "$DB_NAME" -N -e "SELECT CONCAT('  [INFO] bot01: ', c.name, ' slot ', c.char_num, ' lv ', c.base_level, ' map ', c.last_map) FROM \`char\` c JOIN login l USING (account_id) WHERE l.userid=$(sql_quote "$BOT01_USER")" || true
+      fi
+    else
+      bad "нет подключения к $DB_NAME"
+    fi
+    if sql "$LOG_DB_NAME" -N -e 'SELECT 1' >/dev/null 2>&1; then ok "подключение к $LOG_DB_NAME"; else bad "нет подключения к $LOG_DB_NAME"; fi
+  else
+    bad "реквизиты БД не определены"
+  fi
+
+  echo "== процессы"
+  cmd_status_body
+  if ((DOC_FAIL == 0)); then info "doctor: ошибок нет"; else info "doctor: есть ошибки [FAIL]"; return 1; fi
+}
+
+# ---------- сборка и релизы (режим release) ----------
 
 cmd_build() {
   local dir; dir=$(cd "${1:-$REPO}" && pwd)
@@ -175,8 +332,6 @@ cmd_build() {
   info "BUILD_OK $dir (runtime не проверен)"
 }
 
-# ---------- релизы ----------
-
 require_clean() { # чистый checkout, включая содержимое submodules
   local dirty
   dirty=$(git -C "$1" status --porcelain --ignore-submodules=none)
@@ -198,8 +353,7 @@ apply_patches() { # apply_patches RELEASE_DIR
 
 cmd_deploy() {
   local ref="${1:-}"; [[ -n "$ref" ]] || die "укажите commit: scripts/lab deploy <commit>"
-  [[ -d "$LAB_ROOT/releases" ]] || die "нет $LAB_ROOT/releases; выполните prepare"
-  [[ -f "$LAB_ENV" ]] && load_env
+  mkdir -p "$LAB_ROOT/releases"
   require_clean "$REPO"
   local sha; sha=$(git -C "$REPO" rev-parse --verify --quiet "$ref^{commit}") \
     || die "commit $ref не найден локально; выполните git fetch origin"
@@ -287,41 +441,48 @@ cmd_releases() {
   echo "(* current, < previous)"
 }
 
-# ---------- БД ----------
-
 cmd_db_init() {
-  load_env; need_var INTER_USER INTER_PASS BOT01_USER BOT01_PASS
+  need_var INTER_USER INTER_PASS BOT01_USER BOT01_PASS
+  check_cred INTER_USER; check_cred INTER_PASS; check_cred BOT01_USER; check_cred BOT01_PASS
   local rel; rel=$(current_release)
-  write_mycnf
-  sql -e 'SELECT 1' >/dev/null || die "нет доступа к БД $DB_NAME (см. docs/SETUP.md, создание БД)"
-  local n; n=$(sql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()")
-  [[ "$n" == 0 ]] || die "в $DB_NAME уже $n таблиц — db-init только для пустой БД. Миграции — вручную после db-backup."
-  info "загружаю main.sql и logs.sql из $(basename "$rel")"
-  sql < "$rel/upstream/rathena/sql-files/main.sql"
-  sql < "$rel/upstream/rathena/sql-files/logs.sql"
-  sql <<EOF
+  resolve_db
+  sql "$DB_NAME" -e 'SELECT 1' >/dev/null || die "нет доступа к БД $DB_NAME (см. docs/SETUP.md)"
+  local db n
+  for db in "$DB_NAME" "$LOG_DB_NAME"; do
+    n=$(sql "$db" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()")
+    [[ "$n" == 0 ]] || die "в $db уже $n таблиц — db-init только для пустой БД. Миграции — вручную после db-backup."
+  done
+  info "загружаю main.sql в $DB_NAME и logs.sql в $LOG_DB_NAME из $(basename "$rel")"
+  sql "$DB_NAME" < "$rel/upstream/rathena/sql-files/main.sql"
+  sql "$LOG_DB_NAME" < "$rel/upstream/rathena/sql-files/logs.sql"
+  sql "$DB_NAME" <<EOF
 UPDATE login SET userid=$(sql_quote "$INTER_USER"), user_pass=$(sql_quote "$INTER_PASS") WHERE account_id=1;
 INSERT INTO login (userid, user_pass, sex, email) VALUES ($(sql_quote "$BOT01_USER"), $(sql_quote "$BOT01_PASS"), $(sql_quote "${BOT01_SEX:-M}"), 'bot01@lab.local');
 EOF
-  rm -f "$MYCNF"
   info "БД инициализирована: inter-server и аккаунт bot01 созданы (персонаж не создан)"
 }
 
 cmd_db_backup() {
-  load_env; write_mycnf
+  resolve_db
   local dump; dump=$(command -v mariadb-dump || command -v mysqldump) || die "нет mariadb-dump/mysqldump"
-  local out
-  out="$LAB_ROOT/backups/${DB_NAME}-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
-  ( umask 077; "$dump" --defaults-extra-file="$MYCNF" --single-transaction --routines "$DB_NAME" | gzip > "$out" )
-  rm -f "$MYCNF"
-  info "бэкап: $out"
+  local ts db out; ts=$(date -u +%Y%m%dT%H%M%SZ)
+  ( umask 077; mkdir -p "$LAB_ROOT/backups" )
+  for db in $(printf '%s\n' "$DB_NAME" "$LOG_DB_NAME" | sort -u); do
+    out="$LAB_ROOT/backups/${db}-${ts}.sql.gz"
+    if ! ( umask 077; set -o pipefail
+           "$dump" --defaults-extra-file=<(mycnf) --single-transaction --routines "$db" | gzip > "$out" ); then
+      rm -f "$out"; die "дамп $db не удался"
+    fi
+    info "бэкап: $out ($(stat -c %s "$out") байт)"
+  done
 }
 
-# ---------- процессы ----------
+# ---------- запуск и остановка ----------
 
 start_proc() { # start_proc NAME CWD LOG CMD...
   local name="$1" cwd="$2" log="$3"; shift 3
-  if pid_alive "$name"; then info "$name уже запущен (pid $(<"$PIDS/$name.pid"))"; return; fi
+  local pid; pid=$(running_pid "$name")
+  if [[ -n "$pid" ]]; then info "$name уже запущен (pid $pid, $(proc_user "$pid")) — не трогаю"; return; fi
   rotate_log "$log"
   ( cd "$cwd" || exit 1
     setsid nohup "$@" >>"$log" 2>&1 </dev/null &
@@ -332,42 +493,73 @@ start_proc() { # start_proc NAME CWD LOG CMD...
 wait_port() {
   local name="$1" port="$2" i
   for ((i = 0; i < 60; i++)); do
-    port_open "$port" && { info "$name слушает $BIND_IP:$port"; return; }
-    pid_alive "$name" || die "$name завершился; см. $LAB_ROOT/logs/rathena/$name.log"
+    port_open "$port" && { info "$name слушает ${BIND_IP:-127.0.0.1}:$port"; return; }
+    [[ -n "$(running_pid "$name")" ]] || die "$name завершился; см. $LAB_ROOT/logs/rathena/$name.log"
     sleep 1
   done
   die "$name не открыл порт $port за 60 с"
 }
 
 start_server() {
-  local rel; rel=$(current_release)
-  need_var BIND_IP
-  python3 "$rel/scripts/lib/render.py" server "$rel/server/conf/import-tmpl" \
-    "$rel/upstream/rathena/conf/import" "$LAB_ENV" "$LAB_ROOT"
-  local s
+  local rd; rd=$(rathena_dir)
+  if render_server_conf; then
+    local pr; pr=$(profile_root)
+    python3 "$pr/scripts/lib/render.py" server "$pr/server/conf/import-tmpl" \
+      "$rd/conf/import" "$LAB_ENV" "$LAB_ROOT"
+  fi
+  local s pid
   for s in "${SERVERS[@]}"; do
-    start_proc "$s" "$rel/upstream/rathena" "$LAB_ROOT/logs/rathena/$s.log" "./$s-server"
+    pid=$(running_pid "$s")
+    if [[ -z "$pid" ]] && port_open "${PORT[$s]}"; then
+      die "порт ${PORT[$s]} занят процессом, не найденным как $s-server из $rd — разберитесь вручную"
+    fi
+    start_proc "$s" "$rd" "$LAB_ROOT/logs/rathena/$s.log" "./$s-server"
     wait_port "$s" "${PORT[$s]}"
   done
-  info "login/char/map запущены (вход в игру не проверен этой командой)"
+  info "login/char/map работают (вход в игру этой командой не проверяется)"
 }
 
 start_bot() {
-  local bot="$1" rel; rel=$(current_release)
-  [[ -d "$rel/bots/$bot/control" ]] || die "нет профиля bots/$bot в $(basename "$rel")"
-  local ctl="$LAB_ROOT/run/bots/$bot/control"
+  local bot="$1" pr od; pr=$(profile_root); od=$(openkore_dir)
+  [[ -f "$od/openkore.pl" ]] || die "нет $od/openkore.pl"
+  local pid; pid=$(running_pid "$bot")
+  [[ -z "$pid" ]] || { info "$bot уже запущен (pid $pid, $(proc_user "$pid")) — не трогаю"; return; }
+  local ctl var="${bot^^}_CONTROL_DIR"
+  if is_set "$var"; then
+    ctl=$(readlink -f "${!var}")
+    warn "$bot: используется готовый control $ctl — профиль и fallback из Git НЕ применяются"
+  else
+    [[ -d "$pr/bots/$bot/control" ]] || die "нет профиля bots/$bot в $pr"
+    local u="${bot^^}_USER" p="${bot^^}_PASS"
+    need_var "$u" "$p"; check_cred "$u"; check_cred "$p"
+    ctl="$LAB_ROOT/run/bots/$bot/control"
+    ( umask 077; mkdir -p "$(dirname "$ctl")" )
+    python3 "$pr/scripts/lib/render.py" bot "$pr/bots/$bot/control" "$ctl" "$LAB_ENV" "$bot"
+  fi
   mkdir -p "$LAB_ROOT/logs/$bot" "$LAB_ROOT/state/$bot"
-  ( umask 077; mkdir -p "$(dirname "$ctl")" )
-  python3 "$rel/scripts/lib/render.py" bot "$rel/bots/$bot/control" "$ctl" "$LAB_ENV" "$bot"
-  local tables="$rel/upstream/openkore/tables"
-  [[ -d "$rel/bots/$bot/tables" ]] && tables="$rel/bots/$bot/tables:$tables"
-  start_proc "$bot" "$rel/upstream/openkore" "$LAB_ROOT/logs/$bot/console.log" \
-    perl openkore.pl --control="$ctl" --tables="$tables" \
-      --logs="$LAB_ROOT/logs/$bot" --interface=Console::Simple
+  local tables="$od/tables" plugins="$od/plugins"
+  [[ -d "$pr/bots/$bot/tables" ]] && tables="$pr/bots/$bot/tables:$tables"
+  [[ -d "$pr/bots/plugins" ]] && plugins="$pr/bots/plugins:$plugins"
+  local -a cmd=(perl openkore.pl --control="$ctl" --tables="$tables" --plugins="$plugins"
+                --logs="$LAB_ROOT/logs/$bot")
+  local log="$LAB_ROOT/logs/$bot/console.log"
+  if [[ "${BOT_RUNNER:-tmux}" == tmux ]] && command -v tmux >/dev/null; then
+    local sess="live_ro_$bot" q
+    tmux has-session -t "$sess" 2>/dev/null && die "tmux-сессия $sess уже существует"
+    rotate_log "$log"
+    q=$(printf '%q ' "${cmd[@]}")
+    tmux new-session -d -s "$sess" -c "$od" "exec $q"
+    tmux pipe-pane -o -t "$sess" "cat >> $(printf '%q' "$log")"
+    tmux display-message -p -t "$sess" '#{pane_pid}' > "$PIDS/$bot.pid"
+    info "$bot запущен в tmux ($sess, pid $(<"$PIDS/$bot.pid")): tmux attach -t $sess; лог $log"
+  else
+    start_proc "$bot" "$od" "$log" "${cmd[@]}" --interface=Console::Simple
+  fi
 }
 
 cmd_start() {
   load_env
+  mkdir -p "$PIDS"
   local what="${1:-server}"
   case "$what" in
     server) start_server ;;
@@ -377,9 +569,11 @@ cmd_start() {
 }
 
 stop_proc() {
-  local name="$1" force="$2" pid i
-  pid_alive "$name" || { rm -f "$PIDS/$name.pid"; return 0; }
-  pid=$(<"$PIDS/$name.pid")
+  local name="$1" force="$2" line pid owner i
+  line=$(find_procs "$name" | head -n1)
+  [[ -n "$line" ]] || { rm -f "$PIDS/$name.pid"; return 0; }
+  pid=${line%% *}; owner=$(proc_user "$pid")
+  [[ "$owner" == "$(id -un)" ]] || die "$name (pid $pid) принадлежит $owner — остановите от его имени"
   info "останавливаю $name (pid $pid)"
   kill -TERM "$pid"
   for ((i = 0; i < 60; i++)); do
@@ -396,58 +590,78 @@ stop_proc() {
 
 cmd_stop() {
   local what="all" force=0 a
-  for a in "$@"; do [[ "$a" == --force ]] && force=1 || what="$a"; done
-  local f n
-  if [[ "$what" == all || "$what" == bot* ]]; then
-    for f in "$PIDS"/bot*.pid; do
-      [[ -e "$f" ]] || continue
-      n=$(basename "$f" .pid)
-      if [[ "$what" == all || "$what" == "$n" ]]; then stop_proc "$n" "$force"; fi
-    done
-  fi
-  if [[ "$what" == all || "$what" == server ]]; then
-    for n in map char login; do stop_proc "$n" "$force"; done
-  fi
+  for a in "$@"; do if [[ "$a" == --force ]]; then force=1; else what="$a"; fi; done
+  if [[ -f "$LAB_ENV" ]]; then load_env; fi
+  local bots=(bot01) f n
+  for f in "$PIDS"/bot*.pid; do
+    [[ -e "$f" ]] || continue
+    n=$(basename "$f" .pid); [[ "$n" == bot01 ]] || bots+=("$n")
+  done
+  case "$what" in
+    all)    for n in "${bots[@]}"; do stop_proc "$n" "$force"; done
+            for n in map char login; do stop_proc "$n" "$force"; done ;;
+    server) for n in map char login; do stop_proc "$n" "$force"; done ;;
+    bot[0-9]*) stop_proc "$what" "$force" ;;
+    *) die "stop server|<bot>|all" ;;
+  esac
   info "остановлено: $what"
 }
 
+cmd_status_body() {
+  local s line pid owner extra port
+  for s in "${SERVERS[@]}" bot01; do
+    line=$(find_procs "$s" | head -n1)
+    if [[ -n "$line" ]]; then
+      read -r pid owner extra <<<"$line"
+      line="pid $pid ($owner)${extra:+, $extra}"
+      [[ -f "$PIDS/$s.pid" && "$(<"$PIDS/$s.pid")" == "$pid" ]] || line+=", запущен не через lab"
+    else
+      line="не запущен"
+    fi
+    port=${PORT[$s]:-}
+    if [[ -n "$port" ]]; then
+      if port_open "$port"; then line+=", порт $port открыт"; else line+=", порт $port закрыт"; fi
+    fi
+    printf '  %-6s %s\n' "$s" "$line"
+  done
+  echo "  (процессы и порты — не доказательство входа и игры бота)"
+}
+
 cmd_status() {
-  [[ -f "$LAB_ENV" ]] && load_env
-  if [[ -L "$LAB_ROOT/current" ]]; then
-    info "current: $(basename "$(readlink -f "$LAB_ROOT/current")")"
+  if [[ -f "$LAB_ENV" ]]; then load_env; fi
+  if existing_mode; then
+    info "режим existing: rAthena $(rathena_dir)"
+  elif [[ -L "$LAB_ROOT/current" ]]; then
+    info "режим release: current $(basename "$(readlink -f "$LAB_ROOT/current")")"
   else
-    info "current: нет"
+    info "режим release: активной версии нет"
   fi
-  local s state f n
-  for s in "${SERVERS[@]}"; do
-    state="остановлен"; pid_alive "$s" && state="pid $(<"$PIDS/$s.pid")"
-    port_open "${PORT[$s]}" && state+=", порт ${PORT[$s]} открыт" || state+=", порт ${PORT[$s]} закрыт"
-    printf '  %-6s %s\n' "$s" "$state"
-  done
-  for f in "$PIDS"/bot*.pid; do
-    [[ -e "$f" ]] || continue
-    n=$(basename "$f" .pid)
-    pid_alive "$n" && printf '  %-6s pid %s\n' "$n" "$(<"$f")" || printf '  %-6s остановлен\n' "$n"
-  done
-  echo "  (status проверяет процессы и порты, а не вход и игру бота)"
+  cmd_status_body
 }
 
 main() {
-  local cmd="${1:-}"; shift || true
-  case "$cmd" in
+  local sub="${1:-}"; shift || true
+  case "$sub" in
+    ""|-h|--help|help) usage; return ;;
+    check) cmd_check "$@"; return ;;
+  esac
+  guard_user
+  case "$sub" in
     prepare)   cmd_prepare ;;
-    check)     cmd_check "$@" ;;
-    build)     [[ -f "$LAB_ENV" ]] && load_env; cmd_build "$@" ;;
-    deploy)    cmd_deploy "$@" ;;
-    activate)  cmd_activate "$@" ;;
-    rollback)  cmd_rollback ;;
+    doctor)    cmd_doctor ;;
+    status)    cmd_status ;;
     releases)  cmd_releases ;;
-    db-init)   cmd_db_init ;;
-    db-backup) cmd_db_backup ;;
     start)     cmd_start "$@" ;;
     stop)      cmd_stop "$@" ;;
-    status)    cmd_status ;;
-    ""|-h|--help|help) usage ;;
+    db-backup) load_env; cmd_db_backup ;;
+    build|deploy|activate|rollback)
+      if [[ -f "$LAB_ENV" ]]; then load_env; fi
+      require_release_mode "$sub"
+      case "$sub" in
+        build) cmd_build "$@" ;; deploy) cmd_deploy "$@" ;;
+        activate) cmd_activate "$@" ;; rollback) cmd_rollback ;;
+      esac ;;
+    db-init)   load_env; require_release_mode db-init; cmd_db_init ;;
     *) usage; exit 2 ;;
   esac
 }

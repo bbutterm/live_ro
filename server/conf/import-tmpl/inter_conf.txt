@@ -1,6 +1,6 @@
 // Шаблон live_ro. Рендерится командой `scripts/lab start` в
 // <release>/upstream/rathena/conf/import/inter_conf.txt.
-// Плейсхолдеры @@ИМЯ@@ берутся из $LAB_ROOT/secrets/lab.env. Значения не коммитить.
+// Плейсхолдеры @@ИМЯ@@ берутся из $LAB_ROOT/secrets/live_ro.env. Значения не коммитить.
 
 login_server_ip: @@DB_HOST@@
 login_server_port: @@DB_PORT@@
@@ -36,7 +36,7 @@ log_db_ip: @@DB_HOST@@
 log_db_port: @@DB_PORT@@
 log_db_id: @@DB_USER@@
 log_db_pw: @@DB_PASS@@
-log_db_db: @@DB_NAME@@
+log_db_db: @@LOG_DB_NAME@@
 
 // Логи вне release-каталога, чтобы откат кода их не терял.
 inter_log_filename: @@LAB_ROOT@@/logs/rathena/inter.log

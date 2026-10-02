@@ -310,7 +310,7 @@ skillsAddAuto_list
 tankMode 0
 tankModeTarget
 
-teleportAuto_hp 10
+teleportAuto_hp 0
 teleportAuto_sp 0
 teleportAuto_idle 0
 teleportAuto_portal 0
@@ -318,19 +318,19 @@ teleportAuto_search 0
 teleportAuto_minAggressives 0
 teleportAuto_minAggressivesInLock 0
 teleportAuto_onlyWhenSafe 0
-teleportAuto_maxDmg 500
+teleportAuto_maxDmg 0
 teleportAuto_maxDmgInLock 0
-teleportAuto_deadly 1
+teleportAuto_deadly 0
 teleportAuto_useSkill 1
 teleportAuto_useChatCommand
 teleportAuto_allPlayers 0
 teleportAuto_notPlayers
 teleportAuto_atkCount 0
-teleportAuto_atkMiss 10
+teleportAuto_atkMiss 0
 teleportAuto_unstuck 0
 teleportAuto_lostTarget 0
 teleportAuto_dropTarget 0
-teleportAuto_dropTargetEngaged 1
+teleportAuto_dropTargetEngaged 0
 teleportAuto_dropTargetKS 0
 teleportAuto_dropTargetHidden 0
 teleportAuto_attackedWhenSitting 0
@@ -340,8 +340,13 @@ teleportAuto_equip_leftAccessory
 teleportAuto_equip_rightAccessory
 teleportAuto_lostHomunculus
 teleportAuto_useItemForRespawn
+
 teleportAuto_item1
 teleportAuto_item2
+
+# live_ro: fallback выживания без телепорта (bots/plugins/lowHpGuard)
+lowHpGuard_lower 40
+lowHpGuard_upper 90
 
 dealAuto 1
 dealAuto_names
@@ -724,8 +729,11 @@ equipAuto {
 	# [checkMonsterCondition]
 }
 
-useSelf_item {
+useSelf_item Novice Potion, Red Potion, Orange Potion, Yellow Potion, White Potion {
+	hp < 50%
+	timeout 1
 	dcOnEmpty 0
+	disabled 0
 	# [checkSelfCondition]
 }
 

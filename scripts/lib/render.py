@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Рендер runtime-конфигов live_ro из шаблонов и локального lab.env.
+"""Рендер runtime-конфигов live_ro из шаблонов и локального env-файла (secrets/live_ro.env).
 
 Использование (вызывается из scripts/lab):
-  render.py server <templates_dir> <dest_dir> <lab.env> <lab_root>
-  render.py bot <src_control_dir> <dest_control_dir> <lab.env> <bot_id>
+  render.py server <templates_dir> <dest_dir> <env_file> <lab_root>
+  render.py bot <src_control_dir> <dest_control_dir> <env_file> <bot_id>
 
-Секреты читаются только из lab.env и пишутся только в dest (права 600).
+Секреты читаются только из env-файла и пишутся только в dest (права 600).
 """
 from pathlib import Path
 import os
@@ -15,6 +15,9 @@ import sys
 
 PLACEHOLDER = re.compile(r"@@([A-Z0-9_]+)@@")
 UNSET = {"", "CHANGE_ME"}
+# rAthena хранит userid/passwd в буфере 24 байта: максимум 23 ASCII-символа.
+CRED_KEY = re.compile(r"^(INTER|BOT\d+)_(USER|PASS)$")
+CRED_VALUE = re.compile(r"^[!-~]{1,23}$")
 
 
 def die(msg):
@@ -37,9 +40,11 @@ def load_env(path):
 def require(env, key, source):
     value = env.get(key)
     if value is None or value in UNSET:
-        die(f"{source}: переменная {key} не заполнена в lab.env")
+        die(f"{source}: переменная {key} не заполнена в env-файле")
     if "\n" in value or "\r" in value:
         die(f"{key}: перевод строки в значении недопустим")
+    if CRED_KEY.match(key) and not CRED_VALUE.match(value):
+        die(f"{key}: нужно 1-23 печатных ASCII-символа без пробелов (длина {len(value)})")
     return value
 
 
@@ -69,6 +74,12 @@ def render_bot(src, dest, env_file, bot_id):
     prefix = bot_id.upper()
     user = require(env, f"{prefix}_USER", "config.txt")
     password = require(env, f"{prefix}_PASS", "config.txt")
+    slot = env.get(f"{prefix}_CHAR_SLOT", "")
+    if slot and not slot.isdigit():
+        die(f"{prefix}_CHAR_SLOT должен быть числом")
+    values = {"username": user, "password": password}
+    if slot:
+        values["char"] = slot
     src, dest = Path(src), Path(dest)
     if not (src / "config.txt").is_file():
         die(f"нет {src}/config.txt")
@@ -81,11 +92,11 @@ def render_bot(src, dest, env_file, bot_id):
     seen = set()
     for i, line in enumerate(lines):
         key = line.split(None, 1)[0] if line.strip() else ""
-        if key in ("username", "password") and key not in seen:
-            lines[i] = f"{key} {user if key == 'username' else password}\n"
+        if key in values and key not in seen:
+            lines[i] = f"{key} {values[key]}\n"
             seen.add(key)
-    if seen != {"username", "password"}:
-        die("в config.txt нет строк username/password")
+    if seen != set(values):
+        die(f"в config.txt нет строк {sorted(set(values) - seen)}")
     write_private(cfg, "".join(lines))
     print(f"rendered {bot_id} control -> {dest}")
 

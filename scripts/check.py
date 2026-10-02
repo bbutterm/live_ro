@@ -31,10 +31,10 @@ SECRET_PATTERNS = [
     re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),  # Telegram bot token
 ]
 FORBIDDEN_FILES = re.compile(
-    r"(^|/)(lab\.env|\.env|my\.cnf)$|\.(sqlite3?|db|log|sql\.gz|dump|so|dll|exe|o)$"
+    r"(^|/)(lab\.env|live_ro\.env|\.env|my\.cnf)$|\.(sqlite3?|db|log|sql\.gz|dump|so|dll|exe|o)$"
     r"|(^|/)(secrets|state|logs|releases|backups|run)/"
 )
-ALLOWED_FILES = {"lab.env.example"}
+ALLOWED_FILES = {"live_ro.env.example"}
 # Ключи с паролями в шаблонах rAthena: значение обязано быть плейсхолдером.
 SECRET_KEYS = re.compile(r"^\s*(\w+_pw|passwd|userid|\w+_id)\s*:\s*(.*)$")
 

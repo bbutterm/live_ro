@@ -6,7 +6,7 @@ version 55
 serverType kRO_RagexeRE_2018_06_20e
 serverEncoding Western
 charBlockSize 155
-addTableFolders kRO/RagexeRE_2018_06_21a
+addTableFolders kRO/RagexeRE_2018_06_21a;kRO;translated/kRO_english
 secureLogin 0
 gameGuard 0
 pinCode 0

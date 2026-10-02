@@ -14,4 +14,4 @@ server/conf/local/
 backups/
 run/
 *.log
-lab.env
+live_ro.env

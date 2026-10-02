@@ -4,7 +4,20 @@
 каталог и не трогает живую сборку, БД, `state/` и `logs/`. Push в GitHub ничего
 не деплоит. Миграций и рестартов скрипты сами не делают.
 
-## Обновление до выбранного commit
+## Режим existing (текущий VPS)
+Собранный rAthena оператора и БД не меняются. Обновляется только checkout с профилями,
+плагинами и скриптами:
+```sh
+cd <checkout оператора>
+git rev-parse HEAD > /tmp/live_ro.prev       # запомнить текущий commit для отката
+git fetch origin && git checkout --detach <commit> && git submodule update --init --recursive
+python3 scripts/check.py && scripts/lab doctor
+scripts/lab stop bot01 && scripts/lab start bot01   # бот перечитывает профиль
+```
+Откат: `git checkout --detach $(cat /tmp/live_ro.prev)`, затем снова `stop bot01` и `start bot01`.
+Серверы перезапускать нужно, только если задание на проверку прямо этого требует.
+
+## Режим release: обновление до выбранного commit
 
 ```sh
 cd <checkout оператора>            # например $LAB_ROOT/src, отдельный от releases
