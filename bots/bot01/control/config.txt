@@ -348,6 +348,9 @@ teleportAuto_item2
 lowHpGuard_lower 40
 lowHpGuard_upper 90
 
+# live_ro: ожидание подтверждения выхода от сервера при остановке (bots/plugins/gracefulStop)
+gracefulStop_timeout 40
+
 dealAuto 1
 dealAuto_names
 dealMaxItems 10

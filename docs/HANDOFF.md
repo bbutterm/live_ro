@@ -129,6 +129,8 @@ scripts/lab status
 
 ## Задание №2: исправления по отчёту №1 и завершение наблюдения
 
+**Результат:** PARTIAL PASS, `docs/qa/HERMES-9b8157a.md`. Локаль, TERM и бэкап проверены, stale-session осталась. Исправление — в задании №3.
+
 **Ветка:** `claude/stage1-reproducible-delivery`
 **Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
 
@@ -210,3 +212,92 @@ scripts/lab status
 
 ### Что прислать
 Вывод шагов 1–6 (без паролей) по формату отчёта, в файле `docs/qa/HERMES-<sha7>.md`.
+
+---
+
+## Задание №3: подтверждённый выход бота (короткий тест)
+
+**Ветка:** `claude/stage1-reproducible-delivery`
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+**Без 30-минутного наблюдения.** Каждое ожидание ограничено 60 с.
+
+### Причина stale-session (разбор исходников rAthena)
+- `src/map/clif.cpp`, `clif_parse_QuitGame`: если персонаж был в бою меньше `prevent_logout`
+  (10000 мс, `conf/battle/player.conf`; триггеры 14 = атака, умение, получение урона),
+  сервер отвечает на запрос выхода отказом (`018B` fail=1).
+- `clif_quitsave`: если при этом закрыть соединение, персонаж остаётся в мире ещё 10 с
+  (`clif_delayquit`). Login-сервер в это время отвечает на вход кодом 8, отсюда
+  «still recognizes your last connection».
+- gracefulStop v1 только поднимал `quit` и закрывал сокет. Бот был в бою, поэтому сервер
+  выход не принимал. Строка `[gracefulStop]` не доказывала выход.
+
+### Что изменилось
+1. gracefulStop v2: по сигналу AI → manual, каждые 2 с запрос выхода, выход только после
+   `018B` fail=0. Без подтверждения за `gracefulStop_timeout` (40 с) — выход с предупреждением.
+2. `lab stop bot01`: после завершения процесса ждёт `char.online=0` (SELECT, до 30 с) и пишет время.
+3. `lab start bot01`: если персонаж ещё online, ждёт снятия сессии до 60 с (опрос каждые 2 с),
+   потом запускает. OpenKore при коде 8 сам повторяет вход.
+4. Строки `=== live_ro START|STOP bot01 <UTC> commit <sha> ===` в `console.log` делят лог на сегменты.
+5. Ни одна команда не пишет в БД: online-флаги выставляет только rAthena.
+
+### Какие процессы перезапускать
+- login/char/map — **не перезапускать**.
+- bot01 — перезапуски в шагах 3 и 4.
+
+### Шаги (от `ro-lab`, без `LC_ALL=C`)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa
+export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive
+git rev-parse HEAD
+L=$LAB_ROOT/logs/bot01/console.log
+
+# 1. Статика
+python3 scripts/check.py && scripts/lab doctor
+
+# 2. Первый перезапуск: у текущего процесса старый gracefulStop v1 — результат не оценивается
+scripts/lab stop bot01 ; scripts/lab start bot01
+sleep 45
+
+# 3. Попытка А: stop во время боя
+date -u +%T; scripts/lab stop bot01; date -u +%T
+awk '/=== live_ro START/{seg=""} {seg=seg $0 "\n"} END{printf "%s", seg}' $L | grep -E 'gracefulStop|live_ro STOP'
+scripts/lab start bot01; date -u +%T
+sleep 45
+awk '/=== live_ro START/{seg=""} {seg=seg $0 "\n"} END{printf "%s", seg}' $L | grep -nE 'still recognizes|Map Change|You are now attacking' | head
+
+# 4. Попытка Б: то же ещё раз
+date -u +%T; scripts/lab stop bot01; date -u +%T
+awk '/=== live_ro START/{seg=""} {seg=seg $0 "\n"} END{printf "%s", seg}' $L | grep -E 'gracefulStop|live_ro STOP'
+scripts/lab start bot01; date -u +%T
+sleep 45
+awk '/=== live_ro START/{seg=""} {seg=seg $0 "\n"} END{printf "%s", seg}' $L | grep -nE 'still recognizes|Map Change|You are now attacking' | head
+
+# 5. Серверная сторона
+grep -E "Arkady.*logged off|logged off" $LAB_ROOT/logs/rathena/map.log 2>/dev/null | tail -4   # если map пишет туда; иначе — лог вашего map-server
+scripts/lab status
+```
+Если map-server пишет консоль не в `$LAB_ROOT/logs/rathena/map.log`, возьмите строки
+`logged off` из его фактического лога.
+
+### Ожидаемый результат (не проверен)
+| Шаг | Ожидание |
+|---|---|
+| 3, 4 stop | в сегменте `[gracefulStop] сервер подтвердил выход через N с (отказов: K)`; `lab` пишет `char.online=0`, время ≤ 30 с |
+| 3, 4 start | в новом сегменте **нет** `still recognizes your last connection`, есть `Map Change` и затем `You are now attacking` |
+| 5 | на каждую остановку строка `Character 'Arkady' logged off` в логе map-server. Она печатается при закрытии соединения, даже если сервер ещё держит персонажа. Доказательство снятия — `char.online=0` из вывода `lab stop` |
+
+Возможный честный исход: монстр бьёт бота всё время → `не подтвердил выход за 40 с`.
+Тогда сервер держит персонажа до 10 с, а `start` ждёт `online=0`. Отметьте это как отдельный
+случай с выводом, это не провал теста.
+
+### Риски
+- БД: только чтение (`SELECT online`). Схема и данные не меняются.
+- Остановка бота занимает до 40 с (ожидание подтверждения) + до 30 с проверки.
+- Если `stop` упрётся в 60 с ожидания процесса: `scripts/lab stop bot01 --force` и вывод в отчёт.
+
+### Откат
+- `git checkout --detach 9b8157a87273c614bbe170608c1b8fb3e85195ac`, затем `scripts/lab stop bot01` и `scripts/lab start bot01`.
+
+### Что прислать
+Вывод шагов 1–5 и время каждой попытки (stop → online=0 → start → Map Change), в `docs/qa/HERMES-<sha7>.md`.

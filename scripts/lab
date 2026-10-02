@@ -164,6 +164,39 @@ sql() { local db="$1"; shift; "$(mysql_bin)" --defaults-extra-file=<(mycnf) "$db
 
 sql_quote() { local s=${1//\\/\\\\}; s=${s//\'/\\\'}; printf "'%s'" "$s"; }
 
+# bot_online BOT -> "1"/"0" (персонаж аккаунта бота в мире по char.online) или пусто,
+# если БД недоступна. Только SELECT: флаг выставляет сам rAthena.
+bot_online() {
+  local u="${1^^}_USER"
+  is_set "$u" || return 0
+  ( resolve_db ) >/dev/null 2>&1 || return 0
+  resolve_db
+  sql "$DB_NAME" -N -e "SELECT COALESCE(MAX(c.online),0) FROM \`char\` c JOIN login l USING (account_id) WHERE l.userid=$(sql_quote "${!u}")" 2>/dev/null || true
+}
+
+# wait_offline BOT MAX_SEC -> ждёт char.online=0, печатает время; 1 если не дождался.
+wait_offline() {
+  local bot="$1" max="$2" i st
+  st=$(bot_online "$bot")
+  if [[ -z "$st" ]]; then info "$bot: состояние на сервере неизвестно (БД недоступна)"; return 0; fi
+  for ((i = 0; i <= max; i += 2)); do
+    st=$(bot_online "$bot")
+    if [[ "$st" == 0 ]]; then
+      info "$bot: сервер снял персонажа с карты (char.online=0) через ${i} с после проверки"
+      return 0
+    fi
+    sleep 2
+  done
+  warn "$bot: персонаж всё ещё online на сервере через ${max} с"
+  return 1
+}
+
+log_mark() { # отметка сегмента в консольном логе бота
+  printf '=== live_ro %s %s %s commit %s ===\n' "$2" "$1" "$(date -u +%FT%TZ)" \
+    "$(git -C "$(profile_root)" rev-parse --short=12 HEAD 2>/dev/null || echo '?')" \
+    >> "$LAB_ROOT/logs/$1/console.log"
+}
+
 # ---------- процессы ----------
 
 proc_cwd()  { readlink "/proc/$1/cwd" 2>/dev/null || true; }
@@ -544,16 +577,23 @@ start_bot() {
     python3 "$pr/scripts/lib/render.py" bot "$pr/bots/$bot/control" "$ctl" "$LAB_ENV" "$bot"
   fi
   mkdir -p "$LAB_ROOT/logs/$bot" "$LAB_ROOT/state/$bot"
+  # Старая сессия ещё держится на сервере -> вход получит "still recognizes your
+  # last connection". Ждём ограниченно; затем запускаем (OpenKore повторит вход сам).
+  if [[ "$(bot_online "$bot")" == 1 ]]; then
+    info "$bot: персонаж ещё online на сервере — жду снятия сессии до 60 с"
+    wait_offline "$bot" 60 || warn "$bot: запускаю всё равно; OpenKore повторит вход сам"
+  fi
   local tables="$od/tables" plugins="$od/plugins"
   [[ -d "$pr/bots/$bot/tables" ]] && tables="$pr/bots/$bot/tables:$tables"
   [[ -d "$pr/bots/plugins" ]] && plugins="$pr/bots/plugins:$plugins"
   local -a cmd=(perl openkore.pl --control="$ctl" --tables="$tables" --plugins="$plugins"
                 --logs="$LAB_ROOT/logs/$bot")
   local log="$LAB_ROOT/logs/$bot/console.log"
+  rotate_log "$log"
+  log_mark "$bot" START
   if [[ "${BOT_RUNNER:-tmux}" == tmux ]] && command -v tmux >/dev/null; then
     local sess="live_ro_$bot" q
     tmux has-session -t "$sess" 2>/dev/null && die "tmux-сессия $sess уже существует"
-    rotate_log "$log"
     q=$(printf '%q ' "${cmd[@]}")
     tmux new-session -d -s "$sess" -c "$od" "exec $q"
     tmux pipe-pane -o -t "$sess" "cat >> $(printf '%q' "$log")"
@@ -596,6 +636,19 @@ stop_proc() {
   fi
 }
 
+# Бот: SIGTERM -> плагин gracefulStop запрашивает выход у сервера (до 40 с),
+# затем проверяем по БД, что сервер действительно снял персонажа.
+stop_bot() {
+  local bot="$1" force="$2" was
+  was=$(running_pid "$bot")
+  stop_proc "$bot" "$force"
+  [[ -n "$was" ]] || return 0
+  [[ -d "$LAB_ROOT/logs/$bot" ]] && log_mark "$bot" STOP
+  local t0=$SECONDS
+  wait_offline "$bot" 30 || true
+  info "$bot: от завершения процесса до проверки offline прошло $((SECONDS - t0)) с"
+}
+
 cmd_stop() {
   local what="all" force=0 a
   for a in "$@"; do if [[ "$a" == --force ]]; then force=1; else what="$a"; fi; done
@@ -606,10 +659,10 @@ cmd_stop() {
     n=$(basename "$f" .pid); [[ "$n" == bot01 ]] || bots+=("$n")
   done
   case "$what" in
-    all)    for n in "${bots[@]}"; do stop_proc "$n" "$force"; done
+    all)    for n in "${bots[@]}"; do stop_bot "$n" "$force"; done
             for n in map char login; do stop_proc "$n" "$force"; done ;;
     server) for n in map char login; do stop_proc "$n" "$force"; done ;;
-    bot[0-9]*) stop_proc "$what" "$force" ;;
+    bot[0-9]*) stop_bot "$what" "$force" ;;
     *) die "stop server|<bot>|all" ;;
   esac
   info "остановлено: $what"
