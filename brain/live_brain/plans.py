@@ -338,6 +338,9 @@ class PlanExecutor:
                 await self.whisper(plan["partner"], f"Я на месте и вижу тебя. [meet:{plan['id']}:done]",
                                    "план: встреча подтверждена")
                 await self.clear_point("план выполнен: вернуться к охоте")
+                bonds = getattr(self.mind, "bonds", None)
+                if bonds:                                   # ORG-023: встреча с продолжением
+                    await bonds.after_meeting(plan)
             elif now - plan["phase_since"] > self.wait_timeout:
                 await self.fail(plan, f"не дождался {plan['partner']} у точки за {self.wait_timeout} с")
 

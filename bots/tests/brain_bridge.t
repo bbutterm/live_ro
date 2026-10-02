@@ -143,4 +143,15 @@ ok(!(brainBridge::actionToCommand({action => 'sleep', seconds => 'x; quit'}))[0]
 $Globals::config{storageAuto} = 0;
 is((brainBridge::actionToCommand({action => 'service'}))[1], 'autosell', 'без склада — продать и докупить');
 
+# ---- дружба (ORG-024): жителю — принять сразу; запрос — только жителю ----
+@Commands::ran = ();
+$Globals::config{residents} = 'Vera';
+Plugins::call('friend_request', {name => 'Vera'});
+is_deeply(\@Commands::ran, ['friend accept'], 'дружба жителя — принимаю');
+@Commands::ran = ();
+Plugins::call('friend_request', {name => 'Stranger'});
+is_deeply(\@Commands::ran, [], 'чужому — решает человек');
+is((brainBridge::actionToCommand({action => 'friend_request', to => 'Vera'}))[1], 'friend request Vera', 'запрос жителю');
+ok(!(brainBridge::actionToCommand({action => 'friend_request', to => 'Stranger'}))[0], 'чужому — нельзя');
+
 done_testing();

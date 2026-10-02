@@ -30,6 +30,7 @@
 #   unstuck {radius}      -> ai clear; move <случайная проходимая клетка в радиусе radius (5..30, по умолчанию 10)>
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
+#   friend_request {to}   -> friend request <to> (только жителю; видимому); запрос жителя принимается в хуке
 #   job_change {path,stage,steps,success} -> плагин jobChange: этап квеста смены профессии (шаги из progression.json)
 #   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
 #   service {}            -> autostorage (если есть что сдать на склад) или autosell — продать/сдать/докупить
@@ -55,7 +56,8 @@ use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use JSON::PP;
 use Time::HiRes qw(time);
 use Plugins;
-use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID %ai_v);
+use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID %ai_v
+               %friends @friendsID);
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -84,6 +86,7 @@ my $hooks = Plugins::addHooks(
 	['packet_selfChat',    \&onSelfChat],
 	['party_invite',       \&onPartyInvite],
 	['packet_skilluse',    \&onSkillUse],
+	['friend_request',     \&onFriendRequest],
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -171,6 +174,8 @@ sub sendState {
 		%{identity($char)},
 		party     => ($char->{party} && $char->{party}{joined} ? "$char->{party}{name}" : undef),
 		party_members => partyMembers(),
+		friends   => [map { {name => "$friends{$_}{name}", online => ($friends{$_}{online} ? JSON::PP::true : JSON::PP::false)} }
+		              grep { $friends{$_} && defined $friends{$_}{name} } 0 .. $#friendsID],
 		party_leader  => (isPartyLeader() ? JSON::PP::true : JSON::PP::false),
 		follow    => ($config{follow} ? $config{followTarget} : undef),
 		combat    => (%combatProfile::current ? {%combatProfile::current} : undef),
@@ -235,6 +240,17 @@ sub onPartyInvite {
 	} else {
 		event('party_invite', party => $party);
 	}
+}
+
+# ORG-024: запрос дружбы от жителя принимаем сразу (как приглашение в группу); чужие — решает человек.
+sub onFriendRequest {
+	my (undef, $args) = @_;
+	my $name = "$args->{name}";
+	if (grep { $_ eq $name } residents()) {
+		message "[brainBridge] житель $name предлагает дружбу — принимаю\n", 'system';
+		Commands::run('friend accept');
+	}
+	event('friend_request', from => $name);
 }
 
 sub nameOf {
@@ -438,6 +454,11 @@ sub actionToCommand {
 		my $id = $a->{id} // '';
 		return (0, 'эмоция не из списка') unless $id =~ /^\d{1,2}$/ && exists $EMOTES{$id};
 		return (1, "e $EMOTES{$id}");
+	} elsif ($kind eq 'friend_request') {
+		my $to = cleanText($a->{to});
+		return (0, 'неверный адресат') unless $to =~ /^[^"\s]{1,23}$/;
+		return (0, 'не житель') unless grep { $_ eq $to } residents();
+		return (1, "friend request $to");
 	} elsif ($kind eq 'job_change') {
 		return (0, 'плагин jobChange не загружен') unless defined &jobChange::start;
 		my ($ok, $desc) = jobChange::start($a);

@@ -18,6 +18,7 @@ import time
 
 from . import llm
 from .activity import Activities
+from .bonds import Bonds
 from .career import Career
 from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
@@ -127,6 +128,7 @@ class Mind:
             for m in self.mem.get("learned_hunt_maps", []):      # выученные места охоты (атлас) — после рестарта тоже
                 self.learn_hunt_map(m, save=False)
         self.activities = Activities(self) if self.routine and settings.feature("activity") else None
+        self.bonds = Bonds(self) if self.ctx.peers and settings.feature("bonds") else None
         # social: городской распорядок, разговоры жителей, реакции (social.py)
         self.social = (Social(self, world) if world and (world.get("social") or {}).get("enabled", True)
                        and self.ctx.peers and feat("social") else None)
@@ -388,7 +390,7 @@ class Mind:
                              "actions": sent, "rejected": rejected, **(extra or {})})
         label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM", "plan": "план",
                  "operator": "оператор", "economy": "экономика", "routine": "распорядок", "party": "группа",
-                 "social": "общение", "career": "карьера"}.get(source, source)
+                 "social": "общение", "career": "карьера", "bonds": "связи"}.get(source, source)
         log.info("%s (%s): действия %s%s", label, reason,
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
@@ -492,6 +494,8 @@ class Mind:
                 await self.career.tick()
             if self.activities:
                 await self.activities.tick()
+            if self.bonds:
+                await self.bonds.tick()
             if self.social:                                    # social: тик общения
                 await self.social.tick()
             await self.read_inbox()

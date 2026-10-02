@@ -19,7 +19,7 @@ import time
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
            "party_create", "party_invite", "party_accept", "party_leave", "follow", "unfollow")
 # Только исполнители плана (plans.py), распорядка (routine.py), экономики (economy.py) и общения (social.py) — модель их не получает.
-PLAN_ACTIONS = ("job_change", "sleep", "service", "meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close",
+PLAN_ACTIONS = ("friend_request", "job_change", "sleep", "service", "meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close",
                 "emote")
 # Безопасные эмоции (номер -> команда OpenKore «e <команда>», tables/emotions.txt); тот же список в brainBridge.pl.
 EMOTES = {1: "?", 2: "ho", 3: "lv", 5: "ic", 9: "...", 12: "wav", 15: "thx", 17: "sry", 18: "heh",
@@ -95,6 +95,10 @@ class SafetyPolicy:
                 return None, f"лимит эмоций {EMOTE_LIMIT}/10 мин"
             self.emoted.append(now)
             return {"action": "emote", "id": eid}, None
+        if kind == "friend_request":
+            if action.get("to") not in self.peers:
+                return None, "дружба — только с жителями"
+            return {"action": "friend_request", "to": action["to"]}, None
         if kind == "job_change":
             # Шаги — только из brain/world/progression.json (career.py), их проверяет и плагин jobChange.
             steps = action.get("steps")
