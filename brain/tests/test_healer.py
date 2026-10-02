@@ -10,6 +10,7 @@ import random
 import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from live_brain import world_bus
@@ -93,7 +94,9 @@ class HealerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.clock = Clock(time.time())
+        # review3: полдень мира сегодня, а не «сейчас» — иначе вывеска (society.rooms) ночью не открывается
+        tz = timezone(timedelta(hours=WORLD.get("timezone_offset_hours", 0)))
+        self.clock = Clock(datetime.now(tz).replace(hour=12, minute=0, second=0, microsecond=0).timestamp())
         self.bus_path = self.root / "shared" / "world.sqlite"
         self.v = Resident(self.root, "bot02", "Vera", self.bus_path, self.clock)
         self.a = Resident(self.root, "bot01", "Arkady", self.bus_path, self.clock)
