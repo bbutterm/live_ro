@@ -94,8 +94,11 @@ class Needs:
     def weighted(self):
         aims = getattr(self.mind, "aims", None)                     # ORG-038: невыполненные цели недели усиливают мотив
         rivalry = getattr(self.mind, "rivalry", None)               # rivalry: ORG-060 отстающему progress выше
+        cal = getattr(self.mind, "calendar", None)                  # calendar: день недели и праздник (ORG-059)
         return {k: round(v * self.weight(k) * (aims.boost(k) if aims else 1.0)
-                         * (rivalry.boost(k) if rivalry else 1.0), 2) for k, v in self.values().items()}  # rivalry:
+                         * (rivalry.boost(k) if rivalry else 1.0)                # rivalry:
+                         * (cal.factor(k, self.clock()) if cal else 1.0), 2)    # calendar:
+                for k, v in self.values().items()}
 
     def top(self, n=3):
         w = self.weighted()

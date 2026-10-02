@@ -53,6 +53,7 @@ PUBLISH = {
     "guild_joined": ("guild_joined", 3),      # guild:
     "explore_found": ("place_found", 3),      # explore: житель открыл новое место (ORG-054)
     "rival_overtook": ("rival_overtook", 2),  # rivalry: ORG-060 обогнал соперника
+    "tradition_stage": ("tradition", 3),      # tradition: смена ступени вечернего круга (ORG-058)
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 
@@ -263,6 +264,9 @@ TEXTS = {
     "guild_joined": lambda d: f"вступил в гильдию {d.get('name')}",         # guild:
     "place_found": lambda d: f"открыл(а) {d.get('map')}",                    # explore: ORG-054
     "rival_overtook": lambda d: f"обогнал(а) {d.get('rival')} {d.get('label')} ({d.get('mine')} против {d.get('theirs')})",  # rivalry:
+    "tradition": lambda d: d.get("text") or f"вечерний круг: {d.get('label')}",   # tradition: ORG-058
+    "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
+                                     f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
     "death_report": lambda d: f"погиб на {d.get('map')}" + (f" (бил {d.get('cause')})" if d.get("cause") else ""),
     "job_changed": lambda d: f"сменил профессию: {d.get('from')} → {d.get('to')}",

@@ -46,6 +46,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import weather
+from .world_calendar import PHRASES as CALENDAR_PHRASES   # calendar: фразы тем holiday/birthday по умолчанию
 
 log = logging.getLogger("social")
 
@@ -111,6 +112,7 @@ class Social:
         self.phrases = mind.persona.get("phrases") or {}
         if "trip" not in self.phrases:                                         # explore: тема «где был»
             self.phrases = dict(self.phrases, trip=TRIP_PHRASES)               # explore:
+        self.phrases = dict(CALENDAR_PHRASES, **self.phrases)                  # calendar: holiday/birthday (ORG-059)
         self.st = mind.mem.get("social") or {}
         for key in ("pairs", "used", "together", "bonded", "peer_lv", "react", "told", "replies"):
             self.st.setdefault(key, {})
@@ -227,6 +229,9 @@ class Social:
         trip = explorer.last_trip(now - 2 * 86400) if explorer else None       # explore:
         if trip:                                                               # explore:
             f["trip_map"] = trip["map"]                                        # explore:
+        cal = getattr(self.mind, "calendar", None)                             # calendar: праздник и день рождения
+        if cal and peer:                                                       # calendar: собеседника (ORG-059),
+            f.update(cal.topic_facts(peer, now))                               # calendar: раз в день каждому
         if peer:
             heals = [e for e in self.events_since("heal_confirmed", start)
                      if e.get("from") == peer and e.get("to") == self.me]
@@ -250,6 +255,7 @@ class Social:
             topics.append("tired")
         if facts.get("trip_map"):                                              # explore:
             topics.append("trip")                                              # explore:
+        topics += [t for t in ("birthday", "holiday") if facts.get(t)]         # calendar: ORG-059
         return topics
 
     # ---------- реестр тем (ORG-066) ----------

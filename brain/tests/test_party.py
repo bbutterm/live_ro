@@ -22,7 +22,7 @@ WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
 
 class Clock:
     def __init__(self):
-        self.t = time.time()
+        self.t = time.time() // 86400 * 86400 + 9 * 3600   # полдень мира (UTC+3): не в окно сна жителей
 
     def __call__(self):
         return self.t

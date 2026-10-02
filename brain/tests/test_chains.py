@@ -59,6 +59,7 @@ class ChainTest(unittest.TestCase):
         r.new_day(self.clock.t)
         r.st.update(mode="town", arrived=True, rest_until=self.clock.t + 3600, mode_since=self.clock.t)
         self.mind.social.is_night = lambda now: False
+        self.mind.tradition = None                   # tradition: вечерний круг (20–21 ч) не вмешивается в тест
 
     def tearDown(self):
         self.mem.close()

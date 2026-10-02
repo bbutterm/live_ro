@@ -20,6 +20,7 @@ from .economy import CHRONICLE_LINES, metrics_from_rows
 from .society import CHRONICLE_LINES as SOCIETY_LINES   # society: ссоры, примирения, вывески
 from .guild import CHRONICLE_LINES as GUILD_LINES       # guild: основание и вступление (ORG-052)
 from .rivalry import CHRONICLE_LINES as RIVAL_LINES     # rivalry: обгоны соперника (ORG-060)
+from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -38,6 +39,7 @@ LINES = {
     "pet_hatched": lambda d: f"завёл(а) питомца: {d.get('name')}",
     "pet_gone": lambda d: "питомца больше нет рядом",
     "explore_found": lambda d: f"открыл(а) {d.get('map')}",              # explore: ORG-054 экспедиция
+    "tradition_stage": lambda d: d.get("text"),                           # tradition: ORG-058 вечерний круг
     **CHRONICLE_LINES,                                    # ORG-037: сделки и письма жителей
     **SOCIETY_LINES,                                      # society: ORG-026/027
     **GUILD_LINES,                                        # guild: ORG-052
@@ -67,6 +69,9 @@ def chronicle(lab_root, bots, day=None, tz_hours=3):
     day = day or datetime.now(tz).strftime("%Y-%m-%d")
     start, end, tz = day_bounds(day, tz_hours)
     out = [f"# Хроника мира за {day} (UTC{tz_hours:+d})", ""]
+    head = world_calendar.header_for(day, tz_hours)                       # calendar: «суббота, рыночный день; …»
+    if head:                                                              # calendar:
+        out[1:1] = [f"День мира: {head}", ""]                             # calendar:
     timeline = []
     for bot in bots:
         db = Path(lab_root) / "state" / bot / "memory.sqlite"

@@ -47,6 +47,8 @@ from .crowd import Crowd                                # crowd: стигмер�
 from . import topics                                    # talk: темы разговора из жизни мира (ORG-066)
 from .episodes import Episodes                          # talk: «помнишь?» — эпизоды пары (ORG-055)
 from .mood import Mood                                  # talk: настроение (ORG-064)
+from .world_calendar import WorldCalendar               # calendar: календарь мира (ORG-059)
+from .tradition import Tradition                        # tradition: вечерний круг у фонтана (ORG-058)
 
 log = logging.getLogger("mind")
 
@@ -142,6 +144,8 @@ class Mind:
         self.needs = Needs(self)
         self.mood = (Mood(self) if settings.feature("mood")                                  # talk: ORG-064
                      and ((world or {}).get("mood") or {}).get("enabled", True) else None)  # talk:
+        self.calendar = (WorldCalendar(self, world) if world and settings.feature("calendar")        # calendar: ORG-059
+                         and ((world or {}).get("calendar") or {}).get("enabled", True) else None)  # calendar:
         self.career = Career(self, (world or {}).get("progression")) if world and settings.feature("career") else None
         feat = settings.feature
         self.routine = Routine(self, world) if world and feat("routine") else None
@@ -183,6 +187,8 @@ class Mind:
                          and ((world or {}).get("episodes") or {}).get("enabled", True) else None)  # talk:
         if self.social:                                                               # talk: ORG-066 реестр тем
             topics.install(self.social, self, world)                                  # talk:
+        self.tradition = (Tradition(self, world.get("tradition"), world=world) if world and feat("tradition")   # tradition:
+                          and (world.get("tradition") or {}).get("enabled", True) else None)                 # tradition:
 
     # ---------- входящие сообщения плагина ----------
 
@@ -635,6 +641,8 @@ class Mind:
             self.aims.tick()                                   # events: недельные цели
         if self.guild:                                         # guild: ORG-052
             await self.guild.tick()                            # guild:
+        if self.tradition:                                     # tradition: ORG-058 окно круга, сила традиции
+            self.tradition.tick()                              # tradition:
         if self.world:                                         # events:
             self.world.tick()                                  # events: публикация в шину мира и новости жителей
         if self.rivalry:                                       # rivalry: ORG-060
@@ -844,6 +852,8 @@ class Mind:
             "рынок": self.economy.market_summary() if self.economy else None,   # market: оценка рюкзака, сделка
             "мотивы": dict(self.needs.top(4)),
             "настроение": self.mood.summary() if self.mood else None,           # talk: ORG-064
+            "день_мира": self.calendar.summary() if self.calendar else None,             # calendar:
+            "традиция": self.tradition.summary() if self.tradition else None,            # tradition:
             "карьера": (self.mem.get("career") or {}).get("text"),
             "занятие": self.activities.summary() if self.activities else None,
             "экспедиция": self.explorer.summary() if self.explorer else None,         # explore:
