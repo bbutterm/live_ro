@@ -21,7 +21,9 @@ class ChronicleTest(unittest.TestCase):
                 ("bot01", "Arkady", [("kill", {}), ("kill", {}), ("level_up", {"level": 42}),
                                      ("heal_confirmed", {"from": "Vera", "to": "Arkady", "amount": 120})]),
                 ("bot02", "Vera", [("death_report", {"map": "prt_fild08", "cause": "Lunatic", "unknown": ["вес"]}),
-                                   ("gift_given", {"peer": "Arkady", "item": "501", "amount": 5})])):
+                                   ("gift_given", {"peer": "Arkady", "item": "501", "amount": 5}),
+                                   ("trade_sold", {"peer": "Arkady", "item": "Jellopy", "amount": 10, "price": 30,
+                                                   "paid": 30})])):
             (root / "state" / bot).mkdir(parents=True)
             mem = Memory(root / "state" / bot / "memory.sqlite")
             mem.set("last_state", {"name": name, "job": "Swordman", "lv": 42, "job_lv": 20, "map": "prt_fild08"})
@@ -38,6 +40,8 @@ class ChronicleTest(unittest.TestCase):
         self.assertIn("Vera: погиб на prt_fild08 (бил Lunatic); неизвестно: вес", text)
         self.assertIn("побед 2", text)
         self.assertIn("bot03: памяти нет", text)
+        self.assertIn("Vera: продал Arkady 10 × Jellopy за 30z", text)
+        self.assertIn("продал жителям, z 30", text)
         self.assertIn("stuck — тупик", text)
         self.assertNotIn("Хроника мира за 2000", text)
 

@@ -45,6 +45,14 @@ class NeedsTest(unittest.TestCase):
         self.assertGreater(v["safety"], 0.7, "смерти и низкий HP")
         self.assertEqual(v["supply"], 1.0, "нет зелий и тяжело")
 
+    def test_week_aims_boost_motive(self):
+        """ORG-038: невыполненная цель недели усиливает свой мотив, остальные не трогает."""
+        plain = self.n.weighted()
+        self.mind.aims = SimpleNamespace(boost=lambda need: 1.5 if need == "social" else 1.0)
+        boosted = self.n.weighted()
+        self.assertAlmostEqual(boosted["social"], round(plain["social"] * 1.5, 2), delta=0.011)
+        self.assertEqual(boosted["safety"], plain["safety"])
+
     def test_characters_differ(self):
         arkady = Needs(SimpleNamespace(mem=self.mem, persona=persona("bot01"), routine=None,
                                        ctx=SimpleNamespace(last={}), state={}))

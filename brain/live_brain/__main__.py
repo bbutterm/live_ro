@@ -16,6 +16,7 @@ from . import llm
 from .bridge import Bridge
 from .budget import SharedBudget
 from .config import Settings, load_env, load_persona
+from .economy import economy_metrics
 from .gate import RuleGate, make_fast_gate
 from .routine import load_world
 from .memory import Memory
@@ -129,6 +130,9 @@ def report(args, memory, state_dir):
         print(f"   состояние: {status.get('state')} — {status.get('why')}")
     organic = organic_metrics(memory, day)
     print("   органичность за сутки: " + ", ".join(f"{k} {v}" for k, v in organic.items()))
+    econ = {k: v for k, v in economy_metrics(memory, day).items() if v}
+    if econ:
+        print("   экономика за сутки: " + ", ".join(f"{k} {v}" for k, v in econ.items()))
     needs = memory.get("needs") or {}
     if needs:
         top = sorted(needs.items(), key=lambda kv: -kv[1])[:3]

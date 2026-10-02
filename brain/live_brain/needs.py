@@ -92,7 +92,8 @@ class Needs:
                 "wealth": round(wealth, 2), "care": round(care, 2)}
 
     def weighted(self):
-        return {k: round(v * self.weight(k), 2) for k, v in self.values().items()}
+        aims = getattr(self.mind, "aims", None)                     # ORG-038: невыполненные цели недели усиливают мотив
+        return {k: round(v * self.weight(k) * (aims.boost(k) if aims else 1.0), 2) for k, v in self.values().items()}
 
     def top(self, n=3):
         w = self.weighted()

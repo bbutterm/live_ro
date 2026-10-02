@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import world_bus
+from .economy import CHRONICLE_LINES, metrics_from_rows
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -30,6 +31,7 @@ LINES = {
     "routine_blocked": lambda d: "застрял в тупике — нужен владелец",
     "recover_blocked": lambda d: "не может восстановиться (вес/зелья)",
     "diary": lambda d: d.get("text"),
+    **CHRONICLE_LINES,                                    # ORG-037: сделки и письма жителей
 }
 
 
@@ -80,6 +82,9 @@ def chronicle(lab_root, bots, day=None, tz_hours=3):
         out.append(f"побед {counts.get('kill', 0)}, смертей {counts.get('died', 0)}, уровней {counts.get('level_up', 0)}, "
                    f"лечений в группе {counts.get('heal_confirmed', 0)}, передач {counts.get('gift_given', 0)}/"
                    f"{counts.get('gift_received', 0)}, встреч {counts.get('meeting_confirmed', 0)}")
+        econ = {k: v for k, v in metrics_from_rows([(k, d) for _, k, d in rows], st).items() if v}
+        if econ:
+            out.append("экономика: " + ", ".join(f"{k} {v}" for k, v in econ.items()))
         out.append("")
     if timeline:
         out.append("## События")

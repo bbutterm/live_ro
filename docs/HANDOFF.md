@@ -1224,3 +1224,55 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 `docs/qa/HERMES-<sha7>.md`: вывод шага 0, итоги пунктов 1–9 и шагов №13, `scripts/lab chronicle` за день проверки,
 список ручных вмешательств (цель — 0).
 
+
+## Задание №15: органичный мир — занятия, связи, группы, события мира, экономика жителей, реестр
+
+**Ветка:** `claude/brain-routine`. **Commit:** из сообщения разработчика. Заменяет №14 (его пункты 1–9 актуальны, ниже —
+что добавить). Статусы: раздел «Статус» в [`ORGANIC_BACKLOG.md`](ORGANIC_BACKLOG.md). Правила те же: login/char/map не
+перезапускать, БД не трогать, без SQL/GM/ручного respawn. В env по-прежнему `LAB_BOTS="bot01 bot02"`.
+**Новых жителей не создавать** (Bram, Ilsa, Rook, Odette лежат в реестре как неактивные) — рождение только по решению
+владельца и с бэкапом БД (`docs/POPULATION.md`).
+
+### Что нового и что проверить
+1. **Занятия (activity.py).** Выбор занятия по мотивам, инерции и шуму: `grep -h '"type": "activity"' decisions.jsonl | tail`.
+   Ожидается смена занятий за 2 ч (охота, отдых, прогулка, дела), не одно и то же.
+2. **Связи (bonds.py).** После `meeting_confirmed` — `bonds_hunt_together` или `bonds_sit_together`, через 15 мин
+   `bonds_together_done/lost`. При отношении ≥ 3 — `friend request` в console.log и Vera/Arkady в списке друзей (`friend`).
+3. **Группа ≤ 3 (party.py).** С двумя жителями поведение как в №13; проверить, что приглашение и Heal работают.
+4. **События мира.** Файл `state/shared/world.sqlite` создаётся; `scripts/lab chronicle` — раздел «События мира».
+   Объявления сервера (если будут) — события `event`. Цели недели: строка в `report` / промпте.
+5. **Экономика жителей (docs/ECONOMY.md).** Шёпоты с меткой `[offer:...]`; сделка: обе стороны `deal`, в console.log
+   у обоих `Deal complete`; события `trade_sold`/`trade_bought` или `trade_unverified`. В `report` — строка
+   «экономика за сутки», в хронике — строка «экономика:». Почта: `mail_check` раз в сутки; подарок почтой — только если
+   друг не виден. **Риск:** RODEX-пакеты для 20180620 не проверялись — при ошибках в console.log выключить
+   `"market": {"enabled": false}` в goals.json и прислать выдержку.
+6. **Реестр (docs/POPULATION.md).** `scripts/lab roster` — расхождений нет; `scripts/lab doctor` — раздел «жители».
+   Рендер конфигов должен совпасть с нынешним (кроме логина/пароля): `diff` старого и нового control/config.txt.
+7. **Реплей.** Для разбора — включить `BRAIN_RECORD=1` на один прогон, прислать размер `state/<bot>/replay.jsonl`
+   (сам файл не присылать, в нём реплики).
+
+### Шаг 0 — код и проверки
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest discover -s tests)          # OK, 254 (PyYAML нужен для тестов сверки, иначе skipped)
+for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # auto_create 34, brain_bridge 49, combat 29, economy 102, job_change 28, survival 39
+python3 scripts/check_skill_lists.py
+scripts/lab roster; scripts/lab doctor | sed -n '/жители/,/^==/p'
+scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
+```
+
+### Риски
+- Торговля: при `dealAuto 3` обе стороны подтверждают автоматически; отмена `deal no` при несоответствии не проверялась
+  в игре. Выключить: `"market": {"enabled": false}`.
+- Новичок от autoCreate появится в `iz_int` (учебный полигон), выйти оттуда бот не умеет — до решения владельца
+  (`start_point` в conf/import или вывод через tmux) жителей не рождать.
+- Выключить новинки без отката: `BRAIN_DISABLE=social,party,economy,career,routine,world_bus` (любые).
+
+### Откат
+`scripts/lab down`, `git checkout --detach <commit задания №14>`, `scripts/lab up`. Память: копии `memory.sqlite.bak-v1`.
+
+### Что прислать
+`docs/qa/HERMES-<sha7>.md`: вывод шага 0, итоги пунктов 1–7 и пунктов №14, `scripts/lab chronicle` за день,
+ручные вмешательства (цель — 0).
