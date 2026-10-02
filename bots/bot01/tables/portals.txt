@@ -1,0 +1,2 @@
+# live_ro: таблица переходов профиля = общий файл для renewal-сервера (scripts/gen_portals.py, docs/PROGRESSION.md §9).
+!include ../../common/tables/portals.txt

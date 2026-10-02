@@ -10,8 +10,9 @@ state: job (имя OpenKore: Swordsman, Acolyte…), lv, job_lv, zeny, sex, item
 Чего нет в state — «неизвестно», не «выполнено» и не «не выполнено».
 
 Novice (newborn): путь зависит от цели жителя — target (Mage, Thief…, см. target_job по roster.json),
-classes.Novice.next_by_target. blocked() — этап не запускается: житель в учебном полигоне iz_int (выход
-не автоматизирован) или маршрут пути не совпадает с сервером (route.status blocked).
+classes.Novice.next_by_target. blocked() — этап не запускается: житель в учебном полигоне iz_int, а выход
+из него не сверен (start.academy_exit.status не ok), или маршрут пути не совпадает с сервером
+(route.status blocked). После NB-1/NB-2 выход и все шесть путей — ok (данные, не прохождение в игре).
 
 Цель (plan): этапы пути; следующий шаг — первый незавершённый; срок годности (expires) — по виду
 шага из goals.ttl_hours; unreachable — нужен предмет, который нигде не продаётся и не падает
@@ -98,11 +99,19 @@ def target_job(name, world_dir=None):
     return None
 
 
+def academy_blocked(state, data):
+    """Житель в учебном полигоне, а выход из него не сверен с данными OpenKore (start.academy_exit.status)."""
+    start = data.get("start") or {}
+    return state.get("map") in start.get("maps", ()) and \
+        (start.get("academy_exit") or {}).get("status") != "ok"
+
+
 def blocked(state, data, path=None):
     """newborn: почему этап нельзя запускать (None — можно): житель в учебном полигоне iz_int / int_land,
-    откуда тело выйти не умеет, или маршрут пути помечен blocked (данные OpenKore не совпадают с сервером)."""
+    а выход не сверен (start.academy_exit.status не ok), или маршрут пути помечен blocked (данные OpenKore не
+    совпадают с сервером)."""
     start = data.get("start") or {}
-    if state.get("map") in start.get("maps", ()):
+    if academy_blocked(state, data):
         return "учебный полигон " + state["map"] + ": выход не автоматизирован (" + "; ".join(
             start.get("academy_exit", {}).get("why", [])[:1]) + ")"
     route = (data["paths"].get(path) or {}).get("route") if path else None
@@ -261,8 +270,7 @@ def plan(state, data, now=None, done=(), target=None):
         return {"job": job, "path": None, "stages": [], "unreachable": False,
                 "next": _goal_step("base_lv", f"профессия {job!r} не описана в progression.json — просто расти", data, now)}
     path = path_for(state, data, target)
-    start_maps = (data.get("start") or {}).get("maps", ())
-    if state.get("map") in start_maps:                    # newborn: из учебного полигона тело не выйдет само
+    if academy_blocked(state, data):                     # newborn: из учебного полигона тело не выйдет само
         return {"job": job, "path": path, "stages": [], "unreachable": False, "blocked": True,
                 "next": _goal_step("quest_stage", blocked(state, data) + " — нужен перенос оператором или "
                                    "start_point владельца (docs/POPULATION.md)", data, now, blocked=True)}
@@ -314,6 +322,11 @@ def plan(state, data, now=None, done=(), target=None):
     elif sp:
         nxt = _goal_step("quest_stage", f"потратить очки навыков ({sp}): со свободными очками профессию не сменят",
                          data, now, ref=p["requirements"]["refs"][1])
+    elif any(m["kind"] == "zeny" for m in ready["missing"]):
+        z = next(m for m in ready["missing"] if m["kind"] == "zeny")
+        nxt = _goal_step("zeny", f"накопить {z['need']} зени (есть {z['have']}) для {p['to']}: "
+                         f"{p['requirements'].get('zeny_why') or 'требование пути'}", data, now,
+                         target=z["need"], have=z["have"])
     elif any(m["kind"] == "item" for m in ready["missing"]):
         need = [m for m in ready["missing"] if m["kind"] == "item"]
         text = "собрать для Sir Andrew: " + ", ".join(f"{m['name'] or m['id']} {m['have']}/{m['need']}" for m in need)
@@ -348,6 +361,8 @@ def stage_action(state, data, path=None, done=(), target=None):
         if need == "job_lv" and int(state.get("job_lv") or 0) < value:
             return None
         if need == "skill_points" and skill_points(state) != value:
+            return None
+        if need == "zeny" and int(state.get("zeny") or 0) < value:      # Thief: телепорт Kafra в Морокко
             return None
         if need == "items_from_set":
             r = readiness(state, data, path)
