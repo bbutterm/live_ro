@@ -15,7 +15,7 @@
     открыта лавка, отдых кончается раньше чем через rest_end_guard_minutes, ночь.
 Встреча в городе (житель видим ≤ near_cells клеток): шёпот с меткой [chat:<тема>:<шаг>].
     Шаг 1 — приветствие (с эмоцией), 2 — ответ на приветствие, 3 — тема по фактам памяти
-    (уровень, победы за день, добыча, гибель, усталость, погода), 4 — прощание или поздравление/
+    (уровень, победы за день, добыча, гибель, усталость, погода мира — weather.py), 4 — прощание или поздравление/
     сочувствие. На шаг 4 не отвечают: не больше max_exchanges (2) обменов подряд.
     Пара говорит не чаще pair_gap_minutes (15 мин); не друзьям — реже, ночью — ещё реже.
     Фразы не повторяются, пока не исчерпаны варианты ключа (история used в kv "social").
@@ -44,6 +44,8 @@ import re
 import string
 import time
 from datetime import datetime, timedelta, timezone
+
+from . import weather
 
 log = logging.getLogger("social")
 
@@ -99,7 +101,8 @@ class Social:
     def __init__(self, mind, world, clock=None, rng=None):
         self.mind = mind
         self.cfg = merged_social(world, mind.persona)
-        self.tz = timezone(timedelta(hours=(world or {}).get("timezone_offset_hours", 0)))
+        self.tz_hours = (world or {}).get("timezone_offset_hours", 0)
+        self.tz = timezone(timedelta(hours=self.tz_hours))
         self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.rng = rng or random.Random()
         self.phrases = mind.persona.get("phrases") or {}
@@ -115,6 +118,7 @@ class Social:
         self.last_emote = 0.0
         self.last_save = 0.0
         self.topics = {}                  # реестр тем (ORG-066): имя -> поставщик фактов, ключ ответа, флаги
+        self.register_topic("weather", self.weather_facts, fallback=True)   # ORG-085: общая погода мира
 
     # ---------- данные ----------
 
@@ -287,6 +291,14 @@ class Social:
             if self.can_say(f.get("_key", name), dict(base or {}, **f)):
                 out.append(name)
         return out
+
+    def weather_facts(self, peer, now):
+        """ORG-085: погода — общий детерминированный факт мира (weather.py), а не выдумка жителя."""
+        s = getattr(self.mind, "s", None)
+        if s is not None and hasattr(s, "feature") and not s.feature("weather"):
+            return None
+        w = weather.weather(now, self.tz_hours)
+        return {"weather": w["label"], "_key": f"weather_{w['kind']}"}
 
     def choose_topic(self, peer, facts, now):
         """Тема по свежим фактам и реестру; о чём уже говорил сегодня этому жителю — не повторять."""
@@ -472,7 +484,7 @@ class Social:
         """
         facts = self.facts(peer, now)
         extra = self.provide(topic, peer, now) if topic in self.topics else None
-        if topic in self.topics and extra is None and key is None:
+        if topic in self.topics and extra is None and key is None and not self.topics[topic]["fallback"]:
             return None, None
         facts.update(extra or {})
         keys = [key] if key else ([extra["_key"]] if extra and extra.get("_key") else []) + [topic]

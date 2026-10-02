@@ -24,6 +24,8 @@ import random
 import time
 from pathlib import Path
 
+from . import weather                                   # talk: ORG-085 погода — множитель прогулки
+
 log = logging.getLogger("activity")
 
 CATALOG = Path(__file__).resolve().parents[1] / "world" / "activities.json"
@@ -127,6 +129,7 @@ class Activities:
             if not self.requires_ok(a.get("requires") or {}, state, needs):
                 continue
             score = sum(w * needs.get(k, 0) for k, w in a["satisfies"].items())
+            score *= weather.stroll_factor(weather.kind_now(self.mind, now)) if name == "stroll" else 1   # talk: ORG-085
             if name == current:
                 score += self.cfg["inertia"]
             out[name] = round(score + noise * self.rng.uniform(-1, 1) * 0.3, 3)
