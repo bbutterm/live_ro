@@ -8,7 +8,6 @@ import asyncio
 import json
 import random
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
@@ -21,6 +20,7 @@ from live_brain.memory import Memory
 from live_brain.mind import Mind
 from live_brain.routine import load_world
 from live_brain.safety import CAST_LIMIT, SafetyPolicy
+from tests.worldtime import world_ts                      # timefix:
 
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
@@ -93,7 +93,7 @@ class HealerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.clock = Clock(time.time())
+        self.clock = Clock(world_ts())     # timefix: полдень мира — вывеска не упирается в ночь (society.rooms)
         self.bus_path = self.root / "shared" / "world.sqlite"
         self.v = Resident(self.root, "bot02", "Vera", self.bus_path, self.clock)
         self.a = Resident(self.root, "bot01", "Arkady", self.bus_path, self.clock)
