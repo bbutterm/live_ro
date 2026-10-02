@@ -598,3 +598,91 @@ for b in bot01 bot02; do python3 -c "import sqlite3,time;d=sqlite3.connect('$LAB
 
 ### Что прислать
 Вывод этапов A–E (без ключей и паролей) в `docs/qa/HERMES-<sha7>.md`; на каком этапе остановились, если остановились.
+
+---
+
+## Задание №7: доставка, класс/пол, группа/следование/лечение, лимиты — быстрая проверка
+
+**Ветка:** `claude/brain-v2` (поверх `hermes/live-jev-verified` 4feb7a8)
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+**Без 20–30-минутного наблюдения.** Каждый шаг ограничен временем, указанным в нём. login/char/map не трогать.
+Этап провален — остановиться и прислать вывод.
+
+### Что изменилось
+1. JEV: `JEV_PROVIDER=typesafe|openai` вместо сравнения URL (без переменной — по адресу, текущий env работает).
+   Лимит JEV резервируется до вызова (гонка параллельных событий закрыта).
+2. Деньги: `BRAIN_DAILY_USD_LIMIT` по `usage.cost` OpenRouter (учёт по отчётам API, не лимит аккаунта).
+   Промпт не длиннее `BRAIN_MAX_PROMPT_CHARS` (8000).
+3. Доставка: `delivery` в decisions.jsonl — ответ сервера на шёпот (0 доставлено / 1 не в сети / 2 игнор / 3 не принимает)
+   и эхо общего чата; без ответа 15 с — `timeout`. В console.log: `[brainBridge] сервер подтвердил: ...` / `не доставлено (...)`.
+4. Класс/пол/уровень бота и игроков рядом — из игры; модели запрещено угадывать.
+5. Действия party_create (имя всегда `LR_<имя>`), party_invite/follow (только жители), party_accept (правило: только
+   группа жителя), party_leave, unfollow. Vera: `partySkill AL_HEAL` (участники группы HP < 60%) и самолечение
+   HP < 50% — правила OpenKore, без LLM.
+
+### Шаг 0 — код (2 мин)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa
+export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive
+git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits)   # OK, 35 тестов
+```
+В env добавить (если нет): `BRAIN_DAILY_USD_LIMIT=0.5` и, по желанию, `JEV_PROVIDER=typesafe`.
+```sh
+scripts/lab brain-check-jev bot01     # CHECK OK (JEV ...) — transport typesafe
+scripts/lab stop live all && scripts/lab start live all     # серверы не трогает
+sleep 60 && scripts/lab status
+```
+
+### Шаг 1 — доставка шёпота (3 мин)
+В консоли Vera (`tmux attach -t live_ro_bot02`) ввести: `pm "Arkady" !status`, затем `Ctrl-b d`.
+```sh
+sleep 20
+grep -E '"type": "(decision|ack|delivery)"' $LAB_ROOT/state/bot01/decisions.jsonl | tail -n 3
+grep -nE 'сервер подтвердил|не доставлено' $LAB_ROOT/logs/bot01/console.log | tail -n 3
+grep -n '(From: Arkady)' $LAB_ROOT/logs/bot02/console.log | tail -n 2
+```
+Ожидание: у Arkady `decision` (правило статуса) → `ack ok` → `delivery ok, code 0`; у Vera строка `(From: Arkady) : HP ...`.
+
+### Шаг 2 — класс и пол (1 мин)
+```sh
+python3 -c "import sqlite3;d=sqlite3.connect('$LAB_ROOT/state/bot01/memory.sqlite');print(d.execute(\"select value from kv where key='known_players'\").fetchone())"
+```
+Ожидание: `Vera` с `Acolyte`, `Female` (если Vera была в зоне видимости Arkady). Нет записи — так и написать.
+
+### Шаг 3 — группа и следование (5 мин)
+В консоли Vera: `party create "LR_Vera"`, затем `party request "Arkady"`, `Ctrl-b d`.
+```sh
+sleep 15
+grep -E 'party_invite|party_accept' $LAB_ROOT/state/bot01/decisions.jsonl | tail -n 3
+grep -niE 'party|группу' $LAB_ROOT/logs/bot01/console.log | tail -n 5
+```
+Ожидание: у Arkady правило «приглашение в группу жителя Vera» → `party join 1` → `ack ok`; в консоли — вступление в группу.
+Затем в консоли Vera: `follow Arkady`, `Ctrl-b d`; через 60 с в её console.log нет ошибок follow и она рядом с Arkady.
+
+### Шаг 4 — лечение (до 10 мин, затем остановиться)
+```sh
+timeout 600 sh -c "until grep -qiE 'Heal' $LAB_ROOT/logs/bot02/console.log; do sleep 15; done"; echo rc=$?
+grep -niE 'Heal' $LAB_ROOT/logs/bot02/console.log | tail -n 5
+```
+Ожидание: Vera применяет Heal к Arkady, когда его HP < 60%. `rc=124` — за 10 минут HP не опускался или навыка нет:
+это «не наблюдалось», указать уровень навыка Heal у Vera (`skills` в её консоли).
+
+### Шаг 5 — расходы (1 мин)
+```sh
+for b in bot01 bot02; do python3 -c "import sqlite3,time;d=sqlite3.connect('$LAB_ROOT/state/$b/memory.sqlite');print('$b',d.execute('select provider,count(*),sum(ok),round(coalesce(sum(cost),0),6) from llm_calls where ts>? group by provider',(time.time()-86400,)).fetchall())"; done
+```
+
+### Риски
+- Группа: Arkady вступает только в `LR_<житель>`. Общий опыт не включается (partyAutoShare 0).
+- Следование отвлекает Vera от своей охоты; `follow stop` в её консоли или действие мозга `unfollow` отменяет.
+- Расходы: лимиты запросов как раньше + `BRAIN_DAILY_USD_LIMIT` на бота.
+
+### Откат
+`scripts/lab stop live all` (серверы не трогает), `git checkout --detach 4feb7a815ab14f0e4a9393337134e15427bf2154`, `scripts/lab start live all`.
+Группа: `party leave` в консоли бота. БД игры и память не удалять.
+
+### Что прислать
+Вывод шагов 0–5 в `docs/qa/HERMES-<sha7>.md`.

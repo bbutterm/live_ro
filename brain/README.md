@@ -20,10 +20,10 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
   - смерть и новый уровень — в память и повод для LLM;
   - бой и лут — только журнал.
 
-  `JevGate` (`BRAIN_GATE=jev`, `JEV_*`) — быстрая внешняя модель по OpenAI-совместимому API.
-  Для лички, обращений, смерти и уровня за секунды решает важность, нужен ли DeepSeek и короткую
-  реплику (только say/whisper). Сбой, таймаут или лимит `JEV_DAILY_LIMIT` — решают правила.
-  Локально ничего не устанавливается.
+  `JevGate` (`BRAIN_GATE=jev`, `JEV_*`) — быстрая внешняя модель. Транспорт `JEV_PROVIDER`:
+  `typesafe` — нативный TypeSafe Decisions API (`typesafe.py`, закрытый выбор deepseek/ignore,
+  проверка confidence); `openai` — OpenAI-совместимый chat/completions (может дать короткую реплику
+  say/whisper). Сбой, таймаут или лимит `JEV_DAILY_LIMIT` (резервируется до вызова) — решают правила.
 - **Несколько ботов:** `LAB_BOTS`, характер `brain/personas/<bot>.json` на каждого. Мозги знают
   друг друга как жителей: не больше `BRAIN_PEER_REPLIES_PER_HOUR` ответов другому боту в час, повод
   заговорить раз в `BRAIN_PEER_SMALLTALK` секунд (только при включённом LLM).
@@ -38,6 +38,20 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
   Модель не может выполнить ничего, кроме 5 игровых действий: никаких shell-команд.
 - **LLM выключен по умолчанию** (`BRAIN_LLM=off`), даже если ключ есть в env. Включается
   `BRAIN_LLM=openrouter` только после согласования модели и бюджета.
+
+## Игровые действия
+`say`, `whisper`, `set_hunt_map`, `pause`, `resume`, `party_create` (имя группы всегда `LR_<имя>`),
+`party_invite`, `party_accept`, `party_leave`, `follow`, `unfollow`. Группа и следование — только
+с жителями. Приглашение в группу жителя принимает правило. Лечение партнёра (Vera, `AL_HEAL`)
+делает OpenKore по `partySkill` в профиле, без LLM.
+
+## Доставка и контекст
+- `ack` — команда исполнена в OpenKore. `delivery` — ответ сервера: шёпот доставлен или нет
+  (не в сети / игнор / не принимает), общий чат подтверждён эхом; без ответа 15 с — `timeout`.
+- Класс, пол и уровень бота и игроков рядом приходят из игры и запоминаются (`known_players`);
+  модели запрещено угадывать пол и профессию.
+- Лимиты: запросов в сутки (`BRAIN_DAILY_LIMIT`, `JEV_DAILY_LIMIT`), денег по `usage.cost`
+  (`BRAIN_DAILY_USD_LIMIT`), размера промпта (`BRAIN_MAX_PROMPT_CHARS`).
 
 ## Что делает
 - **Слушает тело:** раз в 15 с приходит состояние (HP, уровень, карта, зени); события —
@@ -81,7 +95,7 @@ tail -n 20 $LAB_ROOT/state/bot01/decisions.jsonl
 
 ## Тесты
 ```sh
-cd brain && python3 -m unittest -v tests.test_brain tests.test_rules
+cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits
 ```
 Сквозной тест без сети: фейковый OpenRouter, настоящий процесс мозга, фейковый плагин.
 Проверяет решение, исполнение, память после перезапуска, работу без ключа, `--check` и то,

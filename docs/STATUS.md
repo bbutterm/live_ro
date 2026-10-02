@@ -23,7 +23,7 @@
 
 ## Компоненты репозитория
 
-Отчёты Hermes: `docs/qa/HERMES-56bdba0.md` (PARTIAL PASS), `docs/qa/HERMES-9b8157a.md` (PARTIAL PASS).
+Отчёты Hermes: `docs/qa/HERMES-56bdba0.md` (PARTIAL PASS), `docs/qa/HERMES-9b8157a.md` (PARTIAL PASS), `docs/qa/HERMES-LIVE-JEV.md` (живой диалог, база c6df504 + 4feb7a8).
 
 | Компонент | Код | Локально | Hermes / VPS |
 |---|---|---|---|
@@ -44,6 +44,12 @@
 | `lowHpGuard`: запрет новых целей, восстановление до 90%, снятие защиты | ✅ 56bdba0 | ✅ заглушки | ✅ частично: в логе 56bdba0 два цикла (7%→90%, 35%→90%), между ними 0 `You are now attacking`. Длительный прогон и агрессивные монстры не проверены |
 | Ожидание снятия сессии на сервере (`char.online`, только SELECT) при stop/start bot | ✅ после 9b8157a | ✅ песочница с MariaDB | ⏳ |
 | Метки START/STOP в логе бота | ✅ после 9b8157a | ✅ | ⏳ |
+| Память и отношения переживают перезапуск мозга | ✅ | ✅ тест | ✅ LIVE-JEV: Arkady «память: 2 воспоминаний», отношение к Vera +2 |
+| Профили: ignoreAll 0, serverEncoding UTF-8 (личка и русский текст) | ✅ 4feb7a8 (Hermes) | — | ✅ LIVE-JEV |
+| Подтверждение доставки сервером (delivery) | ✅ ветка `claude/brain-v2` | ✅ плагин на заглушках: эхо чата, «не в сети» | ⏳ №7 |
+| Класс/пол/уровень персонажей в контексте | ✅ `claude/brain-v2` | ✅ тест промпта | ⏳ №7 |
+| Группа, следование, лечение Vera (partySkill) | ✅ `claude/brain-v2` | ✅ тесты safety/gate, команды плагина | ⏳ №7 |
+| Лимиты: резерв JEV, деньги по usage.cost, размер промпта | ✅ `claude/brain-v2` | ✅ тесты | ⏳ №7 |
 | Режим release (`deploy/activate/rollback`, сборка) | ✅ e4914c1 | ✅ песочница | — не нужен на текущем VPS |
 | Мозг `brain/live_brain` (OpenRouter, память SQLite, лимит, fallback) | ✅ после d24e128 | ✅ 3 сквозных теста (фейковый OpenRouter); реальный плагин brainBridge + реальный мозг на заглушках OpenKore | ⏳ |
 | Плагин `brainBridge` (события наружу, действия внутрь) | ✅ после d24e128 | ✅ на заглушках OpenKore: `c ...` и `conf lockMap` исполнены, подтверждения в журнале | ⏳ |
@@ -52,10 +58,10 @@
 | Decision gate (`RuleGate`), место под JEV (не установлено) | ✅ ветка `claude/brain-coordinator` | ✅ модульные тесты | ⏳ |
 | SafetyPolicy без LLM (смерть, низкий HP, карты, лимиты чата, пауза ≤ 10 мин) | ✅ ветка `claude/brain-coordinator` | ✅ модульные тесты | ⏳ |
 | Первый результат без LLM: событие тела → правило → команда в игре | ✅ ветка `claude/brain-coordinator` | ✅ настоящие brainBridge + live_brain, OpenKore на заглушках | ⏳ задание №6, этап A |
-| JEV — быстрый gate (OpenAI-совместимый API), откат на правила при сбое | ✅ `claude/brain-coordinator` | ✅ тесты: быстрая реплика без DeepSeek, эскалация, сбой JEV | ⏳ №6 D; формат API JEV не подтверждён |
-| DeepSeek через OpenRouter (включение по флагу, лимит на бота) | ✅ | ✅ на фейковом API | ⏳ №6 C |
-| Два бота (bot02 Mirela), мозг на каждого, `db-add-account` | ✅ | ✅ песочница: 2 мозга + 2 бота, аккаунт на реальной схеме `login` | ⏳ №6 B |
-| Общение ботов-жителей с лимитами | ✅ | ✅ тест: повод заговорить → whisper жителю; лимит ответов | ⏳ №6 E |
+| JEV — быстрый gate (TypeSafe нативно / OpenAI-совместимый) | ✅ 4feb7a8 (адаптер Hermes), JEV_PROVIDER после | ✅ тесты | ✅ LIVE-JEV: CHECK OK 0.3 с, выбор deepseek в живом диалоге |
+| DeepSeek через OpenRouter (включение по флагу, лимит на бота) | ✅ | ✅ на фейковом API | ✅ LIVE-JEV: CHECK OK 1.8 с, реплики в игре |
+| Два бота (bot01 Arkady, bot02 Vera), мозг на каждого | ✅ | ✅ песочница | ✅ LIVE-JEV: существующие аккаунты, оба мозга подключены |
+| Общение ботов-жителей с лимитами | ✅ | ✅ тесты | ✅ LIVE-JEV: автономные реплики Arkady ↔ Vera, получение в console.log обоих |
 
 ## Известные проблемы
 - Бот продолжал бой при низком HP и пытался телепортироваться без навыка/предмета.
