@@ -72,5 +72,25 @@
     "founder": null,
     "name": null,
     "min_level": 1
+  },
+
+  "explore": {
+    "_comment": "ORG-054 экспедиции (brain/live_brain/explore.py, docs/EXPLORE.md). Цель — известная (слух, дорога с посещённой карты), но не посещённая карта не дальше max_hops переходов, достижимая для OpenKore (brain/world/explore_reach.json, scripts/gen_explore_reach.py), с риском atlas.danger_for ниже min(max_risk, смелость) для слабейшего. Не чаще gap_hours, днём, HP >= min_hp; на месте stay_minutes; прервать при тревоге или HP < abort_hp. deny/deny_prefix — полигон новичков, перестроенный izlude, гильдии.",
+    "enabled": true,
+    "max_hops": 4,
+    "gap_hours": 6,
+    "stay_minutes": [10, 20],
+    "travel_minutes": 40,
+    "return_minutes": 60,
+    "min_hp": 80,
+    "abort_hp": 50,
+    "min_curiosity": 0.25,
+    "max_risk": 0.3,
+    "kinds": ["field", "town"],
+    "sleep_guard_hours": 2,
+    "rumor_bonus": 0.5,
+    "town_bonus": 0.2,
+    "rich_kills_per_hour": 60,
+    "group": true
   }
 }

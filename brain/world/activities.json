@@ -67,6 +67,13 @@
       "requires": {"day": true, "rumor_to_check": true, "no_leader": true},
       "cooldown_minutes": 120, "proof": "map_changed", "proof_minutes": 20,
       "_comment": "ORG-032: слух rich/new (rumors.to_check: доверие, карта из hunt_maps или по атласу, риск по смелости); итог — подтверждение/опровержение опытом (rumors.check)"
+    },
+    "explore": {
+      "label": "отправиться исследовать новое место", "modes": ["town"],
+      "satisfies": {"curiosity": 1.5, "progress": 0.1},
+      "requires": {"day": true, "hp_ok": true, "no_leader": true, "explore_target": true},
+      "cooldown_minutes": 360, "proof": "explore_arrived", "proof_minutes": 45,
+      "_comment": "ORG-054: цель — известная, но не посещённая карта не дальше explore.max_hops (explore.py: достижимость для OpenKore, риск по слабейшему, слухи); пауза между экспедициями — explore.gap_hours"
     }
   }
 }
