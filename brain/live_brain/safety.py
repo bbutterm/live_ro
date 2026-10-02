@@ -41,6 +41,9 @@ SUPPORT_CASTS = ("AL_HEAL", "AL_BLESSING", "AL_INCAGI")   # healer: тот же 
 CAST_LIMIT = 40                  # healer: кастов на игроков за 10 мин (каст раз в 5 с — с запасом на очередь)
 CAST_MIN_SP = 10                 # healer: при меньшем SP % не кастовать вовсе (лекарь сам держит порог выше)
 PLAN_ACTIONS += ("bank_check", "bank_deposit", "bank_withdraw")   # dreams: банк rAthena (savings.py, ORG-073)
+PLAN_ACTIONS += ("spar", "spar_stop")   # spar: спарринг жителей на арене (spar.py, ORG-061)
+SPAR_ROOMS = ("Prontera", "Izlude", "Payon", "Alberta", "Morocc")   # spar: пункты приёмной #8 (npc/other/pvp.txt:297)
+SPAR_MIN_LEVEL = 31              # spar: Gate Keeper — BaseLevel > 30 (npc/other/pvp.txt:202)
 MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
 BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
@@ -112,6 +115,8 @@ class SafetyPolicy:
             return self.check_chat_room(action, state, now)       # society:
         if kind in ("clear_point", "stand", "shop_close"):
             return {"action": kind}, None                     # вернуть к охоте / встать можно всегда
+        if kind == "spar_stop":                                   # spar: остановить спарринг можно всегда
+            return {"action": "spar_stop", "why": fit_text(str(action.get("why") or "стоп"), 40)}, None   # spar:
         if state.get("dead"):
             return None, "персонаж мёртв"
         if kind in ("sit", "shop_open"):
@@ -171,6 +176,8 @@ class SafetyPolicy:
             return self.check_guild(kind, action, state)                                             # guild:
         if kind == "skill_on_player":                                                                 # healer:
             return self.check_cast(action, state, now)                                               # healer:
+        if kind == "spar":                                                                            # spar:
+            return self.check_spar(action, state)                                                    # spar:
         if kind == "explore":                                                                         # explore:
             return self.check_explore(action, state)                                                 # explore:
         if kind in ("bank_check", "bank_deposit", "bank_withdraw"):                                  # dreams:
@@ -270,6 +277,18 @@ class SafetyPolicy:
             return None, f"лимит кастов {CAST_LIMIT}/10 мин"
         self.casts.append(now)
         return {"action": "skill_on_player", "skill": skill, "to": to}, None
+
+    def check_spar(self, action, state):                                                        # spar:
+        """Спарринг — только с жителем, только по согласию (решает spar.py), комната из списка приёмной."""
+        if action.get("to") not in self.peers:
+            return None, "спарринг — только с жителями"
+        if action.get("role") not in ("first", "second"):
+            return None, "роль first или second"
+        if action.get("room") not in SPAR_ROOMS:
+            return None, "комната не из списка приёмной"
+        if not isinstance(state.get("lv"), int) or state["lv"] < SPAR_MIN_LEVEL:
+            return None, f"уровень ниже {SPAR_MIN_LEVEL}"
+        return {"action": "spar", "to": action["to"], "role": action["role"], "room": action["room"]}, None
 
     def check_explore(self, action, state):                                                     # explore:
         """explore: экспедиция (ORG-054) — карта из атласа, не pvp/gvg, не полигон новичков/перестроенный izlude

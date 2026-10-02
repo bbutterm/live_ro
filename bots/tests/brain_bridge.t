@@ -360,4 +360,30 @@ package main;
 	$Globals::playersList = $savedPlayers;
 }
 
+
+# ---- spar: спарринг (ORG-061) — только с жителем; пока идёт, тело у плагина, от мозга — только реплики ----
+{
+	no warnings 'once';
+	my ($sparOn, @sparArgs) = (0);
+	local *spar::start = sub { push @sparArgs, $_[0]; $sparOn = 1; return (1, "спарринг с $_[0]{to}") };
+	local *spar::running = sub { $sparOn };
+	local *spar::stop = sub { $sparOn = 0 };
+	$Globals::config{residents} = 'Vera';
+	my ($okn, $why) = brainBridge::actionToCommand({action => 'spar', to => 'Stranger', role => 'first', room => 'Prontera'});
+	ok(!$okn && $why =~ /только с жителем/, 'spar: не житель — отказ');
+	my ($oks, $res) = brainBridge::actionToCommand({action => 'spar', to => 'Vera', role => 'first', room => 'Prontera'});
+	ok($oks && ref $res eq 'HASH', 'spar: житель — плагин spar');
+	is($sparArgs[0]{to}, 'Vera', 'spar: соперник передан плагину');
+	@Commands::ran = ();
+	brainBridge::handleLine('{"type":"action","id":101,"action":"hunt","map":"prt_fild08"}');
+	is_deeply(\@Commands::ran, [], 'spar: охота во время спарринга отклонена');
+	brainBridge::handleLine('{"type":"action","id":102,"action":"whisper","to":"Vera","text":"gg [spar:yield]"}');
+	is_deeply(\@Commands::ran, ['pm "Vera" gg [spar:yield]'], 'spar: шёпот во время спарринга можно');
+	($oks) = brainBridge::actionToCommand({action => 'spar_stop', why => 'Vera сдалась'});
+	ok($oks && !$sparOn, 'spar_stop останавливает');
+	($okn) = brainBridge::actionToCommand({action => 'spar_stop'});
+	ok(!$okn, 'spar_stop без спарринга — отказ');
+}
+
+
 done_testing();

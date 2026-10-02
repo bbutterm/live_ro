@@ -69,6 +69,10 @@
 #                            $CAST_RANGE клеток, не я. rAthena не даёт кастовать в чат-комнате и сидя (clif.cpp
 #                            clif_parse_skill_toid: chatID, pc_issit) — chat leave здесь, встать — Task::UseSkill.
 #                            В state — support_skills {AL_HEAL: ур., ...}: выученные навыки из %CAST.
+#   spar {to, role first|second, room} / spar_stop {why} -> плагин spar: дружеский спарринг жителей на арене  # spar:
+#                            PvP Yoyo (ORG-061, по умолчанию выключен в мозге); только жителю из residents. Пока  # spar:
+#                            плагин ведёт спарринг, мост отклоняет всё, кроме реплик (%SPAR_OK), — тело у плагина.  # spar:
+#                            В state — spar {running, phase, to, room}; события spar_step, spar_result.  # spar:
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -131,6 +135,7 @@ my $hooks = Plugins::addHooks(
 	['packet/banking_check',       sub { onBank('check', $_[1]) }],          # dreams: 09A6 вклад
 	['packet/banking_deposit',     sub { onBank('deposit', $_[1]) }],        # dreams: 09A8 итог вклада
 	['packet/banking_withdraw',    sub { onBank('withdraw', $_[1]) }],       # dreams: 09AA итог снятия
+
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -229,6 +234,7 @@ sub sendState {
 		players   => nearbyPlayers(),
 		(defined &jobChange::status ? (job_change => jobChange::status()) : ()),
 		(defined &pets::status ? (pet => pets::status()) : ()),                  # pets: питомец (ORG-051)
+		(defined &spar::status ? (spar => spar::status()) : ()),                 # spar: спарринг (ORG-061)
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
 		(defined &economy::buyStatus ? (buy => economy::buyStatus()) : ()),   # market: жду продавца
@@ -448,6 +454,9 @@ our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav
 # chat leave; AI OpenKore о комнате не знает и упрётся в отказ сервера — chatGuard закрывает и тогда.
 my %MOVES = map { $_ => 1 } qw(follow meet_point hunt unstuck service give offer_sell offer_buy job_change
                                sleep shop_open explore skill_on_player);   # explore: экспедиция двигает тело; healer: каст
+$MOVES{spar} = 1;                                                              # spar: поход к Gate Keeper
+# spar: пока плагин spar ведёт тело (арена, бой), от мозга — только реплики и стоп; остальное отклоняется.
+our %SPAR_OK = map { $_ => 1 } qw(say whisper emote party_say guild_say spar_stop);   # spar:
 my %CHAT_BUSY = map { $_ => 1 } qw(route move attack follow sellAuto buyAuto storageAuto take items_take
                                    NPC deal skill_use);
 sub inChat { return defined $currentChatRoom && $currentChatRoom ne ''; }
@@ -708,6 +717,16 @@ sub actionToCommand {
 		return (0, 'плагин jobChange не загружен') unless defined &jobChange::start;
 		my ($ok, $desc) = jobChange::start($a);
 		return $ok ? (1, {note => $desc}) : (0, $desc);
+	} elsif ($kind eq 'spar') {                                            # spar: спарринг жителей (ORG-061)
+		return (0, 'плагин spar не загружен') unless defined &spar::start;   # spar:
+		my $to = cleanText($a->{to});                                        # spar:
+		return (0, 'спарринг — только с жителем') unless grep { $_ eq $to } residents();   # spar:
+		my ($ok, $desc) = spar::start({%$a, to => $to});                     # spar:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                      # spar:
+	} elsif ($kind eq 'spar_stop') {                                       # spar:
+		return (0, 'спарринг не идёт') unless defined &spar::running && spar::running();   # spar:
+		spar::stop(cleanText($a->{why}) || 'остановлен мозгом');            # spar:
+		return (1, {note => 'спарринг остановлен'});                         # spar:
 	} elsif ($kind eq 'pet_tame' || $kind eq 'pet_hatch' || $kind eq 'pet_setup') {   # pets: (ORG-051)
 		return (0, 'плагин pets не загружен') unless defined &pets::startTame;
 		my ($ok, $desc) = $kind eq 'pet_tame' ? pets::startTame($a)
@@ -786,7 +805,10 @@ sub handleLine {
 		return;
 	}
 	return unless ($msg->{type} || '') eq 'action';
-	my ($ok, $res) = inGame() ? actionToCommand($msg) : (0, 'бот не в игре');
+	my ($ok, $res) = !inGame() ? (0, 'бот не в игре')
+		: (defined &spar::running && spar::running() && !$SPAR_OK{$msg->{action} || ''})   # spar: тело у плагина spar
+		? (0, 'идёт спарринг — тело у плагина spar')                                      # spar:
+		: actionToCommand($msg);
 	if ($ok && $MOVES{$msg->{action} || ''} && inChat()) {                # society: в комнате не уйти — сначала chat leave
 		message "[brainBridge] перед $msg->{action} закрываю чат-комнату\n", 'system';
 		Commands::run('chat leave');

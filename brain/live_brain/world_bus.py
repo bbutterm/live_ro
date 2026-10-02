@@ -65,6 +65,8 @@ PUBLISH = {
     "mentor_start": ("mentor_start", 3),      # mentor: ORG-057 взял под крыло новичка
     "mentor_graduated": ("mentor_graduated", 4),   # mentor: выпуск ученика
     "mentor_end": ("mentor_end", 2),          # mentor: опека закончилась (срок)
+    "spar_won": ("spar_won", 3),              # spar: ORG-061 победа в спарринге (пишет только победитель)
+    "spar_draw": ("spar_draw", 2),            # spar: ничья (пишет только вызвавший)
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 BACKSTAGE = {"director"}                      # director: решения режиссёра (ORG-086) — в дашборд, не в летопись/серию
@@ -331,6 +333,8 @@ TEXTS = {
     "monster_first": lambda d: (f"первым(ой) из жителей победил(а) {d.get('monster')}"                  # bestiary: ORG-077
                                 + (" (мини-босс)" if d.get("boss") else "")),                          # bestiary:
     "place_first": lambda d: f"первым(ой) из жителей дошёл(шла) до {d.get('map')} — «{d.get('name')}»",   # bestiary:
+    "spar_won": lambda d: f"победил(а) {d.get('loser')} в спарринге на арене",            # spar: ORG-061
+    "spar_draw": lambda d: f"ничья с {d.get('b')} в спарринге на арене",                 # spar:
     "order_done": lambda d: f"выполнил(а) заказ {d.get('for')}: {d.get('name')} x{d.get('n')}",   # orders:
     "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
                                      f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)
