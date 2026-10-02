@@ -44,6 +44,7 @@ PLAN_ACTIONS += ("bank_check", "bank_deposit", "bank_withdraw")   # dreams: ба
 PLAN_ACTIONS += ("craft_setup",)   # herbal: не продавать материалы ремесла, докупка бутылок (herbal.py, ORG-076)
 CRAFT_KEEP_MAX = 40                # herbal: ID в списке keep (тот же предел в brainBridge.pl)
 CRAFT_BOTTLES_MAX = 100            # herbal: бутылок к докупке
+PLAN_ACTIONS += ("arrowcraft",)    # arrows: Arrow Crafting из лута (arrows.py, ORG-075)
 MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
 BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
@@ -180,6 +181,11 @@ class SafetyPolicy:
             return self.check_bank(kind, action, state, now)                                         # dreams:
         if kind == "craft_setup":                                                                     # herbal:
             return self.check_craft_setup(action)                                                    # herbal:
+        if kind == "arrowcraft":                                                                      # arrows:
+            item = action.get("item")                                                                # arrows:
+            if isinstance(item, bool) or not isinstance(item, int) or not 0 < item < 1000000:       # arrows:
+                return None, "неверный предмет"                                                      # arrows:
+            return {"action": "arrowcraft", "item": item}, None                                      # arrows:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":

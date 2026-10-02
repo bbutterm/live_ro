@@ -74,6 +74,10 @@
 #                            Misc::items_control); bottles — блок buyAuto «Empty Bottle»/713 профиля: maxAmount N,   # herbal:
 #                            minAmount N-1, disabled 0 (N=0 — disabled 1). В state — craft {items {id: n} по          # herbal:
 #                            @CRAFT_IDS и keep, kept [id], weight_free, skills {AC_MAKINGARROW: ур.}}.                # herbal:
+#   arrowcraft {item}     -> Arrow Crafting (ORG-075): навык AC_MAKINGARROW выучен, предмет в рюкзаке ->           # arrows:
+#                            «arrowcraft use»; сервер присылает список (01AD, хук packet/arrowcraft_list) — предмет  # arrows:
+#                            в нём -> sendArrowCraft(ID); событие arrowcraft_result {item, ok, reason} (ok — отправил;  # arrows:
+#                            сделал ли — мозг видит по craft.items). Нет списка за $ARROW_WAIT с — ok=false.          # arrows:
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -137,6 +141,7 @@ my $hooks = Plugins::addHooks(
 	['packet/banking_check',       sub { onBank('check', $_[1]) }],          # dreams: 09A6 вклад
 	['packet/banking_deposit',     sub { onBank('deposit', $_[1]) }],        # dreams: 09A8 итог вклада
 	['packet/banking_withdraw',    sub { onBank('withdraw', $_[1]) }],       # dreams: 09AA итог снятия
+	['packet/arrowcraft_list',     \&onArrowList],                           # arrows: 01AD список для Arrow Crafting
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -666,6 +671,8 @@ sub actionToCommand {
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
 	} elsif ($kind eq 'craft_setup') {                                    # herbal: ремесло (ORG-076/075)
 		return craftSetup($a);                                                # herbal:
+	} elsif ($kind eq 'arrowcraft') {                                     # arrows: Arrow Crafting (ORG-075)
+		return arrowcraftStart($a);                                           # arrows:
 	} elsif ($kind eq 'bank_check' || $kind eq 'bank_deposit' || $kind eq 'bank_withdraw') {   # dreams: ORG-073
 		my ($ok, $desc) = bankAction($kind, $a);                                               # dreams:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                       # dreams:
@@ -842,6 +849,60 @@ sub craftSetup {
 	return (1, \@cmds);
 }
 
+# arrows: Arrow Crafting (ORG-075). «arrowcraft use» (Commands.pm cmdArrowCraft) кастует AC_MAKINGARROW; сервер
+# отвечает списком предметов (01AD, Receive.pm arrowcraft_list: ID по 2 байта с 4-го) — выбираем наш.
+our %arrowWant;               # item, since
+our $ARROW_WAIT = 15;
+
+sub invCount {
+	my ($id) = @_;
+	my $inv = (ref $char ne 'HASH' && $char->can('inventory')) ? $char->inventory : $char->{inv};
+	my $n = 0;
+	for my $item (@{$inv || []}) {
+		$n += $item->{amount} if $item->{nameID} == $id && !$item->{equipped};
+	}
+	return $n;
+}
+
+sub arrowcraftStart {
+	my ($a) = @_;
+	my $id = $a->{item} // '';
+	return (0, 'неверный предмет') unless $id =~ /^\d{1,6}$/;
+	return (0, 'персонаж мёртв') if $char->{dead};
+	return (0, 'навык AC_MAKINGARROW не выучен') unless craftStatus()->{skills}{AC_MAKINGARROW};
+	return (0, "нет предмета $id в рюкзаке") unless invCount($id) > 0;
+	return (0, 'уже жду список Arrow Crafting') if %arrowWant && time - $arrowWant{since} < $ARROW_WAIT;
+	%arrowWant = (item => $id + 0, since => time);
+	return (1, 'arrowcraft use');
+}
+
+sub onArrowList {
+	my (undef, $args) = @_;
+	return unless %arrowWant;
+	my ($msg, $size) = ($args->{RAW_MSG} // '', $args->{RAW_MSG_SIZE} // length($args->{RAW_MSG} // ''));
+	my @ids;
+	for (my $i = 4; $i + 2 <= $size; $i += 2) {
+		push @ids, unpack('v', substr($msg, $i, 2));
+	}
+	my $want = $arrowWant{item};
+	%arrowWant = ();
+	if (grep { $_ == $want } @ids) {
+		$messageSender->sendArrowCraft($want);
+		$char->{selected_craft} = 1;
+		event('arrowcraft_result', item => $want, ok => JSON::PP::true);
+	} else {
+		$messageSender->sendArrowCraft(-1);                                  # закрыть окно, как processAutoMakeArrow
+		event('arrowcraft_result', item => $want, ok => JSON::PP::false, reason => 'предмета нет в списке сервера');
+	}
+}
+
+sub arrowWatch {
+	return unless %arrowWant && time - $arrowWant{since} > $ARROW_WAIT;
+	my $want = $arrowWant{item};
+	%arrowWant = ();
+	event('arrowcraft_result', item => $want, ok => JSON::PP::false, reason => 'сервер не прислал список');
+}
+
 sub handleLine {
 	my ($line) = @_;
 	my $msg = eval { $json->decode($line) };
@@ -911,6 +972,7 @@ sub deadWatch {
 sub onTick {
 	deadWatch();
 	chatGuard();                                                                  # society: комната не держит AI
+	arrowWatch();                                                                 # arrows: нет списка — итог
 	tryConnect();
 	return unless $sock;
 	readIncoming();

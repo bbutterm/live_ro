@@ -198,5 +198,13 @@
     "residents": [],
     "gap_hours": 96,
     "min_potions": 5
+  },
+
+  "arrows": {
+    "_comment": "ORG-075 Arrow Crafting (brain/live_brain/arrows.py, docs/ECONOMY.md): только житель ветки Archer; без него модуль спит. Квест навыка у Roberto moc_ruins,118,99 (brain/world/crafts.json) — этап progression; quest_auto false: пути до Морокка по таблицам OpenKore нет (патч порталов). С навыком — стрелы из лута sources (Trunk, Jellopy, Tree Root) не чаще craft_minutes.",
+    "enabled": true,
+    "quest_auto": false,
+    "craft_minutes": 20,
+    "sources": [1019, 909, 902]
   }
 }

@@ -206,6 +206,34 @@ OpenKore должен найти сам (`move` в другую компонен
 `items_control.txt` важнее записи по ID (так ищет `Misc::items_control`) — для трав таких строк нет. Подарки/продажа
 зелий жителям — следующий шаг (рынок ORG-033 продаёт их как обычный лут).
 
+## Arrow Crafting — ремесло лучника (ORG-075) — `brain/live_brain/arrows.py`
+
+Только для жителя ветки Archer (`state.job`: Archer, Hunter, Bard, Dancer и их высшие, детские и третьи формы;
+шаблон `bots/templates/archer`, Ilsa). **Пока лучника нет, модуль спит**: такт ничего не делает и не пишет. ТЗ —
+`docs/IDEAS.md` Т-33.
+
+**Квест навыка** — Roberto `moc_ruins,118,99` (`npc/quests/skills/archer_skills.txt:18`): `JobLevel >= 30` (:37;
+Hunter/Bard/Dancer — без условия), предметы (:43) 20 Resin 907, 7 Mushroom Spore 921, 41 Pointed Scale 906, 13 Trunk
+1019, 1 Red Potion 501; при всех предметах меню нет, итог — «as I promised, I will teach you the skill» (:47), навык
+`AC_MAKINGARROW` (:54). Данные — `crafts.json` (`scripts/gen_crafts.py`). Этап progression в kv `arrows.stage`:
+`exp` (копить опыт профессии) → `items` (не хватает — список в промпте; материалы держит `craft_setup keep`, сбор —
+лут) → `no_route` / `ready` → `skill`. **Пути до `moc_ruins` по таблицам OpenKore нет** (Морокк закрыт до патча
+порталов): `routes.prontera.roberto = null`, стадия `no_route` записывается один раз и ждёт. С путём и
+`arrows.quest_auto: true` — этап jobChange `{path: arrows, stage: roberto}` (шаги `move` по пути, `talk` без ответов,
+`success {text: "as I promised", map: moc_ruins}`); навык подтверждается только `state.craft.skills.AC_MAKINGARROW`.
+
+**Ремесло** (навык есть): не чаще `craft_minutes` (20), не в бою, не во время этапа, сделки или лавки, HP ≥ 50 %;
+источник — первый из `sources` (Trunk 1019 → 40 Arrow, Jellopy 909 → 4 Arrow, Tree Root 902 → 7 Arrow; рецепты
+`db/create_arrow_db.yml`), который есть в рюкзаке. Действие `arrowcraft {item}`: мост — `arrowcraft use` (навык),
+сервер присылает список (пакет 01AD, хук `packet/arrowcraft_list`), мост выбирает предмет (`sendArrowCraft`), событие
+`arrowcraft_result` — только «отправил». **Итог — по факту**: стрел в `state.craft.items` стало больше →
+`arrows_crafted {source, arrow, n}`, тема `arrows` («Наделал(а) 40 стрел из Trunk своими руками.»), строка летописи.
+
+**Не проверено и риски.** Не проходилось в игре: ни квест (нет пути), ни `arrowcraft use` на нашем сервере. Стрелы
+OpenKore надевает сам только при настройке экипировки — модуль их лишь делает. Trunk у шаблона archer уходит на склад
+(`economy_storeIds`): `craft_setup keep` перекрывает это для лучника. Подарки/продажа стрел другим лучникам и
+«заказы самому себе» (ORG-070) для материалов — следующий шаг.
+
 ## Метрики (ORG-037)
 
 `economy.economy_metrics(memory, since)` → dict (для report; `__main__.py` не изменён):

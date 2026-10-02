@@ -45,6 +45,8 @@ mentor (ORG-057) — метка [mentor:] 55, тик 95, промпт 215.  # me
 bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # bestiary:
 herbal (ORG-076) — событие job_change_result 15 (consume "result": поглощает только свой path herbal), тик 103,
 промпт 207.  # herbal:
+arrows (ORG-075) — события job_change_result 16 (consume "result", path arrows), arrowcraft_result 16 (own), тик 104,
+промпт 208.  # arrows:
 """
 import inspect
 import re
@@ -84,6 +86,7 @@ from .mentor import Mentor           # mentor: ORG-057 наставничест�
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
 from .places import Places           # places: ORG-084 имена мест
 from .herbal import Herbal           # herbal: ORG-076 травник у старого фармацевта
+from .arrows import Arrows           # arrows: ORG-075 Arrow Crafting — ремесло лучника
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -126,6 +129,7 @@ MODULES = (
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
     Bestiary,          # bestiary: ORG-077 после social (тема bestiary); тик 225, событие kill 75, промпт 235
     Herbal,            # herbal: ORG-076 после social (тема herbal) и routine; job_change_result path herbal
+    Arrows,            # arrows: ORG-075 после social (тема arrows); спит без жителя-лучника
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
