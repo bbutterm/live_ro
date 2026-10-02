@@ -58,6 +58,8 @@ usage() {
   dashboard [ДАТА]      HTML-дашборд мира: run/dashboard.html в LAB_ROOT, печатает путь (только чтение памяти)
   episode [НЕДЕЛЯ] [--llm]  серия недели мира: заголовок, 3–5 сцен по фактам, «в следующей серии»
                         (НЕДЕЛЯ — 2026-W40 или дата; --llm — окраска одним вызовом, если BRAIN_LLM включён)
+  memoir BOT [НЕДЕЛЯ] [--llm]  мемуары жителя от первого лица по фактам памяти (вся жизнь или одна неделя;
+                        --llm — окраска глав, если BRAIN_LLM включён; только чтение памяти)
   alerts [N]            последние оповещения владельцу (тупик, восстановление невозможно, сторож сдался)
   gift BOT ITEM N       BOT сейчас просит у жителя рядом N предметов ITEM (ID, например 501, или z — зени);
                         для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
@@ -1195,6 +1197,9 @@ main() {
                  --bots $(lab_bots) ${1:+--day "$1"} ) ;;   # dashboard: ORG-090, печатает путь к файлу
     episode) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain.episode "$@" --env "$LAB_ENV" \
                  --lab-root "$LAB_ROOT" --bots $(lab_bots) ) ;;   # serial: ORG-091 серия недели (только чтение)
+    memoir) load_env; [[ "${1:-}" =~ ^bot[0-9]+$ ]] || die "scripts/lab memoir botNN [НЕДЕЛЯ] [--llm]"   # dreams: ORG-082
+            bot="$1"; shift; ( cd "$(profile_root)/brain" && python3 -m live_brain.memoir "$@" --env "$LAB_ENV" \
+                 --lab-root "$LAB_ROOT" --bot "$bot" ) ;;   # dreams: мемуары (только чтение памяти)
     alerts) load_env; if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then tail -n "${1:-30}" "$LAB_ROOT/run/alerts.log"; else info "оповещений нет"; fi ;;
     supervise) cmd_supervise ;;
     routine)

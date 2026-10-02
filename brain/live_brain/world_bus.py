@@ -58,6 +58,10 @@ PUBLISH = {
     "trophy_rare": ("trophy_rare", 3),        # collect: первая добыча редкости
     "healer_post_start": ("healer_post_start", 2),   # healer: ORG-069 лекарь встал у собора
     "healer_shift": ("healer_shift", 2),             # healer: итог смены лекаря
+    "dream_new": ("dream_new", 2),            # dreams: ORG-081 мечта жителя
+    "dream_stage": ("dream_stage", 3),        # dreams:
+    "dream_done": ("dream_done", 5),          # dreams: мечта сбылась
+    "dream_changed": ("dream_changed", 3),    # dreams: оставил мечту
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 BACKSTAGE = {"director"}                      # director: решения режиссёра (ORG-086) — в дашборд, не в летопись/серию
@@ -305,6 +309,10 @@ TEXTS = {
     "rival_overtook": lambda d: f"обогнал(а) {d.get('rival')} {d.get('label')} ({d.get('mine')} против {d.get('theirs')})",  # rivalry:
     "card_found": lambda d: f"нашёл(шла) карту {d.get('name')}" + (" — первая карта!" if d.get("first") else ""),  # collect:
     "trophy_rare": lambda d: f"добыл(а) редкость: {d.get('name')}",                                       # collect:
+    "dream_new": lambda d: f"мечтает: {d.get('dream')}",                                                  # dreams:
+    "dream_stage": lambda d: f"мечта «{d.get('dream')}»: этап {d.get('n')}/{d.get('of')}",                # dreams:
+    "dream_done": lambda d: f"мечта сбылась: {d.get('dream')}",                                           # dreams:
+    "dream_changed": lambda d: f"оставил(а) мечту «{d.get('dream')}»: {d.get('why')}",                    # dreams:
     "tradition": lambda d: d.get("text") or f"вечерний круг: {d.get('label')}",   # tradition: ORG-058
     "healer_post_start": lambda d: "лечит у собора",                                 # healer: ORG-069
     "healer_shift": lambda d: f"лечил(а) у собора: Heal {d.get('heals')}, людей {d.get('patients')}",   # healer:

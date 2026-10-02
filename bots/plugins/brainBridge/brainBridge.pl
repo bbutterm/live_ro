@@ -44,6 +44,11 @@
 #   offer_buy {from,item,amount,price} -> economy: в сделку продавца положить price зени (deal add z)  # market:
 #   offer_shop {title,items:[{id,price,amount}]} -> economy: тележка (cart_add) и %shop для openshop  # market:
 #   mail_send {to,title,body,zeny?,item?,amount?} / mail_check {} / mail_take {mail_id} -> economy: RODEX  # market:
+#   bank_check {} / bank_deposit {zeny} / bank_withdraw {zeny} -> банк rAthena (ORG-073, savings.py): пакеты  # dreams:
+#                            09AB/09A7/09A9 через $messageSender->sendBanking* (cmdBank требует $bankingopened —   # dreams:
+#                            ответа на «bank open»; rAthena banking_state_enforce: no — окно не нужно); 1..10 000 000,  # dreams:
+#                            вклад ≤ зени в кармане, не мёртв, нет сделки/передачи/лавки. Ответы сервера (хуки        # dreams:
+#                            packet/banking_*) -> события bank_balance {vault}, bank_result {op, ok, reason, vault, zeny}.  # dreams:
 #   emote {id}            -> e <команда> (Commands.pm cmdEmotion, tables/emotions.txt); только номера
 #                            из %EMOTES (приветствие, смех, сердце, вопрос, спасибо...), как safety.EMOTES
 #   chat_room {op open, title, limit} / {op close} -> chat create "<title>" <limit> 1 / chat leave  # society:
@@ -86,6 +91,7 @@ use Plugins;
 use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID %ai_v
                %friends @friendsID $currentChatRoom %chatRooms);   # society: чат-комната
 use Globals qw(%guild $charID);                                     # guild: состав гильдии (ORG-052)
+use Globals qw($messageSender %currentDeal %outgoingDeal %incomingDeal $shopstarted);   # dreams: банк (ORG-073)
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -122,6 +128,9 @@ my $hooks = Plugins::addHooks(
 	['packet/guild_create_result', sub { event('guild_create_result', code => ($_[1]{type} // -1) + 0) }],   # guild: 0167
 	['packet/guild_invite_result', sub { event('guild_invite_result', code => ($_[1]{type} // -1) + 0) }],   # guild: 0169
 	['packet_guildMsg',            \&onGuildMsg],                            # guild: 017F чат гильдии
+	['packet/banking_check',       sub { onBank('check', $_[1]) }],          # dreams: 09A6 вклад
+	['packet/banking_deposit',     sub { onBank('deposit', $_[1]) }],        # dreams: 09A8 итог вклада
+	['packet/banking_withdraw',    sub { onBank('withdraw', $_[1]) }],       # dreams: 09AA итог снятия
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -648,6 +657,9 @@ sub actionToCommand {
 		return (0, 'плагин economy не загружен') unless defined &economy::startMailTake;          # market:
 		my ($ok, $desc) = economy::startMailTake($a);                                             # market:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'bank_check' || $kind eq 'bank_deposit' || $kind eq 'bank_withdraw') {   # dreams: ORG-073
+		my ($ok, $desc) = bankAction($kind, $a);                                               # dreams:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                       # dreams:
 	} elsif ($kind eq 'emote') {
 		my $id = $a->{emotion} // $a->{id} // '';   # society: id сообщения — номер действия (ack), номер эмоции — emotion
 		return (0, 'эмоция не из списка') unless $id =~ /^\d{1,2}$/ && exists $EMOTES{$id};
@@ -726,6 +738,44 @@ sub actionToCommand {
 		return (1, ["conf attackAuto $attack", "conf route_randomWalk $walk", 'conf -f brainBridge_paused none', 'ai auto']);
 	}
 	return (0, "неизвестное действие '$kind'");
+}
+
+# dreams: банк rAthena (ORG-073). Пакеты отправляются напрямую: cmdBank (Commands.pm) требует $bankingopened,
+# а он ставится только ответом сервера на «bank open» — в одном такте мозга не успеть. Сервер (clif_parse_Bank*)
+# проверяет feature.banking, mapflag nobank и AID; сумму — pc_bank_deposit/withdraw (итог — пакет 09A8/09AA).
+my $MAX_BANK_OP = 10_000_000;
+sub bankAction {
+	my ($kind, $a) = @_;
+	return (0, 'нет отправителя пакетов') unless $messageSender;
+	return (0, 'персонаж мёртв') if $char->{dead};
+	return (0, 'идёт сделка') if %currentDeal || %outgoingDeal || %incomingDeal;
+	return (0, 'открыта лавка') if $shopstarted;
+	return (0, 'идёт передача') if defined &economy::giveStatus && economy::giveStatus();
+	if ($kind eq 'bank_check') {
+		$messageSender->sendBankingCheck($accountID);
+		return (1, 'банк: запрос вклада');
+	}
+	my $z = $a->{zeny} // '';
+	return (0, "сумма 1..$MAX_BANK_OP") unless $z =~ /^\d{1,8}$/ && $z >= 1 && $z <= $MAX_BANK_OP;
+	if ($kind eq 'bank_deposit') {
+		return (0, 'в кармане меньше') if $z > ($char->{zeny} || 0);
+		$messageSender->sendBankingDeposit($accountID, $z + 0);
+		return (1, "банк: вклад $z");
+	}
+	$messageSender->sendBankingWithdraw($accountID, $z + 0);
+	return (1, "банк: снять $z");
+}
+
+sub onBank {   # dreams: аргументы пакета (Receive/kRO/Sakexe_0.pm: 09A6 V2 v, 09A8/09AA v V2 V) -> событие мозгу
+	my ($op, $args) = @_;
+	my $vault = ($args->{zeny} // 0) + ($args->{zeny2} // 0) * 4294967296;
+	if ($op eq 'check') {
+		event('bank_balance', vault => $vault + 0);
+		return;
+	}
+	my $reason = ($args->{reason} // -1) + 0;
+	event('bank_result', op => $op, ok => ($reason == 0 ? JSON::PP::true : JSON::PP::false), reason => $reason,
+	      vault => $vault + 0, zeny => ($args->{balance} // 0) + 0);
 }
 
 sub handleLine {

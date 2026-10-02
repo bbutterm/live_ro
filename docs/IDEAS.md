@@ -1309,6 +1309,132 @@ class Orders:                                  # mind.orders, goals.json "orders
 
 **Готово.** Тесты зелёные; раздел в ECONOMY.md; статус ORG-070 «код, в игре не проверено».
 
+### Т-17 · ORG-081 · Жизненный путь (мечта на месяцы)
+
+**Цель.** У каждого жителя есть долгая мечта — «стать Knight», «собрать 5 карт», «обойти окрестности Пронтеры»,
+«завести питомца», «основать гильдию», «скопить 300 000 зени». Мечта разбита на 2–4 этапа; этапы питают недельные
+цели (`aims.py`) и мотивы (`needs.py`), прогресс — только по фактам тела и памяти. Исполненная или невозможная мечта
+сменяется новой с записью «решил(а)…». Без LLM.
+
+**Файлы.** `brain/live_brain/dream.py` (новый модуль реестра), `brain/live_brain/modules.py` (одна строка),
+`brain/live_brain/aims.py` (источник целей: шаблон `dream` и бонус этапа, блоки `# dreams:`), `brain/live_brain/needs.py`
+(множитель мотива, `# dreams:`), `brain/live_brain/world_bus.py` (`dream_*` в `PUBLISH`/`TEXTS`),
+`brain/live_brain/chronicle.py` (строки летописи), `brain/world/goals.json` (раздел `dream`),
+`brain/tests/test_dream.py`, `docs/LIFE.md`. `mind.py` не трогается.
+
+**Интерфейсы.**
+```python
+class Dream:                              # ATTR dream, FEATURE dream, CONFIG dream, TICK_ORDER 145 (до aims)
+    def tick(self)                        # выбор, этапы по фактам, исполнение, смена
+    def weekly_aim(self, state, now)      # шаг этапа на неделю -> цель aims {kind: "dream", text, metric, base, target, need}
+    def aim_progress(self, aim, state)    # прогресс такой цели по метрике
+    def aim_bonus(self, kind) -> float    # +0.3 шаблону aims, продвигающему этап (и самой цели dream)
+    def boost(self, need) -> float        # мотив этапа 1.0..1.2 (needs.weighted)
+    def save_target(self) -> (int, str)   # сколько зени нужно мечте (копилка Т-18)
+    def summary(self)                     # поле промпта «мечта» (225)
+CHRONICLE_LINES = {"dream_new", "dream_stage", "dream_done", "dream_changed"}
+```
+- Шаблоны: `job2` (вторая профессия по первой: Swordman → Knight…; этапы — первая профессия, уровень профессии 40,
+  сама смена; черта diligence), `cards` (альбом collection +3/+5; greed, whimsy), `explorer` (карты окрестностей
+  города отдыха из `explore_reach.json`, ≤ 2 переходов, `_fild`; curiosity), `pet` (поймал → вылупился → 7 дней с
+  питомцем; generosity, sociability), `guild` (2 друга с отношением ≥ 3 → в гильдии по `state.guild`; sociability),
+  `rich` (зени + банк до цели ×3 от текущих; greed). Недоступно — шаблон пропускается (нет модуля pets/guild/
+  collection, нет жителей, уже Knight, окрестности обойдены, уже с питомцем).
+- Выбор: черты + U(0, 0.25) + `persona.dream` (+0.5); недавние (2 последних в истории) — нет.
+- Метрики только по фактам: `state.job/job_lv/lv/zeny/pet/guild`, kv `collection`, `places`, отношения, события
+  `pet_tamed`/`pet_hatched`, банк из kv `savings` (Т-18).
+- Смена: все этапы → `dream_done` (память 5, шина 5); невозможно (модуль выключили, профессия ушла в сторону) или
+  поворот (≥ 3 смертей за неделю у `explorer`, ссора с другом у `guild`, `stale_days` без этапа) → `dream_changed`
+  (воспоминание `note` «решил(а) оставить…»); следующий тик выбирает новую.
+- aims: шаблон `dream` (шаг этапа: «поднять уровень профессии на 3», «найти новую карту», «побывать в новом месте
+  окрестностей»…), бонус +0.3 шаблонам этапа (`job`, `level`, `new_map`, `friend`, `zeny`); `boost` смотрит
+  `aim.need` цели мечты.
+- Тема разговора `dream` (реестр social): «Мечтаю стать Knight. Этап 2 из 3.» — раз на этап каждому жителю.
+
+**Тесты.** Выбор по чертам и персоне; недоступные шаблоны пропущены; этап по фактам (уровень профессии, смена
+профессии) → событие и шина; исполнение → новая мечта не того же вида; невозможность (pets выключен) и поворот
+(3 смерти) → `dream_changed`; aims получает цель `dream` с бонусом и считает её прогресс; boost; тема; выключатель.
+
+**Готово.** Тесты зелёные; `docs/LIFE.md`; статус ORG-081 «код, в игре не проверено».
+
+### Т-18 · ORG-073 · Копилка мечты и банк
+
+**Цель.** Житель откладывает зени на мечту: не тратит ниже копилки на необязательное (подарки зени, перепродажа),
+видит прогресс «копит на … 45 %»; излишек может класть в банк rAthena (по умолчанию выключено — не проверено в игре).
+
+**Факты upstream.** rAthena: `feature.banking: on` (`conf/battle/feature.conf:34`), пакеты `CZ_REQ_BANKING_DEPOSIT
+0x9a7`/`WITHDRAW 0x9a9`/`CHECK 0x9ab` разбираются при `PACKETVER >= 20130717` (`src/map/clif_packetdb.hpp:1648`),
+`banking_state_enforce: no` — открывать окно банка не обязательно (`pc_bank_deposit`, `src/map/pc.cpp`), вклад —
+на аккаунт (`#BANKVAULT`), предел `MAX_BANK_ZENY`. OpenKore: команда `bank open|deposit|withdraw`
+(`src/Commands.pm:104`, `cmdBank` требует `$bankingopened`), отправка `sendBankingCheck/Deposit/Withdraw`
+(`src/Network/Send.pm:3348`), пакеты 09A7/09A9/09AB есть в `Send/kRO/Sakexe_0.pm:255` и не переопределены в цепочке
+`kRO_RagexeRE_2018_06_20e`; ответы `09A6/09A8/09AA` (`Receive/kRO/Sakexe_0.pm:585`) — хуки `packet/banking_*`.
+
+**Файлы.** `brain/live_brain/savings.py` (новый модуль реестра), `brain/live_brain/modules.py`, `brain/live_brain/economy.py`
+(`reserve()` в отказах — `# dreams:`), `brain/live_brain/safety.py` (`bank_*` — `# dreams:`),
+`bots/plugins/brainBridge/brainBridge.pl` (действия и события банка — `# dreams:`), `bots/tests/bank.t`,
+`brain/world/goals.json` (раздел `savings`), `brain/tests/test_savings.py`, `docs/LIFE.md`.
+
+**Интерфейсы.**
+```python
+class Savings:                            # ATTR savings, FEATURE savings, CONFIG savings, TICK_ORDER 147
+    def reserve(self, state=None) -> int  # зени в кармане, отложенные на мечту (economy не тратит их на необязательное)
+    def progress(self, state=None)        # {goal, target, saved, pct, bank}
+    def tick(self)                        # вехи 25/50/75/100 %, банк: проверка, вклад излишка, снятие на нужды
+    def on_bank(self, kind, event)        # bank_result / bank_balance от моста (own)
+```
+- Цель копилки — `dream.save_target()` (job2 — снаряжение, explorer — крылья/телепорт, pet — корм и приручение,
+  rich — вся сумма); без мечты копилки нет. Отложено = min(карман, цель − банк).
+- economy: дарить зени (`[need:..:z:..]`) и покупать на перепродажу — только сверх `keep + reserve` («коплю на
+  мечту»); покупки из списка нужд (зелья, предметы карьеры) — по-прежнему.
+- Банк (`savings.bank: true`): в городе отдыха, тело свободно (нет сделки, передачи, лавки, письма, сна), не чаще
+  `bank_gap_minutes`: при старте сессии `bank_check`; карман > `pocket` (keep_zeny ×2) — вклад излишка до цели;
+  карман < keep_zeny и в банке есть — снять до `pocket` (зелья важнее мечты). Факт — только `bank_result ok` от моста
+  (пакет сервера), три отказа подряд — банк выключен на сутки.
+- Мост: `bank_check {}`, `bank_deposit {zeny}`, `bank_withdraw {zeny}` → `sendBanking*` напрямую (без `bank open`),
+  проверки: в игре, жив, 1..10 000 000, вклад ≤ зени в кармане, нет сделки и лавки. События `bank_balance {vault}`,
+  `bank_result {op, ok, reason, vault, zeny}`. safety: только от правил, лимит 12 операций в сутки.
+
+**Тесты.** Отложено и процент; economy отказывает в подарке зени и перепродаже ниже копилки, но покупает нужное;
+вехи; банк выключен — действий нет; включён — check, вклад излишка, снятие при бедности, тело занято — ждёт;
+`bank_result` — факт и баланс, три отказа — пауза; safety; Perl: действия, проверки, события по пакетам.
+
+**Готово.** Тесты Python и Perl зелёные; `docs/LIFE.md`; статус ORG-073 «код; банк выключен по умолчанию, в игре не
+проверено».
+
+### Т-19 · ORG-082 · Мемуары жителя
+
+**Цель.** Книга жизни жителя от первого лица: главы по неделям — рождение и первые дни, уровни и профессии, дружба и
+ссоры, смерти, мечты, места, карты, питомец. Только факты памяти, правила без LLM; LLM — только окраска по
+механизму дневника и только при включённом LLM.
+
+**Файлы.** `brain/live_brain/memoir.py` (новый: чтение памяти + модуль реестра), `brain/live_brain/modules.py`,
+`scripts/lab` (`memoir БОТ [НЕДЕЛЯ] [--llm]`), `brain/world/goals.json` (раздел `memoir`), `brain/tests/test_memoir.py`,
+`docs/LIFE.md`.
+
+**Интерфейсы.**
+```python
+facts_of(db, start, end) -> [{ts, kind, data}]    # события памяти нужных видов (mode=ro)
+chapter(db, name, sex, start, end, number, born) -> {title, lines, refs}   # одна неделя
+book(db_path, now=None, week=None) -> {name, chapters}                     # все недели жизни или одна
+render(book) -> str                                                         # markdown
+colorize(chapter, settings, budget, call)  # один вызов, фильтр routine.diary_only, кэш run/memoir-<бот>-<неделя>.json
+class Memoir:                            # ATTR memoir, FEATURE memoir, CONFIG memoir, TICK_ORDER 230
+    def tick(self)                       # раз в неделю: state/<бот>/memoir.md (вся книга), событие memoir_chapter
+```
+- Глава недели: «Неделя N (даты)»; первая — «Я появился(лась) в мире …»; абзацы по видам: уровни («дорос(ла) с
+  12 до 15»), профессия, смерти (сколько, где, кто бил), друзья (встречи, подарки, лечение, ссоры/примирения с
+  именами), мечта (`dream_*`), места (`explore_found`, kv `places.first`), карты, питомец, гильдия, цели недели.
+  Пустая неделя — «Тихая неделя: в памяти нет событий». Род глагола — по `state.sex`.
+- LLM: `--llm` или `memoir.llm`, `BRAIN_LLM` включён, общий бюджет; ответ как запись дневника проходит
+  `diary_only` (числа и латинские имена — только из фактов главы), иначе текст правил.
+
+**Тесты.** Первая глава и рождение; уровни, смерть, дружба, мечта, место — строки с фактами; тихая неделя; книга по
+неделям; род; CLI; модуль пишет `memoir.md` раз в неделю и не чаще; LLM выкл. — вызова нет; выдумка отклонена;
+кэш — один вызов.
+
+**Готово.** Тесты зелёные; `docs/LIFE.md`; статус ORG-082 «код, в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности

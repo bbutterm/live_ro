@@ -33,10 +33,10 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
            [party:dead:]) · 80 social [chat:]
   события: 10 crew · 20 social · 30 party · 40 guild · 50 pets · 60 economy
   тик:     (ядро: life, safety, plans) · 10 routine · 20 economy · 30 party · 40 career · 50 activities ·
-           60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 115 boss · 120 rumors · 130 society ·
-           140 strangers · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
-           210 episodes · 220 collection · 125 gossip (метка [gossip:] — 35, промпт — 245) · 205 habits
-           (промпт — 225) · 230 director
+           60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 115 boss · 120 rumors · 125 gossip ·
+           130 society · 135 healer · 140 strangers · 145 dream · 147 savings · 150 aims · 160 guild · 170 tradition ·
+           180 world · 190 rivalry · 200 crowd · 205 habits · 210 episodes · 220 collection · 230 memoir · 230 director
+           (25 orders; метки: [gossip:] 35, [order:] 25, [heal:] 65; промпт: habits 225, gossip 245)
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
 Новые после таблицы: healer (ORG-069) — метка [heal:] 65, события support/chat_* 25, тик 135.  # healer:
 orders (ORG-070) — метка [order:] 25, тик 25.  # orders:
@@ -72,6 +72,9 @@ from .collection import Collection
 from .director import Director          # director: ORG-086 рассказчик мира
 from .healer import Healer           # healer: ORG-069 лекарь у собора
 from .orders import Orders           # orders: ORG-070 заказы между жителями
+from .dream import Dream             # dreams: ORG-081 жизненный путь
+from .savings import Savings         # dreams: ORG-073 копилка мечты и банк
+from .memoir import Memoir           # dreams: ORG-082 мемуары жителя
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -107,6 +110,9 @@ MODULES = (
     Habits,            # habits: ORG-068 (activity.scores, social.pick_point читают mind.habits)
     Healer,            # healer: ORG-069 (тик 135, метка [heal:] 65, события support/чат 25)
     Orders,            # orders: ORG-070 после economy и шины (тик 25, метка [order:] 25)
+    Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
+    Savings,           # dreams: REQUIRES dream — цель копилки от мечты
+    Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 

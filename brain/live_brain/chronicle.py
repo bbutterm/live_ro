@@ -24,6 +24,8 @@ from .collection import CHRONICLE_LINES as COLLECT_LINES   # collect: карты
 from .boss import CHRONICLE_LINES as BOSS_LINES             # boss: мини-босс группой (ORG-079)
 from .healer import CHRONICLE_LINES as HEALER_LINES     # healer: лекарь у собора (ORG-069)
 from .orders import CHRONICLE_LINES as ORDER_LINES      # orders: заказы между жителями (ORG-070)
+from .dream import CHRONICLE_LINES as DREAM_LINES       # dreams: жизненный путь (ORG-081)
+from .savings import CHRONICLE_LINES as SAVINGS_LINES   # dreams: копилка и банк (ORG-073)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 
 LINES = {
@@ -52,6 +54,8 @@ LINES = {
     **BOSS_LINES,                                         # boss: ORG-079
     **HEALER_LINES,                                       # healer: ORG-069
     **ORDER_LINES,                                        # orders: ORG-070
+    **DREAM_LINES,                                        # dreams: ORG-081
+    **SAVINGS_LINES,                                      # dreams: ORG-073
 }
 
 

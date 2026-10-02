@@ -96,7 +96,9 @@ class Needs:
         rivalry = getattr(self.mind, "rivalry", None)               # rivalry: ORG-060 отстающему progress выше
         cal = getattr(self.mind, "calendar", None)                  # calendar: день недели и праздник (ORG-059)
         director = getattr(self.mind, "director", None)             # director: повод/затишье режиссёра (ORG-086)
+        dream = getattr(self.mind, "dream", None)                   # dreams: мотив этапа мечты (ORG-081)
         return {k: round(v * self.weight(k) * (aims.boost(k) if aims else 1.0)
+                         * (dream.boost(k) if dream else 1.0)                    # dreams:
                          * (rivalry.boost(k) if rivalry else 1.0)                # rivalry:
                          * (cal.factor(k, self.clock()) if cal else 1.0)         # calendar:
                          * (director.boost(k) if director else 1.0), 2)          # director:

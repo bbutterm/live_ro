@@ -6,7 +6,9 @@
     zeny     — накопить ещё N зени (30% текущих, от 10 000 до 200 000);     greed, wealth;
     new_map  — побывать в новом месте (places: first после начала недели); curiosity, curiosity;
     friend   — подружиться с жителем (отношение +2 к самому близкому);      sociability, social;
-    help     — помочь жителям HELP_TARGET раз (heal_given, gift_given);     generosity, care.
+    help     — помочь жителям HELP_TARGET раз (heal_given, gift_given);     generosity, care;
+    dream    — шаг текущего этапа мечты (dream.py, ORG-081): текст, метрика и мотив — из мечты; шаблоны,
+               продвигающие этап, получают бонус dream.aim_bonus (+0.3).
 Оценка шаблона = черта + U(0, 0.25); недоступные (нет жителей, рано для профессии) пропускаются.
 Прогресс считается по памяти (события, kv places, отношения) и состоянию тела; цель выполнена —
 воспоминание fact и событие aim_done. Конец недели — итог по каждой цели (aim_result) в память и шину.
@@ -39,6 +41,7 @@ TEMPLATES = {
     "new_map": {"trait": "curiosity", "need": "curiosity"},
     "friend": {"trait": "sociability", "need": "social"},
     "help": {"trait": "generosity", "need": "care"},
+    "dream": {"trait": None, "need": None},   # dreams: шаг этапа мечты (dream.py, ORG-081); need — в самой цели
 }
 
 
@@ -97,6 +100,9 @@ class Aims:
                 return None
             peer = max(cand, key=lambda p: (aff[p], p))
             return {"kind": kind, "text": f"подружиться с {peer}", "peer": peer, "base": aff[peer], "target": 2}
+        if kind == "dream":                                        # dreams: цель недели из этапа мечты
+            dream = getattr(self.mind, "dream", None)               # dreams:
+            return dream.weekly_aim(state, now) if dream else None  # dreams:
         if kind == "help":
             if not self.mind.ctx.peers:
                 return None
@@ -106,13 +112,15 @@ class Aims:
 
     def choose(self, state, now, exclude=()):
         t = self.traits()
+        dream = getattr(self.mind, "dream", None)                   # dreams: этап мечты — бонус шаблону
         scored = []
         for kind, tpl in TEMPLATES.items():
             if kind in exclude:
                 continue
             aim = self.make(kind, state, now)
             if aim:
-                scored.append((t.get(tpl["trait"], 0.5) + self.rng.uniform(0, 0.25), kind, aim))
+                scored.append((t.get(tpl["trait"], 0.5) + self.rng.uniform(0, 0.25)
+                               + (dream.aim_bonus(kind) if dream else 0.0), kind, aim))   # dreams:
         scored.sort(key=lambda x: (-x[0], x[1]))
         return [a for _, _, a in scored]
 
@@ -135,6 +143,9 @@ class Aims:
             return max(0, (mem.relation(aim["peer"]) or {}).get("affinity", 0) - aim["base"])
         if k == "help":
             return mem.count_events("heal_given", aim["base"]) + mem.count_events("gift_given", aim["base"])
+        if k == "dream":                                            # dreams: метрика этапа мечты
+            dream = getattr(self.mind, "dream", None)               # dreams:
+            return dream.aim_progress(aim, state) if dream else aim.get("progress", 0)   # dreams:
         return 0
 
     # ---------- тик ----------
@@ -228,7 +239,7 @@ class Aims:
         frac_time = min(1.0, max(0.0, (now - st["start"]) / WEEK))
         best = 1.0
         for aim in st["items"]:
-            if aim.get("done") or TEMPLATES.get(aim["kind"], {}).get("need") != need:
+            if aim.get("done") or (aim.get("need") or TEMPLATES.get(aim["kind"], {}).get("need")) != need:   # dreams:
                 continue
             left = 1 - min(1.0, aim.get("progress", 0) / max(aim["target"], 1))
             best = max(best, 1 + (MAX_BOOST - 1) * left * (0.5 + 0.5 * frac_time))
