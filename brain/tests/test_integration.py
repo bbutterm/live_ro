@@ -712,6 +712,18 @@ class Review3JointsTest(BodyMixin, unittest.TestCase):
         self.assertIsNone(orders.can_fill(o, self.mind.state), "дубликат — можно")
 
 
+    def test_relation_log_bounded_by_names(self):
+        """kv relation_log (W5) не растёт без предела по числу имён: модель даёт отношения к любым игрокам."""
+        from live_brain.memory import RELATION_LOG
+        for i in range(400):
+            self.mem.update_relation(f"Stranger{i}", 1, "болтали")
+        self.mem.update_relation("Vera", 1, "провели время вместе")
+        log = self.mem.get("relation_log")
+        self.assertLessEqual(len(log), 250, "имён в истории отношений — ограниченно")
+        self.assertIn("Vera", log, "свежая пара остаётся")
+        self.assertLessEqual(max(len(v) for v in log.values()), RELATION_LOG)
+
+
 class ProtocolSurfaceTest(unittest.TestCase):
     def test_every_safe_action_has_bridge_branch(self):
         """Действие, которое safety пропускает, исполняет brainBridge.pl (и наоборот: у моста нет лишних веток)."""

@@ -18,6 +18,7 @@ MAX_MEMORIES = 2000
 KEEP_EVENTS = ("diary", "death_report", "level_up", "meeting_confirmed", "party_confirmed", "map_banned")
 KEEP_EVENTS += ("society_quarrel", "society_reconciled", "job_changed", "pet_hatched", "gift_received")  # gossip: W6
 RELATION_LOG = 40                     # gossip: W5 — записей истории на пару (kv relation_log, prune не чистит)
+RELATION_LOG_NAMES = 200              # review3: имён в relation_log не больше (модель пишет отношения к любым игрокам)
 KINDS = ("fact", "thought", "note")
 
 SCHEMA = """
@@ -160,7 +161,10 @@ class Memory:
         rel = self.relation(name) or {}
         rows.append({"ts": round(time.time(), 1), "delta": int(delta), "note": str(note or "")[:120],
                      "affinity": rel.get("affinity", 0)})
+        log.pop(name, None)                                                  # review3: свежая пара — в конец,
         log[name] = rows[-RELATION_LOG:]
+        for old in list(log)[:max(0, len(log) - RELATION_LOG_NAMES)]:        # review3: давние пары уходят
+            del log[old]
         self.set("relation_log", log)
 
     def relation_log(self, name):
