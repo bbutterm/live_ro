@@ -171,13 +171,15 @@ def collect(lab_root, bots, day=None, tz_hours=0, now=None):
                 if text:
                     events.append({"ts": ts, "who": r["name"], "text": str(text), "src": "летопись", "imp": 0})
     seen = {(datetime.fromtimestamp(e["ts"], tz).strftime("%H:%M"), e["who"], e["text"]) for e in events}
-    for e in world_bus.read_period(Path(lab_root) / "state" / "shared" / "world.sqlite", start, end):
+    for e in world_bus.read_period(Path(lab_root) / "state" / "shared" / "world.sqlite", start, end,
+                                   backstage=True):                       # director: решения режиссёра видны владельцу
         text = world_bus.describe(e["kind"], e["data"])
         key = (datetime.fromtimestamp(e["ts"], tz).strftime("%H:%M"), e["bot"], text)
         if key in seen:
             continue
         seen.add(key)
-        events.append({"ts": e["ts"], "who": e["bot"], "text": text, "src": "шина", "imp": e["importance"]})
+        src = "режиссёр" if e["kind"] in world_bus.BACKSTAGE else "шина"  # director:
+        events.append({"ts": e["ts"], "who": e["bot"], "text": text, "src": src, "imp": e["importance"]})
     events.sort(key=lambda e: e["ts"])
     cut = max(0, len(events) - MAX_EVENTS)
     for e in events:

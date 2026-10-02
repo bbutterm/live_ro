@@ -33,10 +33,10 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
            [party:dead:]) · 80 social [chat:]
   события: 10 crew · 20 social · 30 party · 40 guild · 50 pets · 60 economy
   тик:     (ядро: life, safety, plans) · 10 routine · 20 economy · 30 party · 40 career · 50 activities ·
-           60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 120 rumors · 130 society ·
+           60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 115 boss · 120 rumors · 130 society ·
            140 strangers · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
            210 episodes · 220 collection · 125 gossip (метка [gossip:] — 35, промпт — 245) · 205 habits
-           (промпт — 225)
+           (промпт — 225) · 230 director
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
 """
 import inspect
@@ -45,6 +45,7 @@ import re
 from .activity import Activities
 from .aims import Aims
 from .bonds import Bonds
+from .boss import Boss                  # boss: ORG-079 мини-босс группой
 from .career import Career
 from .crew import Crew
 from .crowd import Crowd
@@ -66,6 +67,7 @@ from .society import Society
 from .strangers import Strangers
 from .tradition import Tradition
 from .collection import Collection
+from .director import Director          # director: ORG-086 рассказчик мира
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -89,6 +91,7 @@ MODULES = (
     Aims,
     Guild,
     Explorer,
+    Boss,              # boss: после party, crew, explorer (REQUIRES)
     Strangers,
     Feed,              # шина мира (world_bus.Feed): mind.world
     Rivalry,
@@ -98,6 +101,7 @@ MODULES = (
     Collection,        # после social: регистрирует тему card
     Gossip,            # gossip: ORG-056, после social (тема gossip) и rumors
     Habits,            # habits: ORG-068 (activity.scores, social.pick_point читают mind.habits)
+    Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
 

@@ -95,9 +95,11 @@ class Needs:
         aims = getattr(self.mind, "aims", None)                     # ORG-038: невыполненные цели недели усиливают мотив
         rivalry = getattr(self.mind, "rivalry", None)               # rivalry: ORG-060 отстающему progress выше
         cal = getattr(self.mind, "calendar", None)                  # calendar: день недели и праздник (ORG-059)
+        director = getattr(self.mind, "director", None)             # director: повод/затишье режиссёра (ORG-086)
         return {k: round(v * self.weight(k) * (aims.boost(k) if aims else 1.0)
                          * (rivalry.boost(k) if rivalry else 1.0)                # rivalry:
-                         * (cal.factor(k, self.clock()) if cal else 1.0), 2)    # calendar:
+                         * (cal.factor(k, self.clock()) if cal else 1.0)         # calendar:
+                         * (director.boost(k) if director else 1.0), 2)          # director:
                 for k, v in self.values().items()}
 
     def top(self, n=3):
@@ -111,8 +113,9 @@ class Needs:
         return 0.75 + 0.5 * (0.6 * self.t["diligence"] + 0.4 * self.t["patience"])
 
     def risk_tolerance(self):
-        """Допустимый риск карты (atlas.danger_for 0..1): смелый терпит больше."""
-        return 0.25 + 0.5 * self.t["bravery"]
+        """Допустимый риск карты (atlas.danger_for 0..1): смелый терпит больше; «день осторожности» режиссёра — ниже."""
+        director = getattr(self.mind, "director", None)                         # director: ORG-086
+        return (0.25 + 0.5 * self.t["bravery"]) * (director.risk_factor() if director else 1.0)   # director:
 
     def noise(self):
         """Доля случайности в выборе: причудливые менее предсказуемы."""

@@ -203,6 +203,16 @@ class Collection:
                                   "first": first, "n": n})
         log.info("новая карта: %s%s", nm, " (первая)" if first else "")
 
+    def boss_trophy(self, mob, ts):                                         # boss: ORG-079 победа группой
+        """Трофей «мини-босс»: kv collection.bosses {имя: {first, n}}; событие trophy_boss — в летопись."""
+        bosses = self.st.setdefault("bosses", {})                          # boss:
+        rec = bosses.get(str(mob)) or {"first": ts, "n": 0}                # boss:
+        rec["n"] += 1                                                      # boss:
+        bosses[str(mob)] = rec                                             # boss:
+        self.save()                                                        # boss:
+        self.mind.mem.add_event("trophy_boss", {"monster": str(mob), "n": rec["n"]})   # boss:
+        return rec                                                         # boss:
+
     # ---------- тема разговора (ORG-066) ----------
 
     def facts(self, peer, now):
@@ -253,4 +263,5 @@ CHRONICLE_LINES = {
                                                                    f" (в альбоме {d.get('n')})"),
     "trophy_rare": lambda d: f"добыл(а) редкость: {d.get('name')}",
     "trophy_first": lambda d: f"первая победа над {d.get('monster')}",
+    "trophy_boss": lambda d: f"трофей: мини-босс {d.get('monster')}" + (f" (×{d.get('n')})" if (d.get("n") or 1) > 1 else ""),  # boss:
 }

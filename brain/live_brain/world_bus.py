@@ -58,6 +58,7 @@ PUBLISH = {
     "trophy_rare": ("trophy_rare", 3),        # collect: первая добыча редкости
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
+BACKSTAGE = {"director"}                      # director: решения режиссёра (ORG-086) — в дашборд, не в летопись/серию
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS world_events (
@@ -153,6 +154,17 @@ class WorldBus:
                 continue
         return out
 
+    def recent(self, kind, since=0.0, limit=50):                          # director: все авторы, свои тоже
+        """Записи вида kind за период от всех жителей (новые последними): [{"id", "ts", "bot", "data"}]."""
+        out = []
+        for i, ts, bot, data in self.db.execute("SELECT id, ts, bot, data FROM world_events WHERE kind = ? AND ts >= ? "
+                                                "ORDER BY id DESC LIMIT ?", (kind, since, limit)).fetchall()[::-1]:
+            try:
+                out.append({"id": i, "ts": ts, "bot": bot, "data": json.loads(data)})
+            except ValueError:
+                continue
+        return out
+
     def last_id(self):
         return self.db.execute("SELECT COALESCE(MAX(id), 0) FROM world_events").fetchone()[0]
 
@@ -162,8 +174,9 @@ class WorldBus:
         self.db.execute("DELETE FROM world_events WHERE ts < ?", (now - KEEP_DAYS * 86400,))
 
 
-def read_period(path, start, end):
-    """Для хроники: события шины за период (только чтение). Нет файла — пусто."""
+def read_period(path, start, end, backstage=False):
+    """Для хроники: события шины за период (только чтение). Нет файла — пусто.
+    backstage=True — с закулисьем (решения режиссёра, director:): только для дашборда владельца."""
     if not Path(path).exists():
         return []
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=10)
@@ -177,6 +190,8 @@ def read_period(path, start, end):
     out = []
     for ts, bot, kind, data, imp in rows:
         if kind in QUIET:                                                   # rivalry: снимки — не события
+            continue
+        if kind in BACKSTAGE and not backstage:                             # director: игрокам не видно
             continue
         try:
             out.append({"ts": ts, "bot": bot, "kind": kind, "data": json.loads(data), "importance": imp})
@@ -276,6 +291,9 @@ class Feed:
 
 
 TEXTS = {
+    "boss_victory": lambda d: f"победа группой над {d.get('mob')} ({d.get('map')}): {', '.join(d.get('team') or [])}",  # boss:
+    "boss_failed": lambda d: f"поход на {d.get('mob')} ({d.get('map')}) не удался",                                 # boss:
+    "director": lambda d: f"режиссёр: {d.get('label')} — {d.get('why')}",          # director: ORG-086 закулисье
     "pet_tamed": lambda d: f"приручил {d.get('name')}",                       # pets:
     "pet_hatched": lambda d: f"завёл питомца: {d.get('name')}",              # pets:
     "guild_founded": lambda d: f"основал гильдию {d.get('name')}",          # guild:
