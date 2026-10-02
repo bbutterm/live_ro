@@ -55,8 +55,14 @@ class SafetyPolicy:
             return {"action": kind}, None                     # вернуть к охоте / встать можно всегда
         if state.get("dead"):
             return None, "персонаж мёртв"
-        if kind in ("sit", "unstuck", "shop_open"):
+        if kind in ("sit", "shop_open"):
             return {"action": kind}, None
+        if kind == "unstuck":
+            try:
+                radius = max(5, min(30, int(action.get("radius", 10))))
+            except (TypeError, ValueError):
+                radius = 10
+            return {"action": "unstuck", "radius": radius}, None
         if kind == "give":
             to, item = action.get("to"), action.get("item")
             if to not in self.peers:

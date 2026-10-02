@@ -210,6 +210,8 @@ class Economy:
             return "ты не житель"
         if state.get("dead"):
             return "я мёртв"
+        if self.mind.plans.store.active():
+            return "иду на встречу"
         if self.giving or state.get("give"):
             return "уже передаю"
         if (state.get("vend") or {}).get("open"):

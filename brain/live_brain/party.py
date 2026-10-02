@@ -93,6 +93,12 @@ class Party:
         return True
 
     async def act(self, actions, reason, protocol=False):
+        may_move = getattr(self.mind, "may_move", None)
+        if may_move and any(a["action"] == "follow" for a in actions):
+            ok, blocker = may_move("party")
+            if not ok:
+                log.info("группа: не двигаю тело — им владеет %s", blocker)
+                return
         await self.mind.execute(actions, source="party", reason=reason, protocol=protocol)
 
     async def signal(self, to, kind, arg=""):

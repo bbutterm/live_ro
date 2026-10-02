@@ -20,6 +20,7 @@ from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
 from .party import TAG as PARTY_TAG, Party
 from .plans import TAG, PlanExecutor, PlanStore
+from .lifecycle import STALE_SEC, Lifecycle
 from .postmortem import Postmortem
 from .routine import Routine
 from .safety import SafetyPolicy
@@ -87,10 +88,13 @@ class Mind:
         self.backoff_until = 0.0
         self.sent = {}                 # id действия -> действие
         self.jev_inflight = 0          # вызовы JEV в полёте: учитываются в лимите сразу
-        self.fresh_state = False       # было ли состояние от тела после запуска мозга
+        self.fresh_state = False       # есть ли свежее (моложе STALE_SEC) состояние от тела
+        self.state_received = 0.0
+        self.epoch = 0                 # номер подключения тела: растёт на каждый hello (AUT-003)
         self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
         self.plans = PlanExecutor(self, PlanStore(memory.db))
         self.postmortem = Postmortem(self)
+        self.life = Lifecycle(self)
         self.routine = Routine(self, world) if world else None
         self.economy = Economy(self, world["economy"]) if world and world.get("economy") else None
         party_cfg = (world or {}).get("party", {})
@@ -103,6 +107,7 @@ class Mind:
         if kind == "hello":
             log.info("тело на связи: %s", msg.get("char") or "ещё не в игре")
             self.mem.add_event("bridge_connected", {"char": msg.get("char")})
+            self.reconnected()
         elif kind == "state":
             self.state = {k: v for k, v in msg.items() if k not in ("type", "ts")}
             self.state["goal"] = self.mem.get("goal")
@@ -112,6 +117,7 @@ class Mind:
             self.notice_peers(self.state.get("players") or [])
             self.mem.set("last_state", self.state)
             self.postmortem.on_state(self.state)
+            self.state_received = time.time()
             self.fresh_state = True
         elif kind == "event":
             await self.on_event(msg)
@@ -175,6 +181,7 @@ class Mind:
             self.mem.add_event(kind, {k: v for k, v in event.items() if k != "kind"})
         if self.routine and kind in ("attack", "kill"):
             self.routine.on_combat()
+        self.life.on_event(kind)
         if kind in ("attack", "survival", "danger"):
             self.postmortem.observe(kind, event)
         if kind == "kill":
@@ -323,6 +330,24 @@ class Mind:
             log.warning("пауза дольше %d с — продолжаю охоту по правилу", self.safety.max_pause)
             await self.execute([{"action": "resume"}], source="rule", reason="правило: пауза истекла")
 
+    def reconnected(self):
+        """AUT-003/106: новое подключение тела — старый снимок не текущий, незавершённое сверить."""
+        self.epoch += 1
+        self.fresh_state = False
+        self.state_received = 0.0
+        if self.economy and self.economy.giving:
+            self.economy.on_rejected({"action": "give"}, "тело переподключилось — сделка прервана")
+        if self.routine:
+            self.routine.last_sent = 0                # заново сверить настройку OpenKore с режимом
+        if self.party:
+            self.party.last.clear()
+            self.party.waiting_since = None
+        self.write_decision({"type": "reconnect", "epoch": self.epoch})
+
+    def may_move(self, owner):
+        """Арбитр (AUT-001/005): (можно ли двигать тело, кто мешает)."""
+        return self.life.may_move(owner)
+
     def resumed_recently(self):
         """resume отправлен, а состояние тела ещё старое (paused) — не взводить паузу заново."""
         return time.time() - self.ctx.last.get("resume_sent", 0) < 60
@@ -342,6 +367,8 @@ class Mind:
             await asyncio.sleep(1)
             if not connected() or not self.state:
                 continue
+            self.fresh_state = bool(self.state_received) and time.time() - self.state_received < STALE_SEC
+            self.life.tick()
             await self.safety_tick()
             await self.plans.tick()
             if self.routine:
@@ -454,6 +481,7 @@ class Mind:
             return
 
         messages = self.build_prompt(reason, context)
+        before = self.snapshot()
         loop = asyncio.get_running_loop()
         try:
             text, usage, latency = await loop.run_in_executor(None, llm.chat, self.s, messages)
@@ -465,6 +493,12 @@ class Mind:
             log.warning("ошибка LLM: %s — 60 с без LLM", e)
             return
         self.mem.log_llm_call(True, latency=latency, usage=usage)
+        stale = self.stale_since(before)
+        if stale:                                     # AUT-111: мир изменился, пока модель думала
+            self.write_decision({"type": "llm_stale", "reason": reason, "why": stale,
+                                 "dropped": decision.get("actions")})
+            log.info("ответ модели устарел (%s) — действия не исполняю", stale)
+            decision = dict(decision, actions=[], goal=None)
         await self.apply(decision, reason, latency, usage)
 
     def build_prompt(self, reason, context):
@@ -544,6 +578,23 @@ class Mind:
             {"role": "system", "content": system},
             {"role": "user", "content": fit_json(user, self.s.max_prompt_chars)},
         ]
+
+    def snapshot(self):
+        r = self.routine.st.get("mode") if self.routine and self.routine.st else None
+        plan = self.plans.store.active()
+        return {"epoch": self.epoch, "dead": bool(self.state.get("dead")), "map": self.state.get("map"),
+                "mode": r, "plan": plan["id"] if plan else None}
+
+    def stale_since(self, before):
+        now = self.snapshot()
+        if now["dead"]:
+            return "персонаж мёртв"
+        for key, why in (("epoch", "тело переподключилось"), ("dead", "смерть и возрождение"),
+                         ("map", "сменилась карта"), ("mode", "сменился режим распорядка"),
+                         ("plan", "сменился план")):
+            if now[key] != before[key]:
+                return why
+        return None
 
     async def apply(self, d, reason, latency, usage):
         if d.get("goal"):

@@ -83,4 +83,21 @@ is_deeply(\@ev, [], 'чужое лечение не про меня — нет �
 Plugins::call('packet_skilluse', {skillID => 5, sourceID => 'ME', targetID => 'M1', damage => 50});
 is_deeply(\@ev, [], 'атакующее умение — не поддержка');
 
+# ---- лестница застревания: радиус шага 5..30 ----
+package FakeField; sub new { bless {}, shift } sub isWalkable { 1 } sub baseName { 'prt_fild08' }
+package main;
+$Globals::field = FakeField->new;
+$Globals::char->{pos_to} = {x => 100, y => 100};
+my $far = 0;
+for (1 .. 50) {
+	my ($ok2, $c) = brainBridge::actionToCommand({action => 'unstuck', radius => 25});
+	my ($x, $y) = $c->[1] =~ /^move (\d+) (\d+)$/;
+	$far = 1 if abs($x - 100) > 10 || abs($y - 100) > 10;
+	die "вне радиуса" if abs($x - 100) > 25 || abs($y - 100) > 25;
+}
+ok($far, 'радиус 25 — шаги дальше 10 клеток бывают, дальше 25 нет');
+my ($ok3, $c3) = brainBridge::actionToCommand({action => 'unstuck', radius => 999});
+my ($x3) = $c3->[1] =~ /^move (\d+)/;
+ok(abs($x3 - 100) <= 30, 'радиус ограничен 30');
+
 done_testing();

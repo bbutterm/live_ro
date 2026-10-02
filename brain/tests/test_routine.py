@@ -81,6 +81,7 @@ class RoutineTest(unittest.TestCase):
             self.mind.state.update(map=town["map"], x=town["x"], y=town["y"])
         elif self.r.st.get("mode") == "hunt" and self.mind.state.get("lock_map") == "prt_fild08":
             self.mind.state.update(map="prt_fild08")
+            self.r.on_combat(self.clock.t)                 # на охоте фейковый бот дерётся, а не стоит
 
     def test_daily_budget_between_4_and_5_hours(self):
         self.run_for(2)
@@ -171,7 +172,7 @@ class RoutineTest(unittest.TestCase):
     def test_stuck_unstuck_once_and_not_while_fighting(self):
         self.run_for(2)
         self.run_for(301, step=5)                                     # стоит на месте, без боя
-        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [{"action": "unstuck"}])
+        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [{"action": "unstuck", "radius": 10}])
         self.mind.sent.clear()
         self.run_for(301, step=5, on_tick=lambda: self.r.on_combat(self.clock.t))   # дерётся на месте
         self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [])
@@ -243,7 +244,7 @@ class RoutineTest(unittest.TestCase):
         self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [])
         self.mind.state.update(activity="route")
         self.run_for(301, step=5)
-        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [{"action": "unstuck"}])
+        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [{"action": "unstuck", "radius": 10}])
 
 
     def test_escape_wing_goes_to_recover(self):
@@ -259,6 +260,23 @@ class RoutineTest(unittest.TestCase):
         self.mind.state.update(hp_pct=10, weight_pct=72, items={"501": 0})
         self.run_for(20 * 60, step=5, on_tick=self.walk_to_town)
         self.assertEqual(sum(1 for d in self.mind.decisions if d.get("event") == "recover_blocked"), 1)
+
+
+    def test_stuck_ladder_relocate_then_blocked(self):
+        self.run_for(2)
+        for _ in range(2):
+            self.run_for(301, step=5)
+        self.assertEqual([a.get("radius") for a in self.mind.sent if a["action"] == "unstuck"], [10, 25])
+        self.run_for(301, step=5)
+        self.assertEqual(self.r.st["mode"], "town", "третья попытка — уйти в город")
+        self.assertIn("prt_fild08", self.mem.get("map_bans"))
+        self.assertNotIn("blocked", self.r.st)
+        # снова на охоте и снова застрял — тупик
+        self.r.st.update(mode="hunt", rest_until=0)
+        self.mind.state.update(map="prt_fild07", lock_map="prt_fild07")
+        self.run_for(301, step=5)
+        self.assertIn("blocked", self.r.st)
+        self.assertIn("routine_blocked", [d.get("event") for d in self.mind.decisions])
 
 
 if __name__ == "__main__":

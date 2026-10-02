@@ -38,6 +38,8 @@ RESEND = 60
 MAX_TICK_GAP = 5          # не засчитывать охоту за время, когда мозг не работал
 STUCK_SEC = 300           # на охоте без движения и без боя дольше — «застрял»
 UNSTUCK_GAP = 120         # не чаще раза в 2 минуты
+LADDER_WINDOW = 1800      # лестница выхода из застревания (AUT-038/042): попытки за 30 мин
+STUCK_BAN = 1800          # после неудачной лестницы карта исключается на 30 мин
 DEATH_WINDOW = 1800       # 3 смерти за 30 минут — отдых и карта полегче
 DEATH_LIMIT = 3
 LOW_HP = 25               # на охоте ниже — и без зелий — уходить в город
@@ -223,9 +225,33 @@ class Routine:
                 and now - self.last_unstuck >= UNSTUCK_GAP):
             self.last_unstuck = now
             self.anchor = (pos[0], pos[1], pos[2], now)
-            self.note("routine_stuck", f"Застрял на {pos[0]} ({pos[1]},{pos[2]}) — {int(still / 60)} мин "
-                                       "без движения и боя, пробую выбраться.", 1)
-            await self.send({"action": "unstuck"}, "распорядок: застрял")
+            await self.stuck_ladder(now, pos, still)
+
+    async def stuck_ladder(self, now, pos, still):
+        """Лестница: шаг 10 клеток -> шаг 25 -> уйти в город и исключить карту -> BLOCKED + оповещение."""
+        tries = [t for t in self.st.get("stuck_tries", []) if now - t < LADDER_WINDOW]
+        step = len(tries)
+        self.st["stuck_tries"] = tries + [now]
+        where = f"{pos[0]} ({pos[1]},{pos[2]})"
+        if step < 2:
+            radius = 10 if step == 0 else 25
+            self.note("routine_stuck", f"Застрял на {where} — {int(still / 60)} мин без движения и боя, "
+                                       f"пробую выбраться (попытка {step + 1}, шаг до {radius} клеток).", 1)
+            await self.send({"action": "unstuck", "radius": radius}, f"распорядок: застрял, попытка {step + 1}")
+            return
+        bans = self.mind.mem.get("map_bans") or {}
+        bans[pos[0]] = now + STUCK_BAN
+        self.mind.mem.set("map_bans", bans)
+        if step == 2:
+            self.note("routine_stuck_relocate", f"Не выбрался на {where} за две попытки — ухожу в город, "
+                                                f"на {pos[0]} пока не хожу.", 2)
+        else:
+            self.st["blocked"] = f"застревает на {pos[0]} снова и снова"
+            self.note("routine_blocked", f"Застреваю на {where} в {step + 1}-й раз за полчаса — нужна помощь.", 3)
+            alert = getattr(self.mind, "alert", None)
+            if alert:
+                alert("stuck", f"{where}: {step + 1} застревания за 30 мин, лестница не помогла")
+        await self.to_town(now, rest_minutes=5)
 
     async def on_death(self, now=None):
         now = now or self.clock()
@@ -349,6 +375,7 @@ class Routine:
                 return
             self.waiting_hp_noted = False
             self.st["recover"] = False
+            self.st.pop("blocked", None)                 # новая сессия охоты — блокировка снята
             left = self.st["budget"] - self.st["hunted"]
             self.st.update(mode="hunt", mode_since=now, arrived=False,
                            session_end=self.st["hunted"] + min(left, self.minutes("session_minutes")))
@@ -385,6 +412,9 @@ class Routine:
         """Сверка настройки OpenKore с режимом; при расхождении — команда, не чаще RESEND с."""
         if now - self.last_sent < RESEND:
             return
+        may_move = getattr(self.mind, "may_move", None)
+        if may_move and not may_move("routine")[0]:
+            return                                   # AUT-005: телом сейчас владеет более важная задача
         if self.st["mode"] == "hunt" and (state.get("vend") or {}).get("open"):
             self.last_sent = now
             await self.send({"action": "shop_close"}, "распорядок: закрыть лавку перед охотой")

@@ -27,7 +27,7 @@
 #   meet_point {map,x,y}  -> conf lockMap/lockMap_x/lockMap_y/randX 2/randY 2 (только исполнитель плана)
 #   clear_point {}        -> conf lockMap_x/_y/_randX/_randY none (вернуться к охоте)
 #   hunt {map} / sit / stand -> распорядок: охота на карте без точки / сесть / встать
-#   unstuck {}            -> ai clear; move <случайная проходимая клетка в радиусе 10>
+#   unstuck {radius}      -> ai clear; move <случайная проходимая клетка в радиусе radius (5..30, по умолчанию 10)>
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
@@ -375,11 +375,14 @@ sub actionToCommand {
 		return (1, ["conf lockMap $map", 'conf lockMap_x none', 'conf lockMap_y none',
 		            'conf lockMap_randX none', 'conf lockMap_randY none', 'stand']);
 	} elsif ($kind eq 'unstuck') {
-		# Застрял: сбросить очередь AI и шагнуть в случайную проходимую клетку в радиусе 10.
+		# Застрял: сбросить очередь AI и шагнуть в случайную проходимую клетку в радиусе radius.
 		my $pos = $char && $char->{pos_to};
 		return (0, 'позиция неизвестна') unless $pos && $field;
-		for (1 .. 30) {
-			my ($x, $y) = ($pos->{x} + int(rand(21)) - 10, $pos->{y} + int(rand(21)) - 10);
+		my $r = ($a->{radius} // 10) =~ /^\d+$/ ? $a->{radius} : 10;
+		$r = 5 if $r < 5;
+		$r = 30 if $r > 30;
+		for (1 .. 40) {
+			my ($x, $y) = ($pos->{x} + int(rand(2 * $r + 1)) - $r, $pos->{y} + int(rand(2 * $r + 1)) - $r);
 			next if $x < 1 || $y < 1 || ($x == $pos->{x} && $y == $pos->{y});
 			return (1, ['ai clear', "move $x $y"]) if $field->isWalkable($x, $y);
 		}

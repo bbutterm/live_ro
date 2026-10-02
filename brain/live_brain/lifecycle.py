@@ -1,0 +1,112 @@
+"""Явные состояния жителя и арбитр движения тела (AUT-001, 002, 003, 005). Без LLM.
+
+Состояние вычисляется каждый тик из данных тела и модулей мозга (первое подходящее):
+    OFFLINE     — нет свежего состояния тела дольше STALE_SEC (или нет связи)
+    DEAD        — тело сообщает dead
+    ESCAPING    — за ESCAPE_SEC было событие survival/danger/escape
+    BLOCKED     — распорядок признал тупик (застревание после лестницы, восстановление невозможно)
+    RECOVERING  — после смерти/крыла/низкого HP: отдых до min_hp_to_hunt
+    SOCIAL      — активный план встречи или передача вещей жителю
+    SERVICING   — продажа, закупка, склад, разговор с NPC, сделка
+    FIGHTING    — бой (activity attack или атака за FIGHT_SEC)
+    TRAVELING   — идёт по маршруту или не на карте назначения
+    RESTING     — отдых в городе / сидит
+    HUNTING     — на карте охоты
+Переход пишется в decisions.jsonl (type status: from, to, why) и в kv "status".
+
+Арбитр (AUT-001, 005): двигать тело может один владелец; приоритет
+    survival (мёртв/спасается) > plan (встреча) > economy (передача) > party (поводок/помощь) > routine.
+may_move(владелец) — False, если сейчас активен владелец с большим приоритетом.
+"""
+import logging
+import time
+
+log = logging.getLogger("lifecycle")
+
+STALE_SEC = 60
+ESCAPE_SEC = 10
+FIGHT_SEC = 10
+SERVICE = ("storageAuto", "sellAuto", "buyAuto", "NPC", "deal", "items_take", "take")
+TRAVEL = ("route", "mapRoute", "move", "follow")
+PRIORITY = ("survival", "plan", "economy", "party", "routine")
+
+
+class Lifecycle:
+    def __init__(self, mind, clock=time.time):
+        self.mind = mind
+        self.clock = clock
+        self.current = mind.mem.get("status", {}).get("state")
+        self.last_alarm = 0.0       # survival/danger/escape
+        self.last_fight = 0.0
+
+    def on_event(self, kind):
+        now = self.clock()
+        if kind in ("survival", "danger", "escape"):
+            self.last_alarm = now
+        elif kind in ("attack", "kill"):
+            self.last_fight = now
+
+    def compute(self, now=None):
+        now = now or self.clock()
+        m, s = self.mind, self.mind.state
+        if not m.fresh_state:
+            return "OFFLINE", "нет свежего состояния тела"
+        if s.get("dead"):
+            return "DEAD", "тело сообщает смерть"
+        if now - self.last_alarm < ESCAPE_SEC:
+            return "ESCAPING", "survival: опасность"
+        r = m.routine
+        st = (r.st if r else None) or {}
+        if st.get("blocked"):
+            return "BLOCKED", st["blocked"]
+        if st.get("recover"):
+            return "RECOVERING", "восстановление после смерти или опасности"
+        if m.plans.store.active():
+            return "SOCIAL", "план встречи"
+        econ = getattr(m, "economy", None)
+        if (econ and econ.giving) or s.get("give"):
+            return "SOCIAL", "передача вещей жителю"
+        activity = s.get("activity") or ""
+        if activity in SERVICE:
+            return "SERVICING", activity
+        if activity == "attack" or now - self.last_fight < FIGHT_SEC:
+            return "FIGHTING", "бой"
+        if activity in TRAVEL or (s.get("lock_map") and s.get("map") != s.get("lock_map")):
+            return "TRAVELING", activity or f"к {s.get('lock_map')}"
+        if st.get("mode") == "town" or s.get("sitting"):
+            return "RESTING", "отдых"
+        return "HUNTING", s.get("map") or "?"
+
+    def tick(self, now=None):
+        now = now or self.clock()
+        new, why = self.compute(now)
+        if new != self.current:
+            old, self.current = self.current, new
+            self.mind.mem.set("status", {"state": new, "why": why, "since": now})
+            self.mind.write_decision({"type": "status", "from": old, "to": new, "why": why})
+            log.info("состояние: %s -> %s (%s)", old, new, why)
+        return new
+
+    # ---------- арбитр ----------
+
+    def active_owners(self, now=None):
+        now = now or self.clock()
+        m, s = self.mind, self.mind.state
+        owners = set()
+        if s.get("dead") or now - self.last_alarm < ESCAPE_SEC:
+            owners.add("survival")
+        if m.plans.store.active():
+            owners.add("plan")
+        econ = getattr(m, "economy", None)
+        if (econ and econ.giving) or s.get("give"):
+            owners.add("economy")
+        party = getattr(m, "party", None)
+        if party and (party.waiting_since is not None or party.help_until > now):
+            owners.add("party")
+        return owners
+
+    def may_move(self, owner, now=None):
+        owners = self.active_owners(now)
+        higher = PRIORITY[:PRIORITY.index(owner)]
+        blocker = next((o for o in higher if o in owners), None)
+        return blocker is None, blocker
