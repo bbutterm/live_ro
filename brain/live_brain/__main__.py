@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import llm
 from .bridge import Bridge
+from .budget import SharedBudget
 from .config import Settings, load_env, load_persona
 from .gate import RuleGate, make_fast_gate
 from .routine import load_world
@@ -118,8 +119,18 @@ def report(args, memory, state_dir):
              if (st.get("vend") or {}).get("can") else ""))
     if plan:
         print(f"   последний план: встреча с {plan[0]} — {plan[1]} {plan[2] or ''} {plan[3] or ''}".rstrip())
-    print("   вызовы моделей за сутки: " + (", ".join(f"{p} {n} (${c:.4f})" for p, n, c in calls) or "нет")
+    lat = dict(memory.db.execute("SELECT provider, AVG(latency) FROM llm_calls WHERE ts >= ? AND ok = 1 "
+                                 "GROUP BY provider", (day,)).fetchall())
+    print("   вызовы моделей за сутки: " + (", ".join(f"{p} {n} (${c:.4f}, в среднем {lat.get(p) or 0:.1f} с)"
+                                                    for p, n, c in calls) or "нет")
           + f"; последнее решение {last_decision}")
+    status = memory.get("status") or {}
+    if status:
+        print(f"   состояние: {status.get('state')} — {status.get('why')}")
+    party = memory.get("party") or {}
+    if party:
+        print(f"   группа: {'подтверждена сервером' if party.get('confirmed') else 'нет'}; "
+              f"лечений подтверждено за сутки {count('heal_confirmed')}")
     for m in memory.db.execute("SELECT text FROM memories ORDER BY id DESC LIMIT 3"):
         print(f"   помнит: {m[0]}")
     return 0
@@ -145,10 +156,12 @@ async def main_async(args, settings, persona, memory, state_dir):
     bridge = Bridge(socket_path, on_message)
     fast = make_fast_gate(settings)
     peers = peer_names(args.persona)
+    shared = SharedBudget(Path(args.lab_root) / "state" / "shared" / "budget.sqlite", args.bot)
     mind = Mind(settings, persona, memory, bridge.send_action, state_dir / "decisions.jsonl",
                 RuleGate(), fast=fast, peers=peers,
                 inbox_path=os.path.join(args.lab_root, "run", "brain", f"{args.bot}.inbox"),
-                world=load_world(args.world) if os.path.exists(args.world) else None)
+                world=load_world(args.world) if os.path.exists(args.world) else None,
+                shared_budget=shared, alerts_path=os.path.join(args.lab_root, "run", "alerts.log"))
     await bridge.start()
     memory.add_event("brain_started", {"model": settings.model, "llm": settings.llm_enabled})
     log.info("мозг %s запущен: gate %s, жители %s, модель %s, LLM %s, лимит %d/сутки, план раз в %d с; "

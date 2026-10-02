@@ -53,6 +53,7 @@ usage() {
   plan BOT show         последние планы BOT из памяти (только чтение)
   routine BOT rest|hunt досрочно отправить BOT отдыхать в город / на охоту (проверка распорядка)
   routine BOT show      распорядок BOT из памяти (только чтение)
+  alerts [N]            последние оповещения владельцу (тупик, восстановление невозможно, сторож сдался)
   gift BOT ITEM N       BOT сейчас просит у жителя рядом N предметов ITEM (ID, например 501, или z — зени);
                         для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
 Боты: LAB_BOTS в env-файле (по умолчанию "bot01").
@@ -694,6 +695,7 @@ start_brain() {
   fi
   mkdir -p "$LAB_ROOT/logs/$bot"
   ( umask 077; mkdir -p "$LAB_ROOT/run/brain" "$LAB_ROOT/state/$bot" )
+  rotate_log "$LAB_ROOT/logs/$bot/brain.log"
   start_proc "brain-$bot" "$pr/brain" "$LAB_ROOT/logs/$bot/brain.log" \
     python3 -m live_brain --env "$LAB_ENV" --bot "$bot" --lab-root "$LAB_ROOT"
   info "$bot: журнал решений $LAB_ROOT/state/$bot/decisions.jsonl"
@@ -721,6 +723,15 @@ hold() { local n; ( umask 077; mkdir -p "$LAB_ROOT/run/supervisor" ); for n in "
 release() { local n; for n in "$@"; do rm -f "$(hold_file "$n")"; done; }
 held() { [[ -f "$(hold_file "$1")" ]]; }
 
+# AUT-118: оповещение владельцу в run/alerts.log (один вид от процесса — не чаще раза в час).
+sup_alert() {
+  local name="$1" text="$2" mark="$LAB_ROOT/run/supervisor/$1.alerted" now; now=$(date +%s)
+  if [[ -f "$mark" ]] && (( now - $(<"$mark") < 3600 )); then return 0; fi
+  echo "$now" > "$mark"
+  python3 -c 'import json,sys,time; print(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "bot": sys.argv[1], "kind": "supervisor", "text": sys.argv[2]}, ensure_ascii=False))' \
+    "$name" "$text" >> "$LAB_ROOT/run/alerts.log"
+}
+
 sup_restart() { # sup_restart NAME CMD... — перезапуск с ограничением частоты
   local name="$1"; shift
   held "$name" && return 0                              # остановлен владельцем — не поднимать
@@ -731,6 +742,7 @@ sup_restart() { # sup_restart NAME CMD... — перезапуск с огран
   fi
   if (( recent >= SUP_MAX )); then
     sup_log "$name: упал $recent раз за $((SUP_WINDOW / 60)) мин — не перезапускаю до конца окна"
+    sup_alert "$name" "упал $recent раз за $((SUP_WINDOW / 60)) мин — сторож перестал перезапускать до конца окна"
     return
   fi
   echo "$now" >> "$f"
@@ -786,6 +798,9 @@ cmd_report() {
   done
   if [[ -f "$LAB_ROOT/logs/supervisor.log" ]]; then
     echo "== сторож (последние события)"; tail -n 5 "$LAB_ROOT/logs/supervisor.log"
+  fi
+  if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then
+    echo "== оповещения (нужно внимание владельца; все: scripts/lab alerts)"; tail -n 5 "$LAB_ROOT/run/alerts.log"
   fi
 }
 
@@ -974,6 +989,7 @@ main() {
     up) cmd_up ;;
     down) cmd_down ;;
     report) cmd_report ;;
+    alerts) load_env; if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then tail -n "${1:-30}" "$LAB_ROOT/run/alerts.log"; else info "оповещений нет"; fi ;;
     supervise) cmd_supervise ;;
     routine)
       case "${2:-}" in

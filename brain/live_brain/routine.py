@@ -271,6 +271,9 @@ class Routine:
         self.st["prefer_map"] = maps[0] if bad != maps[0] else (maps[1] if len(maps) > 1 else maps[0])
         self.note("routine_deaths", f"Погиб {deaths} раза за полчаса на {bad} — отдохну и пойду на "
                                     f"{self.st['prefer_map']}.", 3)
+        alert = getattr(self.mind, "alert", None)
+        if alert:
+            alert("deaths", f"{deaths} смерти за 30 мин на {bad}")
         await self.to_town(now, recover=True)
         self.save()
 

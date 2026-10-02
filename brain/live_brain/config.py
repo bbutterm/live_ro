@@ -80,6 +80,14 @@ class Settings:
     plan_auto_accept: int
     plan_travel_timeout: int
     plan_wait_timeout: int
+    global_daily_limit: int = 600
+    global_daily_usd_limit: float = 2.0
+    global_jev_daily_limit: int = 4000
+    disabled: frozenset = frozenset()
+
+    def feature(self, name):
+        """AUT-120: BRAIN_DISABLE=economy,party,... выключает модуль без потери памяти и без рестарта сервера."""
+        return name not in self.disabled
 
     @property
     def llm_enabled(self):
@@ -132,6 +140,10 @@ class Settings:
             plan_auto_accept=_int(env, "BRAIN_PLAN_AUTO_ACCEPT", 45),
             plan_travel_timeout=_int(env, "BRAIN_PLAN_TRAVEL_TIMEOUT", 300),
             plan_wait_timeout=_int(env, "BRAIN_PLAN_WAIT_TIMEOUT", 240),
+            global_daily_limit=_int(env, "BRAIN_GLOBAL_DAILY_LIMIT", 600),
+            global_daily_usd_limit=_float(env, "BRAIN_GLOBAL_DAILY_USD_LIMIT", 2.0),
+            global_jev_daily_limit=_int(env, "JEV_GLOBAL_DAILY_LIMIT", 4000),
+            disabled=frozenset(x.strip().lower() for x in env.get("BRAIN_DISABLE", "").split(",") if x.strip()),
         )
 
 

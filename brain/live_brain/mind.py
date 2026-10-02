@@ -62,8 +62,12 @@ def fit_json(data, limit):
 
 class Mind:
     def __init__(self, settings, persona, memory, bridge_send, decisions_path, gate,
-                 fast=None, peers=(), inbox_path=None, world=None):
+                 fast=None, peers=(), inbox_path=None, world=None, shared_budget=None, alerts_path=None):
         self.s = settings
+        self.shared = shared_budget        # общий бюджет всех жителей (budget.py) или None
+        self.alerts_path = alerts_path     # оповещения владельцу (AUT-118)
+        self.decision_writes = 0
+        self.last_prune = time.time()
         self.persona = persona
         self.mem = memory
         self.bridge_send = bridge_send
@@ -95,10 +99,12 @@ class Mind:
         self.plans = PlanExecutor(self, PlanStore(memory.db))
         self.postmortem = Postmortem(self)
         self.life = Lifecycle(self)
-        self.routine = Routine(self, world) if world else None
-        self.economy = Economy(self, world["economy"]) if world and world.get("economy") else None
+        feat = settings.feature
+        self.routine = Routine(self, world) if world and feat("routine") else None
+        self.economy = Economy(self, world["economy"]) if world and world.get("economy") and feat("economy") else None
         party_cfg = (world or {}).get("party", {})
-        self.party = Party(self, party_cfg) if world and party_cfg.get("enabled", True) and self.ctx.peers else None
+        self.party = (Party(self, party_cfg) if world and party_cfg.get("enabled", True) and self.ctx.peers
+                      and feat("party") else None)
 
     # ---------- входящие сообщения плагина ----------
 
@@ -250,9 +256,18 @@ class Mind:
     async def _fast_decide(self, event, result, provider):
         relation = self.mem.relation(str(event.get("from"))) if event.get("from") else None
         messages = self.fast.messages(event, self.state, self.ctx, self.persona, relation)
+        call_id = None
+        if self.shared:
+            call_id, why = self.shared.reserve("jev", self.s.global_jev_daily_limit)
+            if why:
+                self.write_decision({"type": "jev_skip", "why": why})
+                self.trigger(result.llm, event, result.llm_kind)
+                return
         loop = asyncio.get_running_loop()
         try:
             d, usage, latency = await loop.run_in_executor(None, self.fast.call, messages)
+            if self.shared:
+                self.shared.settle(call_id, (usage or {}).get("cost"))
         except llm.LLMError as e:
             self.mem.log_llm_call(False, error=str(e), provider="jev")
             self.write_decision({"type": "jev_error", "error": str(e), "reason": result.note})
@@ -264,7 +279,7 @@ class Mind:
         log.info("JEV (%.1f с): важность %s, LLM %s, быстро %s — %s", latency, d["importance"],
                  "да" if d["call_llm"] else "нет", d["quick"], d["why"])
         if d["importance"] >= 4 and event.get("text"):
-            self.mem.remember(f"{event.get('from')}: {str(event['text'])[:150]}", d["importance"])
+            self.mem.remember(f"{event.get('from')}: {str(event['text'])[:150]}", d["importance"], kind="note")
         if d["quick"]:
             q = dict(d["quick"])
             if q["action"] == "whisper" and not q.get("to"):
@@ -368,6 +383,9 @@ class Mind:
             if not connected() or not self.state:
                 continue
             self.fresh_state = bool(self.state_received) and time.time() - self.state_received < STALE_SEC
+            if time.time() - self.last_prune >= 6 * 3600:           # AUT-100: память не растёт без предела
+                self.last_prune = time.time()
+                self.mem.prune()
             self.life.tick()
             await self.safety_tick()
             await self.plans.tick()
@@ -475,6 +493,10 @@ class Mind:
             why_not = f"исчерпан денежный лимит ${self.s.daily_usd_limit:.2f}/сутки (по usage.cost)"
         elif now < self.backoff_until:
             why_not = "пауза после ошибки API"
+        call_id = None
+        if not why_not and self.shared:
+            call_id, why_not = self.shared.reserve("openrouter", self.s.global_daily_limit,
+                                                   self.s.global_daily_usd_limit)
         if why_not:
             self.write_decision({"type": "fallback", "reason": reason, "why": why_not})
             log.info("без LLM (%s): %s", why_not, reason)
@@ -485,6 +507,8 @@ class Mind:
         loop = asyncio.get_running_loop()
         try:
             text, usage, latency = await loop.run_in_executor(None, llm.chat, self.s, messages)
+            if self.shared:
+                self.shared.settle(call_id, (usage or {}).get("cost"))
             decision = llm.parse_json_object(text)
         except llm.LLMError as e:
             self.mem.log_llm_call(False, error=str(e))
@@ -579,6 +603,23 @@ class Mind:
             {"role": "user", "content": fit_json(user, self.s.max_prompt_chars)},
         ]
 
+    def llm_relation_delta(self, name, delta):
+        """AUT-102: разговор меняет отношение не больше чем на 2 в сутки на человека; поступки
+        (помощь, лечение, передача) меняют его правилами отдельно — накрутить дружбу болтовнёй нельзя."""
+        try:
+            delta = max(-2, min(2, int(delta)))
+        except (TypeError, ValueError):
+            return 0
+        day = time.strftime("%Y-%m-%d")
+        used = self.mem.get("llm_relation_used", {})
+        if used.get("day") != day:
+            used = {"day": day}
+        left = 2 - used.get(name, 0)                       # сколько ещё можно сдвинуть за сутки (в любую сторону)
+        delta = max(-left, min(left, delta))
+        used[name] = used.get(name, 0) + abs(delta)
+        self.mem.set("llm_relation_used", used)
+        return delta
+
     def snapshot(self):
         r = self.routine.st.get("mode") if self.routine and self.routine.st else None
         plan = self.plans.store.active()
@@ -604,10 +645,11 @@ class Mind:
             self.mem.set("mood", str(d["mood"])[:40])
         for m in d.get("remember") or []:
             if isinstance(m, dict) and m.get("text"):
-                self.mem.remember(m["text"], m.get("importance", 2))
+                self.mem.remember(m["text"], m.get("importance", 2), kind="thought")   # мысль, не факт
         for r in d.get("relations") or []:
             if isinstance(r, dict) and r.get("name"):
-                self.mem.update_relation(str(r["name"])[:23], r.get("delta", 0), r.get("note"))
+                self.mem.update_relation(str(r["name"])[:23], self.llm_relation_delta(str(r["name"])[:23],
+                                                                                    r.get("delta", 0)), r.get("note"))
         actions = d.get("actions") or []
         if not isinstance(actions, list):
             actions = []
@@ -628,6 +670,38 @@ class Mind:
             "thought": str(d.get("thought", ""))[:300], "goal": d.get("goal"), "mood": d.get("mood")})
 
     def write_decision(self, record):
-        record = dict(record, ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        record = dict(record, ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), epoch=self.epoch)
         with open(self.decisions_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        self.decision_writes += 1
+        if self.decision_writes % 200 == 0:
+            rotate(self.decisions_path)
+
+    def alert(self, kind, text, every=3600):
+        """AUT-118: оповещение владельцу — только то, что требует вмешательства; один вид не чаще раза в час."""
+        now = time.time()
+        key = f"alert:{kind}"
+        if now - self.ctx.last.get(key, 0) < every:
+            return False
+        self.ctx.last[key] = now
+        rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)), "bot": self.persona["name"],
+               "kind": kind, "text": str(text)[:300]}
+        self.write_decision(dict(rec, type="alert"))
+        log.warning("ОПОВЕЩЕНИЕ %s: %s", kind, text)
+        if self.alerts_path:
+            with open(self.alerts_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        return True
+
+
+def rotate(path, limit=20 * 1024 * 1024, keep=3):
+    """AUT-113: журнал не растёт бесконечно — при превышении limit сдвигается в .1 ... .keep."""
+    try:
+        if os.path.getsize(path) < limit:
+            return
+    except OSError:
+        return
+    for i in range(keep - 1, 0, -1):
+        if os.path.exists(f"{path}.{i}"):
+            os.replace(f"{path}.{i}", f"{path}.{i + 1}")
+    os.replace(path, f"{path}.1")
