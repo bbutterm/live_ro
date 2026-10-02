@@ -13,6 +13,8 @@ import time
 
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
            "party_create", "party_invite", "party_accept", "party_leave", "follow", "unfollow")
+# Только исполнитель плана (plans.py) — модель их не получает.
+PLAN_ACTIONS = ("meet_point", "clear_point")
 PEER_ONLY = ("party_invite", "follow")
 WINDOW = 600
 
@@ -34,21 +36,44 @@ class SafetyPolicy:
     def _recent(self, items, now):
         return [x for x in items if now - (x[0] if isinstance(x, tuple) else x) < WINDOW]
 
-    def check(self, action, state, now=None):
-        """Возвращает (нормализованное действие, None) или (None, причина отказа)."""
+    def check(self, action, state, now=None, protocol=False):
+        """Возвращает (нормализованное действие, None) или (None, причина отказа).
+
+        protocol=True — служебные действия исполнителя плана: шёпот протокола встречи не
+        упирается в чат-лимиты, точка встречи разрешена. Модель protocol не получает.
+        """
         now = now or time.time()
-        if not isinstance(action, dict) or action.get("action") not in ACTIONS:
+        allowed = ACTIONS + (PLAN_ACTIONS if protocol else ())
+        if not isinstance(action, dict) or action.get("action") not in allowed:
             return None, "неизвестное действие"
         kind = action["action"]
+        if kind == "clear_point":
+            return {"action": "clear_point"}, None          # вернуть к охоте можно всегда
         if state.get("dead"):
             return None, "персонаж мёртв"
+        if kind == "meet_point":
+            if action.get("map") not in self.hunt_maps:
+                return None, "точка встречи не на разрешённой карте"
+            try:
+                x, y = int(action.get("x")), int(action.get("y"))
+            except (TypeError, ValueError):
+                return None, "неверные координаты"
+            if not (0 < x < 1000 and 0 < y < 1000):
+                return None, "координаты вне карты"
+            return {"action": "meet_point", "map": action["map"], "x": x, "y": y}, None
         hp = state.get("hp_pct")
         if kind in ("say", "whisper"):
             text = " ".join(str(action.get("text", "")).split())[:100]
             if not text:
                 return None, "пустой текст"
             action = dict(action, text=text)
-        if kind == "say":
+        if protocol and kind in ("say", "whisper"):
+            to = str(action.get("to", "")).strip()
+            if kind == "whisper" and (not to or len(to) > 23 or '"' in to):
+                return None, "неверный адресат"
+            if kind == "whisper":
+                action = dict(action, to=to)
+        elif kind == "say":
             self.said = self._recent(self.said, now)
             if len(self.said) >= self.say_limit:
                 return None, f"лимит общего чата {self.say_limit}/10 мин"

@@ -3,6 +3,7 @@
 Обычно вызывается через `scripts/lab start brain` / `scripts/lab brain-check`.
 """
 import argparse
+import json
 import asyncio
 import logging
 import os
@@ -30,6 +31,7 @@ def parse_args(argv):
     p.add_argument("--persona", help="JSON характера (по умолчанию brain/personas/<bot>.json)")
     p.add_argument("--check", action="store_true", help="один тестовый запрос к основной модели и выход")
     p.add_argument("--check-jev", action="store_true", help="один тестовый запрос к JEV и выход")
+    p.add_argument("--plans", action="store_true", help="показать последние планы из памяти и выйти")
     a = p.parse_args(argv)
     a.persona = a.persona or str(here / "personas" / f"{a.bot}.json")
     return a
@@ -100,7 +102,8 @@ async def main_async(args, settings, persona, memory, state_dir):
     fast = make_fast_gate(settings)
     peers = peer_names(args.persona)
     mind = Mind(settings, persona, memory, bridge.send_action, state_dir / "decisions.jsonl",
-                RuleGate(), fast=fast, peers=peers)
+                RuleGate(), fast=fast, peers=peers,
+                inbox_path=os.path.join(args.lab_root, "run", "brain", f"{args.bot}.inbox"))
     await bridge.start()
     memory.add_event("brain_started", {"model": settings.model, "llm": settings.llm_enabled})
     log.info("мозг %s запущен: gate %s, жители %s, модель %s, LLM %s, лимит %d/сутки, план раз в %d с; "
@@ -138,6 +141,13 @@ def main(argv=None):
             return check(settings, persona, memory)
         if args.check_jev:
             return check_jev(settings, persona, memory)
+        if args.plans:
+            from .plans import PlanStore
+            for plan in PlanStore(memory.db).recent(10):
+                plan["created"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(plan["created"]))
+                plan["updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(plan["updated"]))
+                print(json.dumps(plan, ensure_ascii=False))
+            return 0
         asyncio.run(main_async(args, settings, persona, memory, state_dir))
         return 0
     finally:

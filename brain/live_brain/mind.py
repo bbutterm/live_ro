@@ -12,15 +12,18 @@
 import asyncio
 import json
 import logging
+import os
 import time
 
 from . import llm
 from .gate import GateContext, JevGate
+from .plans import TAG, PlanExecutor, PlanStore
 from .safety import SafetyPolicy
 
 log = logging.getLogger("mind")
 
 MAX_ACTIONS = 2
+PLAN_LLM_ACTIONS = ("propose_meeting", "accept_meeting", "decline_meeting", "cancel_plan")
 
 
 SEX_RU = {"Male": "мужской", "Female": "женский"}
@@ -53,7 +56,7 @@ def fit_json(data, limit):
 
 class Mind:
     def __init__(self, settings, persona, memory, bridge_send, decisions_path, gate,
-                 fast=None, peers=()):
+                 fast=None, peers=(), inbox_path=None):
         self.s = settings
         self.persona = persona
         self.mem = memory
@@ -76,6 +79,9 @@ class Mind:
         self.backoff_until = 0.0
         self.sent = {}                 # id действия -> действие
         self.jev_inflight = 0          # вызовы JEV в полёте: учитываются в лимите сразу
+        self.fresh_state = False       # было ли состояние от тела после запуска мозга
+        self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
+        self.plans = PlanExecutor(self, PlanStore(memory.db))
 
     # ---------- входящие сообщения плагина ----------
 
@@ -91,6 +97,7 @@ class Mind:
                 self.ctx.name = self.state["name"]
             self.remember_players(self.state.get("players") or [])
             self.mem.set("last_state", self.state)
+            self.fresh_state = True
         elif kind == "event":
             await self.on_event(msg)
         elif kind == "ack":
@@ -138,6 +145,10 @@ class Mind:
             self.mem.touch_relation(str(event["from"]))
             if kind == "chat_private" and event["from"] in self.ctx.peers:
                 self.ctx.last[f"talk:{event['from']}"] = time.time()
+        if (kind == "chat_private" and event.get("from") in self.ctx.peers
+                and TAG.search(str(event.get("text", "")))):
+            await self.plans.on_tag(str(event["from"]), str(event["text"]))   # протокол встречи, не болтовня
+            return
         result = self.gate.evaluate(event, self.state, self.ctx)
         self.mem.set("gate_last", self.ctx.last)
         for text, importance in result.memory:
@@ -203,7 +214,7 @@ class Mind:
 
     # ---------- исполнение (всегда через safety) ----------
 
-    async def execute(self, actions, source, reason, extra=None):
+    async def execute(self, actions, source, reason, extra=None, protocol=False):
         allowed, rejected = [], []
         for a in actions:
             if len(allowed) >= MAX_ACTIONS:
@@ -211,7 +222,7 @@ class Mind:
                 continue
             if a.get("action") == "set_hunt_map" and a.get("map") == self.state.get("lock_map"):
                 continue
-            clean, why = self.safety.check(a, self.state)
+            clean, why = self.safety.check(a, self.state, protocol=protocol)
             if why:
                 rejected.append({"action": a, "why": why})
             else:
@@ -229,7 +240,8 @@ class Mind:
                 self.ctx.last[f"talk:{a['to']}"] = time.time()
         self.write_decision({"type": "decision", "source": source, "reason": reason,
                              "actions": sent, "rejected": rejected, **(extra or {})})
-        label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM"}.get(source, source)
+        label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM", "plan": "план",
+                 "operator": "оператор"}.get(source, source)
         log.info("%s (%s): действия %s%s", label, reason,
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
@@ -254,6 +266,8 @@ class Mind:
             if not connected() or not self.state:
                 continue
             await self.safety_tick()
+            await self.plans.tick()
+            await self.read_inbox()
             now = time.time()
             self.peer_smalltalk(now)
             if (self.pending is None and self.s.llm_enabled
@@ -267,6 +281,42 @@ class Mind:
             self.pending = None
             async with self.lock:
                 await self.decide(reason, context, kind)
+
+    async def read_inbox(self):
+        """Команды оператора из run/brain/<bot>.inbox (JSON-строки): meet <житель>, cancel."""
+        if not self.inbox_path:
+            return
+        try:
+            with open(self.inbox_path, encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            os.unlink(self.inbox_path)
+        except FileNotFoundError:
+            return
+        for line in lines:
+            try:
+                cmd = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if cmd.get("cmd") == "meet":
+                why = await self.plans.propose(str(cmd.get("with", "")), "operator")
+            elif cmd.get("cmd") == "cancel":
+                why = await self.plans.cancel("operator")
+            else:
+                why = "неизвестная команда"
+            self.write_decision({"type": "operator", "cmd": cmd, "result": why or "ok"})
+            log.info("команда оператора %s: %s", cmd, why or "ok")
+
+    async def plan_action(self, a, source):
+        kind = a.get("action")
+        if kind == "propose_meeting":
+            return await self.plans.propose(str(a.get("to", "")), source)
+        if kind == "accept_meeting":
+            return await self.plans.accept(str(a.get("id", "")), source)
+        if kind == "decline_meeting":
+            return await self.plans.decline(str(a.get("id", "")), source, str(a.get("why", "не сейчас"))[:40])
+        if kind == "cancel_plan":
+            return await self.plans.cancel(source, str(a.get("why", "передумал"))[:40])
+        return "неизвестное действие плана"
 
     def peer_smalltalk(self, now):
         """Повод заговорить с другим жителем, если давно не общались (только при LLM)."""
@@ -347,6 +397,11 @@ class Mind:
             '{"action": "follow", "to": "житель"} — идти за жителем (охотиться рядом с ним); '
             '{"action": "unfollow"} — перестать идти за ним. '
             "Группа и следование — только с другими жителями; лечение в группе тело делает само. "
+            "Встречи — настоящие: тело дойдёт до точки и проверит, что житель рядом. "
+            '{"action": "propose_meeting", "to": "житель"} — предложить встречу у твоей текущей позиции; '
+            '{"action": "accept_meeting", "id": "<id плана>"} / {"action": "decline_meeting", "id": "<id>", "why": "..."} '
+            '— ответить на предложение; {"action": "cancel_plan"} — отменить свой план. '
+            "Не обещай встречу словами без этих действий; что встреча состоялась, узнаешь из поля «план». "
             "Реплики короткие (до 100 символов), на языке собеседника, в твоём стиле. "
             "Не отвечай каждому сообщению, не спамь в общий чат без повода. "
             "Другие жители — такие же обитатели мира, с ними можно разговаривать в личке, "
@@ -365,6 +420,7 @@ class Mind:
             "последние_события": self.mem.recent_events(20),
             "воспоминания": self.mem.top_memories(12),
             "рядом_игроки": self.state.get("players", []),
+            "план": self.plans.summary(),
             "другие_жители": {p: {"кто": self.who(p), "отношение": self.mem.relation(p)}
                               for p in sorted(self.ctx.peers)},
         }
@@ -392,6 +448,14 @@ class Mind:
         if not isinstance(actions, list):
             actions = []
         actions = [a if isinstance(a, dict) else {"action": "invalid", "raw": a} for a in actions]
+        game_actions = []
+        for a in actions:
+            if a.get("action") in PLAN_LLM_ACTIONS:
+                why = await self.plan_action(a, "llm")
+                self.write_decision({"type": "plan_decision", "source": "llm", "action": a, "result": why or "ok"})
+            else:
+                game_actions.append(a)
+        actions = game_actions
         await self.execute(actions, source="llm", reason=reason, extra={
             "model": self.s.model, "latency": round(latency, 2), "usage": usage,
             "thought": str(d.get("thought", ""))[:300], "goal": d.get("goal"), "mood": d.get("mood")})

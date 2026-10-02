@@ -44,6 +44,9 @@ usage() {
   brain-check [BOT]     один платный запрос к основной модели (только при BRAIN_LLM=openrouter)
   brain-check-jev [BOT] один запрос к JEV (только при BRAIN_GATE=jev)
   db-add-account BOT    создать игровой аккаунт BOT_USER/PASS (нужен бэкап за последние 24 ч)
+  plan BOT meet ИМЯ     поручить мозгу BOT предложить встречу жителю ИМЯ (исполняет план мозг)
+  plan BOT cancel       отменить активный план BOT
+  plan BOT show         последние планы BOT из памяти (только чтение)
 Боты: LAB_BOTS в env-файле (по умолчанию "bot01").
   db-backup             дамп основной и лог-БД в backups/
 Только режим release:
@@ -683,6 +686,27 @@ cmd_brain_check() { # cmd_brain_check --check|--check-jev [BOT]
   ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot "$bot" --lab-root "$LAB_ROOT" "$flag" )
 }
 
+# Команда оператора мозгу: строка JSON в run/brain/<bot>.inbox (мозг читает раз в секунду).
+cmd_plan() {
+  local bot="${1:-}" sub="${2:-}" who="${3:-}"
+  [[ "$bot" =~ ^bot[0-9]+$ ]] || die "scripts/lab plan botNN meet ИМЯ|cancel|show"
+  load_env
+  local pr; pr=$(profile_root)
+  case "$sub" in
+    show)
+      ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot "$bot" --lab-root "$LAB_ROOT" --plans ) ;;
+    meet|cancel)
+      [[ -n "$(running_pid "brain-$bot")" ]] || die "мозг $bot не запущен: scripts/lab start brain $bot"
+      if [[ "$sub" == meet ]]; then
+        [[ "$who" =~ ^[^\"[:cntrl:]]{1,23}$ ]] || die "укажите имя жителя: scripts/lab plan $bot meet Arkady"
+      fi
+      ( umask 077; python3 -c 'import json,sys; print(json.dumps({"cmd": sys.argv[1], "with": sys.argv[2]}, ensure_ascii=False))' \
+          "$sub" "$who" >> "$LAB_ROOT/run/brain/$bot.inbox" )
+      info "команда передана мозгу $bot: $sub $who (результат: scripts/lab plan $bot show, decisions.jsonl)" ;;
+    *) die "scripts/lab plan botNN meet ИМЯ|cancel|show" ;;
+  esac
+}
+
 # Новый игровой аккаунт для бота. Пишет в БД игры, поэтому требует бэкап не старше 24 ч.
 cmd_db_add_account() {
   local bot="${1:-}"; [[ "$bot" =~ ^bot[0-9]+$ ]] || die "укажите бота: scripts/lab db-add-account bot02"
@@ -829,6 +853,7 @@ main() {
     brain-check) cmd_brain_check --check "${1:-}" ;;
     brain-check-jev) cmd_brain_check --check-jev "${1:-}" ;;
     db-add-account) cmd_db_add_account "$@" ;;
+    plan) cmd_plan "$@" ;;
     build|deploy|activate|rollback)
       if [[ -f "$LAB_ENV" ]]; then load_env; fi
       require_release_mode "$sub"

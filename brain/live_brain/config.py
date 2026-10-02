@@ -76,6 +76,10 @@ class Settings:
     peer_smalltalk_every: int
     daily_usd_limit: float
     max_prompt_chars: int
+    plan_answer_timeout: int
+    plan_auto_accept: int
+    plan_travel_timeout: int
+    plan_wait_timeout: int
 
     @property
     def llm_enabled(self):
@@ -124,6 +128,10 @@ class Settings:
             peer_smalltalk_every=_int(env, "BRAIN_PEER_SMALLTALK", 1800),
             daily_usd_limit=_float(env, "BRAIN_DAILY_USD_LIMIT", 1.0),
             max_prompt_chars=_int(env, "BRAIN_MAX_PROMPT_CHARS", 8000),
+            plan_answer_timeout=_int(env, "BRAIN_PLAN_ANSWER_TIMEOUT", 120),
+            plan_auto_accept=_int(env, "BRAIN_PLAN_AUTO_ACCEPT", 45),
+            plan_travel_timeout=_int(env, "BRAIN_PLAN_TRAVEL_TIMEOUT", 300),
+            plan_wait_timeout=_int(env, "BRAIN_PLAN_WAIT_TIMEOUT", 240),
         )
 
 

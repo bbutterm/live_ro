@@ -21,6 +21,8 @@
 #   party_accept {}       -> party join 1               (мозг решает по событию party_invite)
 #   party_leave {}        -> party leave
 #   follow {to} / unfollow {} -> follow <to> / follow stop
+#   meet_point {map,x,y}  -> conf lockMap/lockMap_x/lockMap_y/randX 2/randY 2 (только исполнитель плана)
+#   clear_point {}        -> conf lockMap_x/_y/_randX/_randY none (вернуться к охоте)
 package brainBridge;
 
 use strict;
@@ -132,6 +134,8 @@ sub sendState {
 		map       => ($field ? $field->baseName : undef),
 		x         => $pos->{x}, y => $pos->{y},
 		lock_map  => $config{lockMap},
+		lock_x    => (defined $config{lockMap_x} && $config{lockMap_x} ne '' ? $config{lockMap_x} + 0 : undef),
+		lock_y    => (defined $config{lockMap_y} && $config{lockMap_y} ne '' ? $config{lockMap_y} + 0 : undef),
 		ai        => (AI::state() == AI::AUTO() ? 'auto' : 'manual'),
 		%{identity($char)},
 		party     => ($char->{party} && $char->{party}{joined} ? "$char->{party}{name}" : undef),
@@ -155,7 +159,8 @@ sub nearbyPlayers {
 	return [] unless $playersList;
 	my @players = grep { defined $_->{name} && length $_->{name} } @{$playersList->getItems() || []};
 	@players = @players[0 .. 9] if @players > 10;
-	return [map { {name => $_->{name}, %{identity($_)}} } @players];
+	return [map { {name => $_->{name}, %{identity($_)},
+	               x => ($_->{pos_to} ? $_->{pos_to}{x} : undef), y => ($_->{pos_to} ? $_->{pos_to}{y} : undef)} } @players];
 }
 
 # ---------- подтверждение доставки сервером ----------
@@ -267,6 +272,18 @@ sub actionToCommand {
 		return (1, "follow $to");
 	} elsif ($kind eq 'unfollow') {
 		return (1, 'follow stop');
+	} elsif ($kind eq 'meet_point') {
+		# Точка встречи: OpenKore сам идёт к lockMap_x/y, держится в радиусе 2 клеток и отбивается.
+		my ($map, $x, $y) = ($a->{map} || '', $a->{x}, $a->{y});
+		return (0, 'неверная карта') unless $map =~ /^[a-z0-9_]{3,16}$/;
+		return (0, 'неверные координаты') unless defined $x && defined $y && $x =~ /^\d{1,3}$/ && $y =~ /^\d{1,3}$/;
+		if ($field && $field->baseName eq $map && !$field->isWalkable($x, $y)) {
+			return (0, "клетка $x,$y на $map непроходима");
+		}
+		return (1, ["conf lockMap $map", "conf lockMap_x $x", "conf lockMap_y $y",
+		            'conf lockMap_randX 2', 'conf lockMap_randY 2']);
+	} elsif ($kind eq 'clear_point') {
+		return (1, ['conf lockMap_x none', 'conf lockMap_y none', 'conf lockMap_randX none', 'conf lockMap_randY none']);
 	} elsif ($kind eq 'pause') {
 		return (1, 'ai manual');
 	} elsif ($kind eq 'resume') {
@@ -286,8 +303,10 @@ sub handleLine {
 	my ($ok, $res) = actionToCommand($msg);
 	if ($ok && !inGame()) { ($ok, $res) = (0, 'бот не в игре'); }
 	if ($ok) {
+		my @cmds = ref $res ? @$res : ($res);
+		$res = join('; ', @cmds);
 		message "[brainBridge] решение мозга -> $res\n", 'system';
-		Commands::run($res);
+		Commands::run($_) for @cmds;
 		my $kind = $msg->{action} || '';
 		if ($kind eq 'whisper') {
 			push @pendingPM, {id => $msg->{id}, action => $kind, to => cleanText($msg->{to}), ts => time};
