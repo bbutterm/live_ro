@@ -98,7 +98,11 @@ class Routine:
 
     def minutes(self, key):
         lo, hi = self.cfg[key]
-        return self.rng.uniform(lo, hi) * 60
+        factor = 1.0
+        needs = getattr(self.mind, "needs", None)
+        if needs and key == "session_minutes":
+            factor = needs.session_factor()               # ORG-019: усердие и терпение удлиняют сессию
+        return self.rng.uniform(lo, hi) * 60 * factor
 
     def hunt_map(self):
         """Карта охоты: выбор модели/группы, но не исключённая после смертей (AUT-010)."""
@@ -511,7 +515,8 @@ class Routine:
             return
         bans = self.bans()
         self.grow(maps)
-        choice, why = maps.choose(self.mind.persona["hunt_maps"], bans, level=self.mind.state.get("lv"))
+        choice, why = maps.choose(self.mind.persona["hunt_maps"], bans, level=self.mind.state.get("lv"),
+                                  needs=getattr(self.mind, "needs", None), rng=self.rng)
         if choice != self.st.get("prefer_map"):
             self.note("routine_map_choice", f"На охоту пойду на {choice}: {why}.", 1)
         self.st["prefer_map"] = choice

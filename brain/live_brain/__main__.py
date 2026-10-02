@@ -127,6 +127,10 @@ def report(args, memory, state_dir):
     status = memory.get("status") or {}
     if status:
         print(f"   состояние: {status.get('state')} — {status.get('why')}")
+    needs = memory.get("needs") or {}
+    if needs:
+        top = sorted(needs.items(), key=lambda kv: -kv[1])[:3]
+        print("   мотивы сейчас: " + ", ".join(f"{k} {v:.2f}" for k, v in top))
     party = memory.get("party") or {}
     if party:
         print(f"   группа: {'подтверждена сервером' if party.get('confirmed') else 'нет'}; "

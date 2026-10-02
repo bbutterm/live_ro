@@ -11,12 +11,13 @@
 с автором и временем). Слух не становится фактом: told не исключает карту и не меняет выбор (AUT-076).
 """
 import logging
+import random
 import time
 
 log = logging.getLogger("maps")
 
 EXPLORE_MIN = 20
-DEATH_PENALTY = 50           # смерть «стоит» 50 побед: две смерти за сессию перевешивают богатую карту
+DEATH_PENALTY = 100          # смерть в час «стоит» 100 очков (10% опыта): две смерти за сессию перевешивают богатую карту
 MAX_GAP = 5
 
 
@@ -74,27 +75,35 @@ class MapStats:
         self.save(st)
 
     def score(self, hmap):
+        """ORG-010/D13: очки в час = опыт %·10 + зени/1000 + победы·0.05 − смерти·DEATH_PENALTY."""
         m = self.stats().get(hmap)
         if not m or m["minutes"] < EXPLORE_MIN - 1e-6:           # допуск на сложение дробных минут
             return None
         hours = m["minutes"] / 60
-        return (m["kills"] - DEATH_PENALTY * m["deaths"]) / hours
+        return (10 * m["exp"] + m["zeny"] / 1000 + 0.05 * m["kills"] - DEATH_PENALTY * m["deaths"]) / hours
 
-    def choose(self, maps, bans, level=None):
+    def choose(self, maps, bans, level=None, needs=None, rng=None):
+        """Карта на сессию. needs (needs.py) — характер: допустимый риск по смелости и шум по причудливости."""
         allowed = [m for m in maps if m not in bans] or list(maps)
         if level:
-            allowed = self.safe_for_level(allowed, level)
-        for m in allowed:
-            if self.score(m) is None:
-                return m, "мало опыта на карте — попробую"
-        best = max(allowed, key=lambda m: self.score(m))
-        return best, f"лучшая по опыту: {self.score(best):.0f} очков/час"
+            allowed = self.safe_for_level(allowed, level, needs.risk_tolerance() if needs else None)
+        rng = rng or random
+        unexplored = [m for m in allowed if self.score(m) is None]
+        if unexplored:                                          # любопытный пробует новое не по порядку списка
+            pick = rng.choice(unexplored) if needs and rng.random() < needs.t["curiosity"] else unexplored[0]
+            return pick, "мало опыта на карте — попробую"
+        noise = needs.noise() if needs else 0.0
+        scored = {m: self.score(m) * (1 + noise * rng.uniform(-1, 1)) for m in allowed}
+        best = max(allowed, key=lambda m: scored[m])
+        return best, f"лучшая по опыту и добыче: {self.score(best):.0f} очков/час"
 
-    def safe_for_level(self, maps, level):
-        """Атлас мира (atlas.py): не идти туда, где монстры заведомо сильнее уровня. Нет атласа — без фильтра."""
+    def safe_for_level(self, maps, level, max_risk=None):
+        """Атлас мира (atlas.py): не идти туда, где монстры заведомо сильнее уровня. Нет атласа — без фильтра.
+        max_risk — допустимый риск по характеру (смелость); по умолчанию — порог атласа."""
         try:
             from . import atlas
-            ok, rejected = atlas.default().filter_hunt_maps(maps, level)
+            a = atlas.default()
+            ok, rejected = a.filter_hunt_maps(maps, level, **({"max_risk": max_risk} if max_risk else {}))
         except (OSError, ValueError, KeyError):
             return maps
         for name, why in rejected.items():

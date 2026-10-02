@@ -21,6 +21,7 @@ from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
 from .lifecycle import STALE_SEC, Lifecycle
 from .maps import MapStats
+from .needs import Needs
 from .party import TAG as PARTY_TAG, Party
 from .plans import TAG, PlanExecutor, PlanStore
 from .postmortem import Postmortem
@@ -112,6 +113,7 @@ class Mind:
         self.postmortem = Postmortem(self)
         self.life = Lifecycle(self)
         self.maps = MapStats(self)
+        self.needs = Needs(self)
         feat = settings.feature
         self.routine = Routine(self, world) if world and feat("routine") else None
         self.economy = Economy(self, world["economy"]) if world and world.get("economy") and feat("economy") else None
@@ -463,6 +465,9 @@ class Mind:
             if not connected() or not self.state:
                 continue
             self.fresh_state = bool(self.state_received) and time.time() - self.state_received < STALE_SEC
+            if self.fresh_state and time.time() - self.ctx.last.get("needs_saved", 0) >= 60:
+                self.ctx.last["needs_saved"] = time.time()            # ORG-015: мотивы видны в отчёте
+                self.mem.set("needs", self.needs.weighted())
             if time.time() - self.last_prune >= 6 * 3600:           # AUT-100: память не растёт без предела
                 self.last_prune = time.time()
                 self.mem.prune()
@@ -667,6 +672,7 @@ class Mind:
             "распорядок": self.routine.summary() if self.routine else None,
             "глобальные_цели": self.routine.goals() if self.routine else None,
             "хозяйство": self.economy.summary() if self.economy else None,
+            "мотивы": dict(self.needs.top(4)),
             "опасные_монстры": self.postmortem.risky_monsters(),
             "опыт_по_картам": self.maps.summary(),
             "закрытые_карты_до": {m: time.strftime("%H:%M", time.localtime(t))
