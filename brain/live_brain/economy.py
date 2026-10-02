@@ -326,6 +326,8 @@ class Economy:
             return "не знаю своих запасов"
         if self.have(item) - amount < int(rule.get("keep", 0)):
             return "самому мало"
+        if item == "z" and self.have(item) - amount < int(rule.get("keep", 0)) + self.reserve():   # dreams: копилка
+            return "коплю на мечту"                                                                # dreams: ORG-073
         return None
 
     async def on_ask(self, sender, rid, item, amount):
@@ -401,6 +403,11 @@ class Economy:
 
     def trades_today(self, now):
         return sum(self.mind.mem.count_events(k, now - 86400) for k in ("trade_sold", "trade_bought"))
+
+    def reserve(self):                                       # dreams: копилка мечты (savings.py, ORG-073)
+        """Зени, отложенные на мечту: не тратить на необязательное (подарок зени, перепродажа)."""
+        sv = getattr(self.mind, "savings", None)
+        return sv.reserve(self.state) if sv else 0
 
     def busy_trade(self):
         return bool(self.offer or self.buying)
@@ -578,6 +585,8 @@ class Economy:
                 return None
             return f"дороговато: дам не больше {limit}z"
         if self.prices.resale_ok(item, amount, price, self.overcharge(state)):
+            if zeny - price < self.market["keep_zeny"] + self.reserve():                  # dreams: перепродажа —
+                return "коплю на мечту"                                                    # dreams: необязательное
             return None
         return "мне не нужно, и перепродать невыгодно"
 

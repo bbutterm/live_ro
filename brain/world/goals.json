@@ -94,6 +94,13 @@
     "region_hops": 2,
     "save": {"job2": 30000, "explorer": 10000, "pet": 5000, "cards": 0, "guild": 0}
   },
+  "savings": {
+    "_comment": "dreams: ORG-073 копилка мечты (live_brain/savings.py, docs/LIFE.md): зени на мечту не тратятся на необязательное (подарок зени, перепродажа). bank=true — излишек сверх 2×keep_zeny в банк rAthena (feature.banking), снятие при бедности; по умолчанию выключено — в игре не проверено.",
+    "enabled": true,
+    "bank": false,
+    "bank_gap_minutes": 10,
+    "min_deposit": 5000
+  },
   "episode": {
     "_comment": "Серия недели для владельца (live_brain/episode.py, ORG-091, scripts/lab episode): только чтение памяти и шины. llm=true — окраска одним вызовом в неделю (нужен BRAIN_LLM и общий бюджет); по умолчанию выкл.",
     "enabled": true,

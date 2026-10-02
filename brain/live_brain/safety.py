@@ -16,6 +16,8 @@
   ≤ 36 символов/байт без '#', не чаще CHAT_ROOM_GAP; закрыть — всегда (society:).
 - гильдия (guild_create/guild_invite/guild_say/guild_expect) — только от исполнителей правил (guild.py):
   имя по правилам rAthena, приглашение — только жителю (guild:).
+- банк (bank_check/bank_deposit/bank_withdraw) — только от правил (savings.py): сумма 1..MAX_BANK_OP, вклад
+  не больше зени в кармане, не больше BANK_PER_DAY в сутки (dreams:).
 """
 import re
 import time
@@ -32,6 +34,9 @@ PLAN_ACTIONS += ("chat_room",)   # society: чат-комната-вывеска
 PLAN_ACTIONS += ("guild_create", "guild_invite", "guild_say", "guild_expect")   # guild: гильдия (guild.py, ORG-052)
 GUILD_NAME = re.compile(r"^[A-Za-z0-9 ]{1,23}$")   # guild: rAthena NAME_LENGTH 24, char_name_letters upstream
 PLAN_ACTIONS += ("explore",)     # explore: экспедиция на карту атласа (explore.py, ORG-054)
+PLAN_ACTIONS += ("bank_check", "bank_deposit", "bank_withdraw")   # dreams: банк rAthena (savings.py, ORG-073)
+MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
+BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
 MAX_PRICE = 100_000_000          # market: цена лота между жителями
@@ -160,6 +165,8 @@ class SafetyPolicy:
             return self.check_guild(kind, action, state)                                             # guild:
         if kind == "explore":                                                                         # explore:
             return self.check_explore(action, state)                                                 # explore:
+        if kind in ("bank_check", "bank_deposit", "bank_withdraw"):                                  # dreams:
+            return self.check_bank(kind, action, state, now)                                         # dreams:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":
@@ -272,6 +279,23 @@ class SafetyPolicy:
             if not all(isinstance(v, int) and not isinstance(v, bool) and 0 < v < 1000 for v in (x, y)):
                 return None, "неверные координаты"
             clean.update(x=x, y=y)
+        return clean, None
+
+    def check_bank(self, kind, action, state, now):                                                # dreams:
+        """dreams: банк (ORG-073) — только от правил (savings.py): сумма 1..MAX_BANK_OP, вклад ≤ зени в кармане,
+        не больше BANK_PER_DAY операций в сутки; мёртвому — отказ выше."""
+        self.banked = [t for t in getattr(self, "banked", []) if now - t < 86400]
+        if len(self.banked) >= BANK_PER_DAY:
+            return None, f"лимит банка {BANK_PER_DAY} операций в сутки"
+        clean = {"action": kind}
+        if kind != "bank_check":
+            z = action.get("zeny")
+            if isinstance(z, bool) or not isinstance(z, int) or not 0 < z <= MAX_BANK_OP:
+                return None, f"сумма банка 1..{MAX_BANK_OP}"
+            if kind == "bank_deposit" and state.get("zeny") is not None and int(state["zeny"]) < z:
+                return None, "в кармане меньше"
+            clean["zeny"] = z
+        self.banked.append(now)
         return clean, None
 
     def check_pet(self, kind, action):  # pets: ID — целые из pets.json, списки короткие; мёртвому — отказ выше

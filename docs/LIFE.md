@@ -40,3 +40,50 @@
 
 **Настройки** (`goals.json → dream`): `enabled`, `stale_days`, `region_hops`, `save` — цель копилки по виду мечты.
 Выключатель: `BRAIN_DISABLE=dream`. Тест: `brain/tests/test_dream.py`.
+
+## 2. Копилка мечты и банк (ORG-073, `brain/live_brain/savings.py`)
+
+Модуль реестра: `mind.savings` (создаётся только при мечте — `REQUIRES dream`), тик 147, поле промпта «копилка»
+(135), события моста `bank_result`/`bank_balance` принадлежат модулю (в gate/LLM не идут). Состояние — kv `savings`.
+
+**Копилка.** Цель — `dream.save_target()`: `goals.json → dream.save` по виду мечты (job2 30 000 — снаряжение новой
+профессии, explorer 10 000 — крылья и телепорт Kafra, pet 5 000 — приручение и корм, cards/guild — 0), у `rich` —
+вся сумма мечты. Отложено = min(зени в кармане, цель − банк). Прогресс = min(цель, карман + банк) / цель; вехи
+25/50/75/100 % → событие `savings_progress` (летопись), 100 % — воспоминание важности 4. Вехи, пройденные к моменту
+появления цели, — молча.
+
+**Согласование с `economy.py` (блоки `# dreams:`).** Порог «необязательного» сдвигается на отложенное:
+- подарок зени жителю по просьбе `[need:..:z:..]` (лично и почтой): отдаю, только если останется `keep + отложено`,
+  иначе отказ «коплю на мечту»;
+- покупка у жителя **на перепродажу** NPC: только если останется `keep_zeny + отложено`;
+- покупки из списка нужд (`wishlist`: нехватка зелий `share`, `market.wish`, предметы карьеры и питомца) —
+  по-прежнему с порогом `keep_zeny` (зелья важнее мечты).
+Автозакупка OpenKore (`buyAuto`, плагин economy) копилку не видит — она тратит на расходники, это нужное.
+
+**Банк rAthena** (`goals.json → savings.bank`, **по умолчанию `false`**: в игре не проверено).
+Проверено по upstream: `feature.banking: on` (`conf/battle/feature.conf:34`); пакеты `0x9a7`/`0x9a9`/`0x9ab`
+разбираются при `PACKETVER >= 20130717` (`src/map/clif_packetdb.hpp:1648`), у нас 20180620; `banking_state_enforce:
+no` — окно банка (`0x9b6`) открывать не нужно (`pc_bank_deposit`, `src/map/pc.cpp`); вклад — на аккаунт
+(`#BANKVAULT`), у каждого жителя свой аккаунт. OpenKore: `bank open|deposit|withdraw` (`src/Commands.pm:104`) —
+`deposit` требует `$bankingopened` (ставится только ответом сервера на `bank open`), поэтому мост шлёт пакеты
+напрямую `$messageSender->sendBankingCheck/Deposit/Withdraw` (`src/Network/Send.pm:3348`); пакеты
+`09A7/09A9/09AB` — `Send/kRO/Sakexe_0.pm:255`, в цепочке `kRO_RagexeRE_2018_06_20e` не переопределены; ответы
+`09A6/09A8/09AA` (`Receive/kRO/Sakexe_0.pm:585`) мост ловит хуками `packet/banking_*`.
+
+Правила вклада и снятия: город отдыха, режим отдыха распорядка, тело свободно (нет сделки, передачи, письма,
+лавки, квеста, сна, плана встречи), не чаще `bank_gap_minutes` (10), одна операция в пути (ответ ждём 60 с).
+В начале сессии — `bank_check`; карман меньше `keep_zeny` и в банке есть — снять до `pocket` (2 × `keep_zeny`);
+карман больше `pocket` — вклад излишка, но не больше «цель − банк» и не меньше `min_deposit` (5 000). Факт — только
+`bank_result ok` (пакет сервера): события `bank_deposit`/`bank_withdraw`, воспоминание; три отказа подряд — банк
+выключен на сутки.
+
+**Мост** (`brainBridge.pl`, блоки `# dreams:`): `bank_check {}`, `bank_deposit {zeny}`, `bank_withdraw {zeny}` —
+сумма 1..10 000 000, вклад ≤ зени в кармане, жив, нет сделки и лавки, нет передачи плагина economy. События
+`bank_balance {vault}`, `bank_result {op, ok, reason, vault, zeny}` (vault — int64 из двух слов пакета).
+**safety:** только от правил (`PLAN_ACTIONS`), те же пределы, не больше 12 операций в сутки.
+
+**Как включить банк для проверки в игре.** `goals.json → savings.bank: true`, перезапуск мозга; в `console.log`
+OpenKore искать `Bank: Deposit Success`, в памяти — события `bank_result`/`bank_deposit`. Вклад виден в игре
+NPC/окном банка и в БД (`acc_reg_num`, ключ `#BANKVAULT`) — только чтением.
+
+Тесты: `brain/tests/test_savings.py`, `bots/tests/bank.t`.

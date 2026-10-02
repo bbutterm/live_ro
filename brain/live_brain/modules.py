@@ -34,7 +34,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
   события: 10 crew · 20 social · 30 party · 40 guild · 50 pets · 60 economy
   тик:     (ядро: life, safety, plans) · 10 routine · 20 economy · 30 party · 40 career · 50 activities ·
            60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 120 rumors · 130 society ·
-           140 strangers · 145 dream · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
+           140 strangers · 145 dream · 147 savings · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
            210 episodes
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
 """
@@ -64,6 +64,7 @@ from .strangers import Strangers
 from .tradition import Tradition
 from .collection import Collection
 from .dream import Dream             # dreams: ORG-081 жизненный путь
+from .savings import Savings         # dreams: ORG-073 копилка мечты и банк
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -95,6 +96,7 @@ MODULES = (
     Tradition,
     Collection,        # после social: регистрирует тему card
     Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
+    Savings,           # dreams: REQUIRES dream — цель копилки от мечты
 )
 
 
