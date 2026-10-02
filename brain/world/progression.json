@@ -1,0 +1,799 @@
+{
+  "_comment": [
+    "Прогрессия жителей (AUT-049..054, 079..084): смена профессии и цели роста. Редактируется в Git руками.",
+    "Каждый шаг сценария выведен из скрипта rAthena (ссылка file:line, пути от upstream/rathena) — ветки не угаданы (AUT-078/081).",
+    "Статус всего файла: «выведено из скрипта, проверено тестом разбора»; в игре сценарии НЕ проходились.",
+    "select — номер пункта меню в скрипте (с 1); в OpenKore это r<select-1>. text — текст пункта: тело отвечает по тексту.",
+    "Справочник магазинов и добычи — brain/world/jobs/catalog.json (scripts/gen_progression.py)."
+  ],
+  "rathena": {
+    "loaded": "npc/re/scripts_main.conf:31 import: npc/scripts_jobs.conf -> npc/scripts_jobs.conf:14 (knight.txt), :15 (priest.txt); в npc/re/jobs своих версий Knight/Priest нет",
+    "pilgrimage_npcs": "npc/re/scripts_jobs.conf:7 npc/re/jobs/1-1/acolyte.txt (вызывает F_FatherRub/F_MotherMart/F_FatherYos из priest.txt)",
+    "reset_npc": "npc/re/jobs/repair.txt:66 Valerie (prt_in 38,104) — сброс переменных квеста при поломке; боту не нужен"
+  },
+  "classes": {
+    "Swordsman": {
+      "rathena": "Swordman",
+      "next": "knight",
+      "max_job": 50,
+      "weapon_types": ["1hSword"],
+      "use_shield": true,
+      "why": "профиль bots/combat/classes.json учит SM_SWORD 10 (мастерство одноручного меча)"
+    },
+    "Knight": {
+      "rathena": "Knight",
+      "next": null,
+      "max_job": 50,
+      "weapon_types": ["2hSword", "1hSword"],
+      "use_shield": false,
+      "why": "профиль Knight учит KN_TWOHANDQUICKEN (двуручный меч)"
+    },
+    "Acolyte": {
+      "rathena": "Acolyte",
+      "next": "priest",
+      "max_job": 50,
+      "weapon_types": ["Mace"],
+      "use_shield": true,
+      "why": "булавы — основное оружие Acolyte в магазине собора (prt_church)"
+    },
+    "Priest": {
+      "rathena": "Priest",
+      "next": null,
+      "max_job": 50,
+      "weapon_types": ["Mace"],
+      "use_shield": true,
+      "why": "как Acolyte"
+    }
+  },
+  "equipment": {
+    "_comment": "Порядок слотов для next_equipment: сначала оружие, потом броня. Правило live_ro, не из rAthena.",
+    "slots": ["weapon", "Armor", "Left_Hand", "Shoes", "Garment", "Head_Top"],
+    "max_share_of_zeny": 0.7
+  },
+  "paths": {
+    "knight": {
+      "title": "Swordman -> Knight",
+      "from": "Swordsman",
+      "to": "Knight",
+      "script": "npc/jobs/2-1/knight.txt",
+      "variable": "KNIGHT_Q",
+      "requirements": {
+        "job_lv": 40,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/jobs/2-1/knight.txt:125 JobLevel < 40 -> отказ",
+          "npc/jobs/2-1/knight.txt:132 SkillPoint -> отказ",
+          "npc/jobs/2-1/knight.txt:305 SkillPoint -> отказ перед сменой"
+        ],
+        "note": "Базовый уровень и зени скрипт не проверяет. Предметы — набор Sir Andrew (rand), при job 50 не нужны."
+      },
+      "skip": {
+        "job_lv": 50,
+        "skips": ["andrew_deliver"],
+        "ref": "npc/jobs/2-1/knight.txt:547-566 JobLevel == 50 -> KNIGHT_Q 4, без предметов"
+      },
+      "item_sets": {
+        "chosen_by": "rand(1,2) — npc/jobs/2-1/knight.txt:576-584; узнать набор: квест 9001 (A) или 9002 (B)",
+        "after_quests": [9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012],
+        "A": {
+          "quest": 9001,
+          "knight_q": 2,
+          "ref": "npc/jobs/2-1/knight.txt:578",
+          "items": {"1040": 5, "7006": 5, "931": 5, "1057": 5, "903": 5, "1028": 5}
+        },
+        "B": {
+          "quest": 9002,
+          "knight_q": 3,
+          "ref": "npc/jobs/2-1/knight.txt:580",
+          "items": {"1042": 5, "950": 5, "1032": 5, "966": 5, "7031": 5, "946": 5}
+        }
+      },
+      "reward": {"items": {"656": 7}, "ref": "npc/jobs/2-1/knight.txt:438 getitem 656,7 (Awakening Potion)"},
+      "npcs": {
+        "captain": {"name": "Chivalry Captain#knt", "map": "prt_in", "x": 88, "y": 101, "ref": "npc/jobs/2-1/knight.txt:45"},
+        "andrew": {"name": "Sir Andrew#knt", "map": "prt_in", "x": 75, "y": 107, "ref": "npc/jobs/2-1/knight.txt:469"},
+        "siracuse": {"name": "Sir Siracuse#knt", "map": "prt_in", "x": 71, "y": 91, "ref": "npc/jobs/2-1/knight.txt:673"},
+        "windsor": {"name": "Sir Windsor#knt", "map": "prt_in", "x": 79, "y": 94, "ref": "npc/jobs/2-1/knight.txt:1058"},
+        "arena": {
+          "name": "Windsor Benedict#knt",
+          "map": "job_knt",
+          "x": 89,
+          "y": 106,
+          "chat": "Waiting Room",
+          "ref": "npc/jobs/2-1/knight.txt:1226-1233"
+        },
+        "amy": {"name": "Lady Amy#knt", "map": "prt_in", "x": 69, "y": 107, "ref": "npc/jobs/2-1/knight.txt:1449"},
+        "edmond": {"name": "Sir Edmond#knt", "map": "prt_in", "x": 70, "y": 99, "ref": "npc/jobs/2-1/knight.txt:1791"},
+        "gray": {"name": "Sir Gray#knt", "map": "prt_in", "x": 87, "y": 92, "ref": "npc/jobs/2-1/knight.txt:2006"}
+      },
+      "stages": [
+        {
+          "id": "apply",
+          "title": "Заявка капитану Herman",
+          "npc": "captain",
+          "when": {"quests_none": [9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012]},
+          "needs": {"job_lv": 40, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 86, "y": 99},
+            {
+              "do": "talk",
+              "npc": "captain",
+              "x": 88,
+              "y": 101,
+              "answers": [
+                {"select": 1, "text": "I want to change my job to a Knight.", "ref": "npc/jobs/2-1/knight.txt:102"},
+                {"select": 1, "text": "Yes, I would like to apply.", "ref": "npc/jobs/2-1/knight.txt:123"}
+              ]
+            }
+          ],
+          "success": {"quest": 9000, "ref": "npc/jobs/2-1/knight.txt:138-139 KNIGHT_Q 1, setquest 9000"},
+          "fail": "job < 40 или есть очки навыков — close без изменений (knight.txt:125-137)"
+        },
+        {
+          "id": "andrew_items",
+          "title": "Sir Andrew: узнать набор предметов",
+          "npc": "andrew",
+          "when": {"quests_any": [9000]},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 77, "y": 109},
+            {
+              "do": "talk",
+              "npc": "andrew",
+              "x": 75,
+              "y": 107,
+              "answers": [{"select": 1, "text": "I would like to take the test.", "ref": "npc/jobs/2-1/knight.txt:527"}]
+            }
+          ],
+          "success": {
+            "quests_any": [9001, 9002, 9003],
+            "ref": "npc/jobs/2-1/knight.txt:547-584: job 50 -> 9003 (без предметов); иначе rand -> 9001 (набор A) или 9002 (набор B)"
+          },
+          "random": "набор предметов выбирает rand(1,2) — заранее не известен; бот читает квест 9001/9002"
+        },
+        {
+          "id": "andrew_deliver",
+          "title": "Sir Andrew: сдать 6 × 5 предметов",
+          "npc": "andrew",
+          "when": {"quests_any": [9001, 9002]},
+          "needs": {"items_from_set": true},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 77, "y": 109},
+            {"do": "talk", "npc": "andrew", "x": 75, "y": 107, "answers": []}
+          ],
+          "success": {
+            "quest": 9003,
+            "ref": "npc/jobs/2-1/knight.txt:619-631 countitem всех шести >= 5 -> delitem, KNIGHT_Q 4, квест 9003"
+          },
+          "fail": "не хватает предметов — close без изменений (knight.txt:642-644)"
+        },
+        {
+          "id": "siracuse_quiz",
+          "title": "Sir Siracuse: вопросы о мечниках",
+          "npc": "siracuse",
+          "when": {"quests_any": [9003]},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 71, "y": 93},
+            {
+              "do": "talk",
+              "npc": "siracuse",
+              "x": 71,
+              "y": 91,
+              "answers": [
+                {
+                  "select": 1,
+                  "text": "Sir Andrew sent me to take your test.",
+                  "ref": "npc/jobs/2-1/knight.txt:809",
+                  "alt": "KNIGHT_Q 5"
+                },
+                {
+                  "select": 1,
+                  "text": "I wish to take the test again.",
+                  "ref": "npc/jobs/2-1/knight.txt:841",
+                  "alt": "KNIGHT_Q 5 (повтор)"
+                },
+                {"select": 4, "text": "Flamberge", "ref": "npc/jobs/2-1/knight.txt:866"},
+                {"select": 3, "text": "Provoke Lv.10", "ref": "npc/jobs/2-1/knight.txt:880"},
+                {"select": 3, "text": "Spear Boomerang Lv.3", "ref": "npc/jobs/2-1/knight.txt:890"},
+                {"select": 1, "text": "Zephyrus", "ref": "npc/jobs/2-1/knight.txt:903"},
+                {"select": 2, "text": "80 % of normal attack speed", "ref": "npc/jobs/2-1/knight.txt:918"},
+                {
+                  "select": 1,
+                  "text": "Tell the Novice of a reasonable hunting area.",
+                  "ref": "npc/jobs/2-1/knight.txt:935"
+                },
+                {
+                  "select": 1,
+                  "text": "Protect everyone in the front of the battle.",
+                  "ref": "npc/jobs/2-1/knight.txt:958"
+                },
+                {"select": 1, "text": "Honor", "ref": "npc/jobs/2-1/knight.txt:982"}
+              ]
+            }
+          ],
+          "success": {"quest": 9004, "ref": "npc/jobs/2-1/knight.txt:999-1000 KNIGHT_Q 6, квест 9004"},
+          "fail": "любой другой ответ — KNIGHT_Q 5 и close; повтор у Siracuse с «I wish to take the test again.» (knight.txt:837-845)"
+        },
+        {
+          "id": "windsor_arena",
+          "title": "Sir Windsor: три волны монстров по 3 минуты",
+          "npc": "windsor",
+          "when": {"quests_any": [9004, 9005, 9006]},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 77, "y": 96},
+            {
+              "do": "talk",
+              "npc": "windsor",
+              "x": 79,
+              "y": 94,
+              "answers": [
+                {
+                  "select": 1,
+                  "text": "Sir Siracuse sent me to you.",
+                  "ref": "npc/jobs/2-1/knight.txt:1101",
+                  "alt": "KNIGHT_Q 6 (меню в .@mes$, select на :1109)"
+                },
+                {
+                  "select": 1,
+                  "text": "I want to try again!",
+                  "ref": "npc/jobs/2-1/knight.txt:1106",
+                  "alt": "KNIGHT_Q 7 (повтор)"
+                }
+              ],
+              "expect_map": "job_knt"
+            },
+            {"do": "move", "map": "job_knt", "x": 89, "y": 104},
+            {
+              "do": "chat_join",
+              "title": "Waiting Room",
+              "expect_map_xy": [43, 146],
+              "ref": "npc/jobs/2-1/knight.txt:1232 waitingroom \"Waiting Room\",20,...,1 -> OnStartArena -> warpwaitingpc job_knt 43,146 (:1240)"
+            },
+            {
+              "do": "fight",
+              "area": "job_knt",
+              "kills": 8,
+              "time_limit": 180,
+              "next_xy": [43, 52],
+              "mobs": {"1160": 2, "1095": 2, "1105": 2, "1100": 2},
+              "ref": "npc/jobs/2-1/knight.txt:1265-1273 (renewal: checkre(0) -> 8 монстров), 1292 warp 43,52, 1299-1309 таймер 180 с"
+            },
+            {
+              "do": "fight",
+              "area": "job_knt",
+              "kills": 6,
+              "time_limit": 180,
+              "next_xy": [143, 152],
+              "mobs": {"1119": 2, "1111": 4},
+              "ref": "npc/jobs/2-1/knight.txt:1333-1339, 1357 warp 143,152, 1364-1374 таймер"
+            },
+            {
+              "do": "fight",
+              "area": "job_knt",
+              "kills": 5,
+              "time_limit": 180,
+              "next_map": "prt_in",
+              "mobs": {"1122": 1, "1123": 1, "1124": 1, "1125": 1, "1126": 1},
+              "ref": "npc/jobs/2-1/knight.txt:1394-1399, 1421-1425 KNIGHT_Q 8, квест 9007, warp prt_in 80,100"
+            }
+          ],
+          "success": {"quest": 9007, "ref": "npc/jobs/2-1/knight.txt:1421-1424"},
+          "fail": "не успел за 180 с — areawarp в prt_in 80,100, KNIGHT_Q остаётся 7; повтор у Windsor «I want to try again!» (knight.txt:1303-1304, 1368-1369, 1436-1437)",
+          "risk": "монстры renewal: Piere 32, Andre 33, Deniro 31, Argos 47, Frilldora 57, Drainliar 47, Goblin 44-56 (db/re/mob_db.yml); на job_knt нет nopenalty — смерть стоит опыта; телепорт запрещён (npc/mapflag/noteleport.txt:144)"
+        },
+        {
+          "id": "amy_etiquette",
+          "title": "Lady Amy: этикет (10 вопросов, нужно 90+ очков)",
+          "npc": "amy",
+          "when": {"quests_any": [9007, 9008]},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 71, "y": 105},
+            {
+              "do": "talk",
+              "npc": "amy",
+              "x": 69,
+              "y": 107,
+              "answers": [
+                {
+                  "select": 1,
+                  "text": "Sir Windsor told me to--",
+                  "ref": "npc/jobs/2-1/knight.txt:1549",
+                  "alt": "KNIGHT_Q 8"
+                },
+                {
+                  "select": 1,
+                  "text": "I would like to take the test to change jobs.",
+                  "ref": "npc/jobs/2-1/knight.txt:1588",
+                  "alt": "KNIGHT_Q 9 (повтор)"
+                },
+                {
+                  "select": 3,
+                  "text": "Look for people seeking Knights.",
+                  "ref": "npc/jobs/2-1/knight.txt:1619",
+                  "alt": "+10 если не 1"
+                },
+                {
+                  "select": 1,
+                  "text": "Check out the area and plan ahead.",
+                  "ref": "npc/jobs/2-1/knight.txt:1633",
+                  "alt": "+10 если не 2"
+                },
+                {
+                  "select": 1,
+                  "text": "Keep the monsters from reaching the party.",
+                  "ref": "npc/jobs/2-1/knight.txt:1638",
+                  "alt": "+10 если не 3"
+                },
+                {
+                  "select": 1,
+                  "text": "Ask your party's Priest to help.",
+                  "ref": "npc/jobs/2-1/knight.txt:1646",
+                  "alt": "+10 если 1"
+                },
+                {
+                  "select": 3,
+                  "text": "Decide with party who gets it.",
+                  "ref": "npc/jobs/2-1/knight.txt:1657",
+                  "alt": "+10 если не 2"
+                },
+                {
+                  "select": 3,
+                  "text": "Inquire if there is anyone that is interested.",
+                  "ref": "npc/jobs/2-1/knight.txt:1666",
+                  "alt": "+10 если не 1"
+                },
+                {
+                  "select": 3,
+                  "text": "Give suggestions for a place to hunt.",
+                  "ref": "npc/jobs/2-1/knight.txt:1674",
+                  "alt": "+10 если 3"
+                },
+                {
+                  "select": 2,
+                  "text": "Lead the person to the exit.",
+                  "ref": "npc/jobs/2-1/knight.txt:1684",
+                  "alt": "+10 если не 3"
+                },
+                {
+                  "select": 1,
+                  "text": "Would it be possible to get a heal please?",
+                  "ref": "npc/jobs/2-1/knight.txt:1696",
+                  "alt": "+10 если 1"
+                },
+                {
+                  "select": 2,
+                  "text": "Ask around to find the owner.",
+                  "ref": "npc/jobs/2-1/knight.txt:1710",
+                  "alt": "+10 если не 1"
+                }
+              ]
+            }
+          ],
+          "success": {"quest": 9009, "ref": "npc/jobs/2-1/knight.txt:1718-1738 .@knight_t 100 или 90 -> KNIGHT_Q 10, квест 9009"},
+          "fail": "меньше 90 очков — KNIGHT_Q 9; повтор у Amy (knight.txt:1739, 1583-1608)"
+        },
+        {
+          "id": "edmond_patience",
+          "title": "Sir Edmond: терпение — ждать, никого не убивая",
+          "npc": "edmond",
+          "when": {"quests_any": [9009, 9010]},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 70, "y": 101},
+            {
+              "do": "talk",
+              "npc": "edmond",
+              "x": 70,
+              "y": 99,
+              "answers": [
+                {
+                  "select": 1,
+                  "text": "Lady Amy sent me.",
+                  "ref": "npc/jobs/2-1/knight.txt:1862",
+                  "alt": "KNIGHT_Q 10"
+                },
+                {
+                  "select": 1,
+                  "text": "I'm sorry, I didn't mean to...",
+                  "ref": "npc/jobs/2-1/knight.txt:1903",
+                  "alt": "KNIGHT_Q 11 (повтор)"
+                }
+              ],
+              "expect_map": "job_knt"
+            },
+            {
+              "do": "wait",
+              "attack": false,
+              "until_map": "prt_in",
+              "time_limit": 330,
+              "ref": "npc/jobs/2-1/knight.txt:1944-1957 общий таймер Timer#knt: на 300 с включается Warp#knt (радиус 22 вокруг 143,57, :1993-2001) -> KNIGHT_Q 12, квест 9011, warp prt_in 80,100; npc.cpp: enablenpc срабатывает OnTouch для стоящих в зоне"
+            }
+          ],
+          "success": {"quest": 9011, "ref": "npc/jobs/2-1/knight.txt:1998-1999"},
+          "fail": "убил любого монстра (Poring, Lunatic, Chonchon, Thief Mushroom) — warp prt_fild05 353,251 (knight.txt:1988-1989); повтор у Edmond «I'm sorry, I didn't mean to...»",
+          "note": "монстры в комнате пассивные (Ai 01/02/06 в db/re/mob_db.yml), бот должен стоять с attackAuto 0 до 5 минут (таймер общий, не от входа)"
+        },
+        {
+          "id": "gray_interview",
+          "title": "Sir Gray: беседа (нужно 0, 5 или 10 очков)",
+          "npc": "gray",
+          "when": {"quests_any": [9011]},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 85, "y": 90},
+            {
+              "do": "talk",
+              "npc": "gray",
+              "x": 87,
+              "y": 92,
+              "answers": [
+                {
+                  "select": 1,
+                  "text": "I would like to take the test to change jobs.",
+                  "ref": "npc/jobs/2-1/knight.txt:2127",
+                  "alt": "KNIGHT_Q 12"
+                },
+                {
+                  "select": 1,
+                  "text": "I've been thinking a lot.",
+                  "ref": "npc/jobs/2-1/knight.txt:2163",
+                  "alt": "KNIGHT_Q 13 (повтор)"
+                },
+                {
+                  "select": 1,
+                  "text": "To become stronger...",
+                  "ref": "npc/jobs/2-1/knight.txt:2190",
+                  "alt": "ветка case 1 (:2191)"
+                },
+                {
+                  "select": 3,
+                  "text": "I can protect others.",
+                  "ref": "npc/jobs/2-1/knight.txt:2200",
+                  "alt": "0 очков (:2212-2219)"
+                },
+                {
+                  "select": 2,
+                  "text": "There are those waiting for me.",
+                  "ref": "npc/jobs/2-1/knight.txt:2314",
+                  "alt": "ветка case 2 (:2341), 0 очков"
+                },
+                {
+                  "select": 1,
+                  "text": "My friends.",
+                  "ref": "npc/jobs/2-1/knight.txt:2346",
+                  "alt": "0 очков (:2347-2351)"
+                }
+              ]
+            }
+          ],
+          "success": {"quest": 9012, "ref": "npc/jobs/2-1/knight.txt:2411-2413 .@knight_t == 0 -> KNIGHT_Q 14, квест 9012"},
+          "fail": "сумма не 0/5/10 — KNIGHT_Q 13; повтор у Gray (knight.txt:2453-2466, 2158-2189)"
+        },
+        {
+          "id": "captain_final",
+          "title": "Капитан Herman: смена профессии",
+          "npc": "captain",
+          "when": {"quests_any": [9012]},
+          "needs": {"skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "prt_in", "x": 86, "y": 99},
+            {"do": "talk", "npc": "captain", "x": 88, "y": 101, "answers": []}
+          ],
+          "success": {
+            "job": "Knight",
+            "ref": "npc/jobs/2-1/knight.txt:429-431 completequest 9012, Job_Change Job_Knight, F_ClearJobVar"
+          },
+          "fail": "есть очки навыков — close (knight.txt:305-310)"
+        }
+      ]
+    },
+    "priest": {
+      "title": "Acolyte -> Priest",
+      "from": "Acolyte",
+      "to": "Priest",
+      "script": "npc/jobs/2-1/priest.txt",
+      "variable": "PRIEST_Q",
+      "requirements": {
+        "job_lv": 40,
+        "base_lv": null,
+        "skill_points": 0,
+        "zeny": 0,
+        "refs": [
+          "npc/jobs/2-1/priest.txt:230 JobLevel < 40 -> отказ",
+          "npc/jobs/2-1/priest.txt:238 SkillPoint -> отказ",
+          "npc/jobs/2-1/priest.txt:493 SkillPoint -> отказ перед сменой"
+        ],
+        "note": "Предметов и зени скрипт не требует. Rosary (2608) нужен только Priest-помощнику (priest.txt:85)."
+      },
+      "skip": {
+        "job_lv": 50,
+        "skips": ["pilgrimage"],
+        "ref": "npc/jobs/2-1/priest.txt:264-289 JobLevel == 50 -> PRIEST_Q 5, сразу испытание"
+      },
+      "reward": {
+        "items": {"1550": 1},
+        "items_job50": {"1551": 1},
+        "ref": "npc/jobs/2-1/priest.txt:520-526 Book (job < 50) или Bible"
+      },
+      "npcs": {
+        "bishop": {"name": "High Bishop#prst", "map": "prt_church", "x": 16, "y": 41, "ref": "npc/jobs/2-1/priest.txt:35"},
+        "cecilia": {"name": "Sister Cecilia", "map": "prt_church", "x": 27, "y": 24, "ref": "npc/jobs/2-1/priest.txt:535"},
+        "rubalkabara": {
+          "name": "Ascetic#aco",
+          "map": "prt_fild03",
+          "x": 365,
+          "y": 255,
+          "ref": "npc/re/jobs/1-1/acolyte.txt:113, 170"
+        },
+        "mathilda": {
+          "name": "Ascetic#2aco",
+          "map": "moc_fild07",
+          "x": 41,
+          "y": 355,
+          "ref": "npc/re/jobs/1-1/acolyte.txt:190, 242"
+        },
+        "yosuke": {
+          "name": "Ascetic#3aco",
+          "map": "prt_fild00",
+          "x": 208,
+          "y": 218,
+          "ref": "npc/re/jobs/1-1/acolyte.txt:259, 317"
+        },
+        "peter": {"name": "Peter S. Alberto", "map": "job_prist", "x": 24, "y": 187, "ref": "npc/jobs/2-1/priest.txt:847"}
+      },
+      "stages": [
+        {
+          "id": "apply",
+          "title": "Заявка епископу Paul",
+          "npc": "bishop",
+          "when": {"quests_none": [8009, 8010, 8011, 8012, 8013, 8014, 8015, 8016]},
+          "needs": {"job_lv": 40, "skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "prt_church", "x": 17, "y": 39},
+            {
+              "do": "talk",
+              "npc": "bishop",
+              "x": 16,
+              "y": 41,
+              "answers": [
+                {"select": 1, "text": "I want to be a Priest.", "ref": "npc/jobs/2-1/priest.txt:214"},
+                {"select": 1, "text": "Yes, I do.", "ref": "npc/jobs/2-1/priest.txt:229"},
+                {"select": 1, "text": "I am ready.", "ref": "npc/jobs/2-1/priest.txt:279", "alt": "только при job 50"}
+              ]
+            }
+          ],
+          "success": {
+            "quests_any": [8010, 8011],
+            "ref": "npc/jobs/2-1/priest.txt:244-245 setquest 8009; :316 changequest 8009,8010 (паломничество) или :274-275 job 50 -> 8011 и warp job_prist 24,180"
+          },
+          "fail": "job < 40 или есть очки навыков — close (priest.txt:230-243)"
+        },
+        {
+          "id": "pilgrimage",
+          "title": "Паломничество: Rubalkabara -> Mathilda -> Yosuke",
+          "npc": "rubalkabara",
+          "when": {"quests_any": [8010]},
+          "steps": [
+            {"do": "move", "map": "prt_fild03", "x": 364, "y": 253},
+            {
+              "do": "talk",
+              "npc": "rubalkabara",
+              "x": 365,
+              "y": 255,
+              "answers": [],
+              "ref": "npc/jobs/2-1/priest.txt:1727-1743 F_FatherRub: PRIEST_Q 1 -> 2, savepoint prt_fild03 361,255"
+            },
+            {"do": "move", "map": "moc_fild07", "x": 40, "y": 354},
+            {
+              "do": "talk",
+              "npc": "mathilda",
+              "x": 41,
+              "y": 355,
+              "answers": [],
+              "ref": "npc/jobs/2-1/priest.txt:1771-1791 F_MotherMart: PRIEST_Q 2 -> 3, savepoint moc_fild07 35,355"
+            },
+            {"do": "move", "map": "prt_fild00", "x": 207, "y": 220},
+            {
+              "do": "talk",
+              "npc": "yosuke",
+              "x": 208,
+              "y": 218,
+              "answers": [],
+              "ref": "npc/jobs/2-1/priest.txt:1831-1851 F_FatherYos: PRIEST_Q 3 -> 4, savepoint prt_fild00 206,230"
+            }
+          ],
+          "success": {
+            "text": "Hereby, the first of|I told you to go back to church",
+            "ref": "npc/jobs/2-1/priest.txt:1845 (PRIEST_Q 3 -> 4) или :1854 (уже 4); квест в журнале не меняется — остаётся 8010"
+          },
+          "note": "Паломников можно обходить заново: при другом PRIEST_Q они только говорят и закрывают диалог (priest.txt:1749-1750, 1793-1798, 1853-1858). Точка возрождения меняется на поле — после квеста перезаписаться у Kafra.",
+          "risk": "moc_fild07 и prt_fild00 — поля с монстрами по пути"
+        },
+        {
+          "id": "spiritual_test",
+          "title": "Духовное испытание: зомби, искушения, мумии",
+          "npc": "bishop",
+          "when": {"quests_any": [8010, 8011, 8012]},
+          "steps": [
+            {"unless_map": "job_prist", "do": "move", "map": "prt_church", "x": 17, "y": 39},
+            {
+              "unless_map": "job_prist",
+              "do": "talk",
+              "npc": "bishop",
+              "x": 16,
+              "y": 41,
+              "answers": [
+                {
+                  "select": 1,
+                  "text": "I'm ready.",
+                  "ref": "npc/jobs/2-1/priest.txt:412",
+                  "alt": "PRIEST_Q 4; то же меню при PRIEST_Q 5 — :431"
+                },
+                {"select": 1, "text": "I'll try again.", "ref": "npc/jobs/2-1/priest.txt:453", "alt": "PRIEST_Q 6"}
+              ],
+              "expect_map": "job_prist"
+            },
+            {"do": "move", "map": "job_prist", "x": 22, "y": 185},
+            {
+              "do": "talk",
+              "npc": "peter",
+              "x": 24,
+              "y": 187,
+              "answers": [
+                {
+                  "select": 1,
+                  "text": "Yes, I do.",
+                  "ref": "npc/jobs/2-1/priest.txt:912",
+                  "alt": "только PRIEST_Q 5, оба ответа ведут дальше"
+                },
+                {
+                  "select": 1,
+                  "text": "I'm ready.",
+                  "ref": "npc/jobs/2-1/priest.txt:940",
+                  "alt": "PRIEST_Q 5; при PRIEST_Q 6 — :984"
+                }
+              ],
+              "expect_map_xy": [24, 44]
+            },
+            {
+              "do": "fight",
+              "area": "job_prist",
+              "kills": 13,
+              "time_limit": 290,
+              "walk_to": [24, 109],
+              "next_xy": [168, 17],
+              "mobs": {"1015": 13},
+              "ref": "npc/jobs/2-1/priest.txt:1105-1132 13 Zombie спавнятся при входе в полосы y=52,62,72,82,92 (:1193-1294); :1296-1306 выход 24,109 только при .MyMobs < 1; :1139-1140 через 300 с areawarp в prontera 234,318"
+            },
+            {
+              "do": "walk",
+              "map": "job_prist",
+              "x": 168,
+              "y": 178,
+              "next_xy": [98, 40],
+              "autotalk": [
+                {
+                  "npc": "Deviruchi",
+                  "answers": [
+                    {"select": 2, "text": "Out of my sight, demon!", "ref": "npc/jobs/2-1/priest.txt:1350"},
+                    {"select": 2, "text": "Silence!", "ref": "npc/jobs/2-1/priest.txt:1380"}
+                  ]
+                },
+                {
+                  "npc": "Doppelganger",
+                  "answers": [
+                    {"select": 2, "text": "No deal... Doppelganger.", "ref": "npc/jobs/2-1/priest.txt:1436"},
+                    {"select": 2, "text": "I'll never listen to you!", "ref": "npc/jobs/2-1/priest.txt:1457"}
+                  ]
+                },
+                {
+                  "npc": "Dark Lord",
+                  "answers": [
+                    {"select": 2, "text": "God will protect me.", "ref": "npc/jobs/2-1/priest.txt:1506"},
+                    {"select": 2, "text": "Begone, vile fiend!", "ref": "npc/jobs/2-1/priest.txt:1519"}
+                  ]
+                },
+                {
+                  "npc": "Baphomet",
+                  "answers": [{"select": 2, "text": "No, Baphomet. You lose.", "ref": "npc/jobs/2-1/priest.txt:1578"}]
+                }
+              ],
+              "ref": "npc/jobs/2-1/priest.txt:1312-1599 OnTouch-диалоги (зона 8x1 на y=45,80,115,150); :1601-1607 prst2_1 (168,180, 3x3) -> warp 98,40"
+            },
+            {
+              "do": "walk",
+              "map": "job_prist",
+              "x": 98,
+              "y": 105,
+              "attack": false,
+              "next_map": "prt_church",
+              "ref": "npc/jobs/2-1/priest.txt:1613-1706 6 Mummy (1041) при входе в полосы y=55,70,85; :1708-1721 prst3_1 (98,105) -> PRIEST_Q 7, квест 8013, warp prt_church 16,37; убивать мумий не требуется"
+            }
+          ],
+          "success": {
+            "quest": 8013,
+            "ref": "npc/jobs/2-1/priest.txt:1715-1719 PRIEST_Q 7, changequest 8012,8013, warp prt_church 16,37"
+          },
+          "fail": "PRIEST_Q 1-3 (паломничество не закончено) — епископ только напоминает (priest.txt:344-393); не уложился в 300 с — prontera 234,318, PRIEST_Q 5/6; повтор через епископа «I'm ready.» / «I'll try again.»; согласие с демоном — warp на опасную карту (c_tower2 168,33; mjolnir_05 200,200; gef_dun02 210,177; gl_church 145,170; glast_01 200,203), PRIEST_Q не меняется; повтор через епископа",
+          "parts": [
+            {
+              "id": "bishop_test",
+              "title": "Епископ: начать духовное испытание",
+              "success": {
+                "map": "job_prist",
+                "ref": "npc/jobs/2-1/priest.txt:394-417 PRIEST_Q 4 -> 5, changequest 8010,8011, warp job_prist 24,180"
+              }
+            },
+            {
+              "id": "zombies",
+              "title": "Peter: убить 13 зомби за 5 минут",
+              "success": {"map_xy": ["job_prist", 168, 17], "ref": "npc/jobs/2-1/priest.txt:1300-1301"}
+            },
+            {
+              "id": "temptations",
+              "title": "Коридор искушений: отказать четырём демонам",
+              "success": {"map_xy": ["job_prist", 98, 40]},
+              "risk": "неверный ответ выбрасывает Acolyte на карты с монстрами 60-90+ уровня"
+            },
+            {
+              "id": "mummies",
+              "title": "Зал мумий: пройти к выходу",
+              "success": {"quest": 8013, "ref": "npc/jobs/2-1/priest.txt:1715-1719"},
+              "risk": "Mummy: уровень 55, агрессивная (Ai 04, db/re/mob_db.yml) — для Acolyte 30 опасно; job_prist — nopenalty (npc/mapflag/nopenalty.txt:157)"
+            }
+          ],
+          "risk": "неверный ответ выбрасывает Acolyte на карты с монстрами 60-90+ уровня; Mummy: уровень 55, агрессивная (Ai 04, db/re/mob_db.yml) — для Acolyte 30 опасно; job_prist — nopenalty (npc/mapflag/nopenalty.txt:157)"
+        },
+        {
+          "id": "oath",
+          "title": "Сестра Cecilia: клятва (8 вопросов)",
+          "npc": "cecilia",
+          "when": {"quests_any": [8013, 8014]},
+          "steps": [
+            {"do": "move", "map": "prt_church", "x": 25, "y": 24},
+            {
+              "do": "talk",
+              "npc": "cecilia",
+              "x": 27,
+              "y": 24,
+              "ordered": true,
+              "answers": [
+                {"select": 1, "text": "Yes.", "ref": "npc/jobs/2-1/priest.txt:721", "alt": "отдать жизнь Богу"},
+                {"select": 2, "text": "No.", "ref": "npc/jobs/2-1/priest.txt:733", "alt": "силу ради корысти"},
+                {"select": 1, "text": "Yes.", "ref": "npc/jobs/2-1/priest.txt:745", "alt": "помогать незнакомым"},
+                {"select": 1, "text": "Yes.", "ref": "npc/jobs/2-1/priest.txt:757", "alt": "жертвовать собой"},
+                {"select": 2, "text": "No.", "ref": "npc/jobs/2-1/priest.txt:769", "alt": "спамить проповедью"},
+                {"select": 2, "text": "No.", "ref": "npc/jobs/2-1/priest.txt:783", "alt": "собирать паровоз монстров"},
+                {"select": 1, "text": "Yes.", "ref": "npc/jobs/2-1/priest.txt:795", "alt": "следовать Богу во всём"},
+                {"select": 1, "text": "I do.", "ref": "npc/jobs/2-1/priest.txt:811", "alt": "клятва"}
+              ]
+            }
+          ],
+          "success": {"quest": 8015, "ref": "npc/jobs/2-1/priest.txt:812-813 PRIEST_Q 9, changequest 8014,8015"},
+          "fail": "любой неверный ответ — PRIEST_Q 8; повтор у Cecilia теми же ответами (priest.txt:698-704)"
+        },
+        {
+          "id": "bishop_final",
+          "title": "Епископ: смена профессии",
+          "npc": "bishop",
+          "when": {"quests_any": [8015]},
+          "needs": {"skill_points": 0},
+          "steps": [
+            {"do": "move", "map": "prt_church", "x": 17, "y": 39},
+            {"do": "talk", "npc": "bishop", "x": 16, "y": 41, "answers": []}
+          ],
+          "success": {
+            "job": "Priest",
+            "ref": "npc/jobs/2-1/priest.txt:503-515 changequest 8015,8016, completequest 8016, Job_Change Job_Priest"
+          },
+          "fail": "есть очки навыков — close (priest.txt:493-497)"
+        }
+      ]
+    }
+  },
+  "goals": {
+    "_comment": "Срок годности целей (часы) и пороги — правила live_ro, не из rAthena.",
+    "ttl_hours": {"job_lv": 24, "base_lv": 24, "collect_items": 12, "quest_stage": 2, "zeny": 12},
+    "hard_mob_level_gap": 10,
+    "base_lv_after_job": 99
+  }
+}

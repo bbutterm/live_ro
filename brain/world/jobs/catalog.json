@@ -1,0 +1,4368 @@
+{
+ "_comment": "Сгенерировано scripts/gen_progression.py из upstream/rathena (renewal). Не редактировать руками.",
+ "shop_maps": [
+  "prontera",
+  "prt_in",
+  "prt_church",
+  "izlude",
+  "izlude_in"
+ ],
+ "equipment": [
+  {
+   "id": 2301,
+   "name": "Cotton Shirt",
+   "aegis": "Cotton_Shirt",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 10,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 10,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2303,
+   "name": "Jacket",
+   "aegis": "Leather_Jacket",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 15,
+   "slots": 0,
+   "weight": 20.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 200,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2401,
+   "name": "Sandals",
+   "aegis": "Sandals",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Shoes"
+   ],
+   "attack": 0,
+   "defense": 5,
+   "slots": 0,
+   "weight": 20.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 400,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2628,
+   "name": "Novice Armlet",
+   "aegis": "Novice_Armlet",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Both_Accessory"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 1,
+   "weight": 20.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Novice",
+    "SuperNovice"
+   ],
+   "price": 400,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2101,
+   "name": "Guard",
+   "aegis": "Guard",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Left_Hand"
+   ],
+   "attack": 0,
+   "defense": 20,
+   "slots": 0,
+   "weight": 30.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 500,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2212,
+   "name": "Eye Patch",
+   "aegis": "Eye_Bandage",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Mid"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 1000,
+   "shops": [
+    {
+     "npc": "Toy Dealer",
+     "map": "prt_in",
+     "x": 117,
+     "y": 79
+    }
+   ]
+  },
+  {
+   "id": 2220,
+   "name": "Hat",
+   "aegis": "Hat",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Top"
+   ],
+   "attack": 0,
+   "defense": 2,
+   "slots": 0,
+   "weight": 20.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 1000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2305,
+   "name": "Adventurer's Suit",
+   "aegis": "Adventure_Suit",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 20,
+   "slots": 0,
+   "weight": 30.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 1000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2501,
+   "name": "Hood",
+   "aegis": "Hood",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Garment"
+   ],
+   "attack": 0,
+   "defense": 4,
+   "slots": 0,
+   "weight": 20.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 1000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2403,
+   "name": "Shoes",
+   "aegis": "Shoes",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Shoes"
+   ],
+   "attack": 0,
+   "defense": 10,
+   "slots": 0,
+   "weight": 40.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 3500,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2201,
+   "name": "Sunglasses",
+   "aegis": "Sunglasses",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Mid"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 5000,
+   "shops": [
+    {
+     "npc": "Toy Dealer",
+     "map": "prt_in",
+     "x": 117,
+     "y": 79
+    }
+   ]
+  },
+  {
+   "id": 2241,
+   "name": "Grampa Beard",
+   "aegis": "Granpa_Beard",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Low"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 5000,
+   "shops": [
+    {
+     "npc": "Toy Dealer",
+     "map": "prt_in",
+     "x": 117,
+     "y": 79
+    }
+   ]
+  },
+  {
+   "id": 2503,
+   "name": "Muffler",
+   "aegis": "Muffler",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Garment"
+   ],
+   "attack": 0,
+   "defense": 8,
+   "slots": 0,
+   "weight": 40.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 5000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2328,
+   "name": "Wooden Mail",
+   "aegis": "Wooden_Mail",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 25,
+   "slots": 0,
+   "weight": 100.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Swordman"
+   ],
+   "price": 5500,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2323,
+   "name": "Scapulare",
+   "aegis": "Scapulare",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 24,
+   "slots": 0,
+   "weight": 40.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Monk",
+    "Priest"
+   ],
+   "price": 6500,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 2216,
+   "name": "Biretta",
+   "aegis": "Biretta",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Top"
+   ],
+   "attack": 0,
+   "defense": 8,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Monk",
+    "Priest"
+   ],
+   "price": 9000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 2117,
+   "name": "Arm Guard",
+   "aegis": "Arm_Guard",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Left_Hand"
+   ],
+   "attack": 0,
+   "defense": 50,
+   "slots": 0,
+   "weight": 15.0,
+   "equip_lv": 20,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "KagerouOboro",
+    "Ninja"
+   ],
+   "price": 10000,
+   "shops": [
+    {
+     "npc": "Amatsu Trader",
+     "map": "prontera",
+     "x": 178,
+     "y": 244
+    }
+   ]
+  },
+  {
+   "id": 2239,
+   "name": "Monocle",
+   "aegis": "One_Eyed_Glass",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Mid"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 10000,
+   "shops": [
+    {
+     "npc": "Toy Dealer",
+     "map": "prt_in",
+     "x": 117,
+     "y": 79
+    }
+   ]
+  },
+  {
+   "id": 2307,
+   "name": "Mantle",
+   "aegis": "Mantle",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 37,
+   "slots": 0,
+   "weight": 60.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 10000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 15053,
+   "name": "Special Ninja Suit",
+   "aegis": "Special_Ninja_Suit",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 70,
+   "slots": 0,
+   "weight": 120.0,
+   "equip_lv": 100,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "KagerouOboro",
+    "Ninja"
+   ],
+   "price": 10000,
+   "shops": [
+    {
+     "npc": "Amatsu Trader",
+     "map": "prontera",
+     "x": 178,
+     "y": 244
+    }
+   ]
+  },
+  {
+   "id": 2226,
+   "name": "Cap",
+   "aegis": "Cap",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Top"
+   ],
+   "attack": 0,
+   "defense": 7,
+   "slots": 0,
+   "weight": 40.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "BardDancer",
+    "Blacksmith",
+    "Crusader",
+    "Hunter",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 12000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2103,
+   "name": "Buckler",
+   "aegis": "Buckler",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Left_Hand"
+   ],
+   "attack": 0,
+   "defense": 40,
+   "slots": 0,
+   "weight": 60.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Assassin",
+    "BardDancer",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Monk",
+    "Priest",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 14000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2608,
+   "name": "Rosary",
+   "aegis": "Rosary",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Both_Accessory"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 20,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 15000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 2405,
+   "name": "Boots",
+   "aegis": "Boots",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Shoes"
+   ],
+   "attack": 0,
+   "defense": 16,
+   "slots": 0,
+   "weight": 60.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "BardDancer",
+    "Blacksmith",
+    "Crusader",
+    "Gunslinger",
+    "Hunter",
+    "Knight",
+    "Merchant",
+    "Rebellion",
+    "Rogue",
+    "StarGladiator",
+    "Swordman",
+    "Taekwon",
+    "Thief"
+   ],
+   "price": 18000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 2243,
+   "name": "Geek Glasses",
+   "aegis": "Spinning_Eyes",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Mid"
+   ],
+   "attack": 0,
+   "defense": 1,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 20000,
+   "shops": [
+    {
+     "npc": "Toy Dealer",
+     "map": "prt_in",
+     "x": 117,
+     "y": 79
+    }
+   ]
+  },
+  {
+   "id": 2627,
+   "name": "Belt",
+   "aegis": "Belt",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Both_Accessory"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 1,
+   "weight": 120.0,
+   "equip_lv": 25,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 20000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2309,
+   "name": "Coat",
+   "aegis": "Coat",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 42,
+   "slots": 0,
+   "weight": 120.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 22000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2206,
+   "name": "Wedding Veil",
+   "aegis": "Wedding_Veil",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Top"
+   ],
+   "attack": 0,
+   "defense": 0,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 23000,
+   "shops": [
+    {
+     "npc": "Wedding Shop Dealer",
+     "map": "prt_in",
+     "x": 211,
+     "y": 169
+    }
+   ]
+  },
+  {
+   "id": 2242,
+   "name": "Purple Glasses",
+   "aegis": "Luxury_Sunglasses",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Mid"
+   ],
+   "attack": 0,
+   "defense": 2,
+   "slots": 0,
+   "weight": 10.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Novice",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "SuperNovice",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 24000,
+   "shops": [
+    {
+     "npc": "Toy Dealer",
+     "map": "prt_in",
+     "x": 117,
+     "y": 79
+    }
+   ]
+  },
+  {
+   "id": 2505,
+   "name": "Manteau",
+   "aegis": "Manteau",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Garment"
+   ],
+   "attack": 0,
+   "defense": 13,
+   "slots": 0,
+   "weight": 60.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "StarGladiator",
+    "Swordman",
+    "Taekwon",
+    "Thief"
+   ],
+   "price": 32000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 2171,
+   "name": "Fox Wrist Guard",
+   "aegis": "Fox_Armguard",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Left_Hand"
+   ],
+   "attack": 0,
+   "defense": 45,
+   "slots": 1,
+   "weight": 20.0,
+   "equip_lv": 100,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "KagerouOboro",
+    "Ninja"
+   ],
+   "price": 40000,
+   "shops": [
+    {
+     "npc": "Amatsu Trader",
+     "map": "prontera",
+     "x": 178,
+     "y": 244
+    }
+   ]
+  },
+  {
+   "id": 2338,
+   "name": "Wedding Dress",
+   "aegis": "Wedding_Dress",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 10,
+   "slots": 0,
+   "weight": 50.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "Bard",
+    "Blacksmith",
+    "Crusader",
+    "Dancer",
+    "Gunslinger",
+    "Hunter",
+    "Kagerou",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Monk",
+    "Ninja",
+    "Oboro",
+    "Priest",
+    "Rebellion",
+    "Rogue",
+    "Sage",
+    "Soul_Linker",
+    "Star_Gladiator",
+    "Summoner",
+    "Swordman",
+    "Taekwon",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 43000,
+   "shops": [
+    {
+     "npc": "Wedding Shop Dealer",
+     "map": "prt_in",
+     "x": 211,
+     "y": 169
+    }
+   ]
+  },
+  {
+   "id": 2228,
+   "name": "Helm",
+   "aegis": "Helm",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Top"
+   ],
+   "attack": 0,
+   "defense": 13,
+   "slots": 0,
+   "weight": 60.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 44000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 2312,
+   "name": "Padded Armor",
+   "aegis": "Padded_Armor",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 35,
+   "slots": 0,
+   "weight": 280.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 48000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2325,
+   "name": "Saint's Robe",
+   "aegis": "Saint_Robe",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 50,
+   "slots": 0,
+   "weight": 60.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Blacksmith",
+    "Merchant",
+    "Monk",
+    "Priest"
+   ],
+   "price": 54000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 2105,
+   "name": "Shield",
+   "aegis": "Shield",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Left_Hand"
+   ],
+   "attack": 0,
+   "defense": 60,
+   "slots": 0,
+   "weight": 130.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 56000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 2314,
+   "name": "Chain Mail",
+   "aegis": "Chain_Mail",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 55,
+   "slots": 0,
+   "weight": 330.0,
+   "equip_lv": 0,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 65000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    },
+    {
+     "npc": "Armor Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 132
+    }
+   ]
+  },
+  {
+   "id": 2316,
+   "name": "Full Plate",
+   "aegis": "Plate_Armor",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Armor"
+   ],
+   "attack": 0,
+   "defense": 70,
+   "slots": 0,
+   "weight": 450.0,
+   "equip_lv": 40,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 80000,
+   "shops": [
+    {
+     "npc": "Armor Dealer",
+     "map": "izlude_in",
+     "x": 70,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 5092,
+   "name": "Coif",
+   "aegis": "Blue_Coif",
+   "type": "Armor",
+   "subtype": null,
+   "locations": [
+    "Head_Mid",
+    "Head_Top"
+   ],
+   "attack": 0,
+   "defense": 5,
+   "slots": 0,
+   "weight": 30.0,
+   "equip_lv": 65,
+   "weapon_lv": 0,
+   "gender": "Both",
+   "jobs": [
+    "Assassin",
+    "Priest"
+   ],
+   "price": 150000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 1201,
+   "name": "Knife",
+   "aegis": "Knife",
+   "type": "Weapon",
+   "subtype": "Dagger",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 17,
+   "defense": 0,
+   "slots": 3,
+   "weight": 40.0,
+   "equip_lv": 1,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "BardDancer",
+    "Blacksmith",
+    "Crusader",
+    "Hunter",
+    "KagerouOboro",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Ninja",
+    "Novice",
+    "Rogue",
+    "Sage",
+    "SoulLinker",
+    "SuperNovice",
+    "Swordman",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 50,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1601,
+   "name": "Rod",
+   "aegis": "Rod",
+   "type": "Weapon",
+   "subtype": "Staff",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 15,
+   "defense": 0,
+   "slots": 3,
+   "weight": 40.0,
+   "equip_lv": 1,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Mage",
+    "Monk",
+    "Novice",
+    "Priest",
+    "Sage",
+    "SoulLinker",
+    "SuperNovice",
+    "Wizard"
+   ],
+   "price": 50,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1101,
+   "name": "Sword",
+   "aegis": "Sword",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 25,
+   "defense": 0,
+   "slots": 3,
+   "weight": 50.0,
+   "equip_lv": 2,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Novice",
+    "Rogue",
+    "SuperNovice",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 100,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1501,
+   "name": "Club",
+   "aegis": "Club",
+   "type": "Weapon",
+   "subtype": "Mace",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 23,
+   "defense": 0,
+   "slots": 3,
+   "weight": 70.0,
+   "equip_lv": 2,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Monk",
+    "Novice",
+    "Priest",
+    "SuperNovice",
+    "Swordman"
+   ],
+   "price": 120,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 1401,
+   "name": "Javelin",
+   "aegis": "Javelin",
+   "type": "Weapon",
+   "subtype": "1hSpear",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 28,
+   "defense": 0,
+   "slots": 3,
+   "weight": 70.0,
+   "equip_lv": 4,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 150,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 1301,
+   "name": "Axe",
+   "aegis": "Axe",
+   "type": "Weapon",
+   "subtype": "1hAxe",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 38,
+   "defense": 0,
+   "slots": 3,
+   "weight": 80.0,
+   "equip_lv": 3,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Novice",
+    "SuperNovice",
+    "Swordman"
+   ],
+   "price": 500,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1701,
+   "name": "Bow",
+   "aegis": "Bow",
+   "type": "Weapon",
+   "subtype": "Bow",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 15,
+   "defense": 0,
+   "slots": 3,
+   "weight": 50.0,
+   "equip_lv": 4,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Archer",
+    "BardDancer",
+    "Hunter",
+    "Rogue",
+    "Thief"
+   ],
+   "price": 1000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1204,
+   "name": "Cutter",
+   "aegis": "Cutter",
+   "type": "Weapon",
+   "subtype": "Dagger",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 30,
+   "defense": 0,
+   "slots": 3,
+   "weight": 50.0,
+   "equip_lv": 1,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "BardDancer",
+    "Blacksmith",
+    "Crusader",
+    "Hunter",
+    "KagerouOboro",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Ninja",
+    "Novice",
+    "Rogue",
+    "Sage",
+    "SoulLinker",
+    "SuperNovice",
+    "Swordman",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 1250,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1104,
+   "name": "Falchion",
+   "aegis": "Falchion",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 39,
+   "defense": 0,
+   "slots": 3,
+   "weight": 60.0,
+   "equip_lv": 2,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Novice",
+    "Rogue",
+    "SuperNovice",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 1500,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1504,
+   "name": "Mace",
+   "aegis": "Mace",
+   "type": "Weapon",
+   "subtype": "Mace",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 37,
+   "defense": 0,
+   "slots": 3,
+   "weight": 80.0,
+   "equip_lv": 2,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Monk",
+    "Novice",
+    "Priest",
+    "SuperNovice",
+    "Swordman"
+   ],
+   "price": 1600,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 1404,
+   "name": "Spear",
+   "aegis": "Spear",
+   "type": "Weapon",
+   "subtype": "1hSpear",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 44,
+   "defense": 0,
+   "slots": 3,
+   "weight": 85.0,
+   "equip_lv": 4,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 1700,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 1116,
+   "name": "Katana",
+   "aegis": "Katana",
+   "type": "Weapon",
+   "subtype": "2hSword",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 60,
+   "defense": 0,
+   "slots": 3,
+   "weight": 100.0,
+   "equip_lv": 4,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 2000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1207,
+   "name": "Main Gauche",
+   "aegis": "Main_Gauche",
+   "type": "Weapon",
+   "subtype": "Dagger",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 43,
+   "defense": 0,
+   "slots": 3,
+   "weight": 60.0,
+   "equip_lv": 1,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Archer",
+    "Assassin",
+    "BardDancer",
+    "Blacksmith",
+    "Crusader",
+    "Hunter",
+    "KagerouOboro",
+    "Knight",
+    "Mage",
+    "Merchant",
+    "Ninja",
+    "Novice",
+    "Rogue",
+    "Sage",
+    "SoulLinker",
+    "SuperNovice",
+    "Swordman",
+    "Thief",
+    "Wizard"
+   ],
+   "price": 2400,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1107,
+   "name": "Blade",
+   "aegis": "Blade",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 53,
+   "defense": 0,
+   "slots": 3,
+   "weight": 70.0,
+   "equip_lv": 2,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Novice",
+    "Rogue",
+    "SuperNovice",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 2900,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    },
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 13150,
+   "name": "Branch",
+   "aegis": "Branch",
+   "type": "Weapon",
+   "subtype": "Rifle",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 50,
+   "defense": 0,
+   "slots": 3,
+   "weight": 50.0,
+   "equip_lv": 1,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 3000,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  },
+  {
+   "id": 1407,
+   "name": "Pike",
+   "aegis": "Pike",
+   "type": "Weapon",
+   "subtype": "1hSpear",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 60,
+   "defense": 0,
+   "slots": 3,
+   "weight": 100.0,
+   "equip_lv": 4,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 3450,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 1507,
+   "name": "Smasher",
+   "aegis": "Smasher",
+   "type": "Weapon",
+   "subtype": "Mace",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 54,
+   "defense": 0,
+   "slots": 2,
+   "weight": 100.0,
+   "equip_lv": 14,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Monk",
+    "Novice",
+    "Priest",
+    "SuperNovice",
+    "Swordman"
+   ],
+   "price": 9000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 1110,
+   "name": "Rapier",
+   "aegis": "Lapier",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 70,
+   "defense": 0,
+   "slots": 2,
+   "weight": 50.0,
+   "equip_lv": 14,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Novice",
+    "Rogue",
+    "SuperNovice",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 10000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 13154,
+   "name": "Rolling Stone",
+   "aegis": "Rolling_Stone",
+   "type": "Weapon",
+   "subtype": "Shotgun",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 135,
+   "defense": 0,
+   "slots": 1,
+   "weight": 90.0,
+   "equip_lv": 14,
+   "weapon_lv": 1,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 12000,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  },
+  {
+   "id": 1451,
+   "name": "Guisarme",
+   "aegis": "Guisarme",
+   "type": "Weapon",
+   "subtype": "2hSpear",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 84,
+   "defense": 0,
+   "slots": 2,
+   "weight": 100.0,
+   "equip_lv": 18,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 13000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 1151,
+   "name": "Slayer",
+   "aegis": "Slayer",
+   "type": "Weapon",
+   "subtype": "2hSword",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 90,
+   "defense": 0,
+   "slots": 2,
+   "weight": 130.0,
+   "equip_lv": 18,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 15000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 1510,
+   "name": "Flail",
+   "aegis": "Flail",
+   "type": "Weapon",
+   "subtype": "Mace",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 69,
+   "defense": 0,
+   "slots": 2,
+   "weight": 90.0,
+   "equip_lv": 14,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Monk",
+    "Priest",
+    "Swordman"
+   ],
+   "price": 16000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 1113,
+   "name": "Scimitar",
+   "aegis": "Scimiter",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 85,
+   "defense": 0,
+   "slots": 2,
+   "weight": 70.0,
+   "equip_lv": 14,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Novice",
+    "Rogue",
+    "SuperNovice",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 17000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 13151,
+   "name": "Cyclone",
+   "aegis": "The_Cyclone",
+   "type": "Weapon",
+   "subtype": "Rifle",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 120,
+   "defense": 0,
+   "slots": 1,
+   "weight": 70.0,
+   "equip_lv": 24,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 17500,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  },
+  {
+   "id": 1454,
+   "name": "Glaive",
+   "aegis": "Glaive",
+   "type": "Weapon",
+   "subtype": "2hSpear",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 104,
+   "defense": 0,
+   "slots": 2,
+   "weight": 120.0,
+   "equip_lv": 18,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 20000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 13102,
+   "name": "Crimson Bolt",
+   "aegis": "Crimson_Bolt",
+   "type": "Weapon",
+   "subtype": "Revolver",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 45,
+   "defense": 0,
+   "slots": 1,
+   "weight": 45.0,
+   "equip_lv": 35,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 20000,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  },
+  {
+   "id": 1154,
+   "name": "Bastard Sword",
+   "aegis": "Bastard_Sword",
+   "type": "Weapon",
+   "subtype": "2hSword",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 115,
+   "defense": 0,
+   "slots": 2,
+   "weight": 160.0,
+   "equip_lv": 18,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 22500,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 1519,
+   "name": "Chain",
+   "aegis": "Chain",
+   "type": "Weapon",
+   "subtype": "Mace",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 84,
+   "defense": 0,
+   "slots": 2,
+   "weight": 80.0,
+   "equip_lv": 14,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Monk",
+    "Priest",
+    "Swordman"
+   ],
+   "price": 23000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 1122,
+   "name": "Ring Pommel Saber",
+   "aegis": "Ring_Pommel_Saber",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 100,
+   "defense": 0,
+   "slots": 2,
+   "weight": 90.0,
+   "equip_lv": 14,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 24000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1457,
+   "name": "Partizan",
+   "aegis": "Partizan",
+   "type": "Weapon",
+   "subtype": "2hSpear",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 124,
+   "defense": 0,
+   "slots": 1,
+   "weight": 200.0,
+   "equip_lv": 18,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 27000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 13155,
+   "name": "Black Rose",
+   "aegis": "Black_Rose",
+   "type": "Weapon",
+   "subtype": "Shotgun",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 180,
+   "defense": 0,
+   "slots": 1,
+   "weight": 90.0,
+   "equip_lv": 35,
+   "weapon_lv": 2,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 32000,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  },
+  {
+   "id": 1245,
+   "name": "Cinquedea",
+   "aegis": "Cinquedea",
+   "type": "Weapon",
+   "subtype": "Dagger",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 110,
+   "defense": 0,
+   "slots": 1,
+   "weight": 70.0,
+   "equip_lv": 30,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Novice",
+    "SuperNovice"
+   ],
+   "price": 40000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 165,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 13163,
+   "name": "Long Barrel",
+   "aegis": "Long_Barrel",
+   "type": "Weapon",
+   "subtype": "Rifle",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 150,
+   "defense": 0,
+   "slots": 0,
+   "weight": 100.0,
+   "equip_lv": 70,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 40000,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  },
+  {
+   "id": 1513,
+   "name": "Morning Star",
+   "aegis": "Morning_Star",
+   "type": "Weapon",
+   "subtype": "Mace",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 110,
+   "defense": 0,
+   "slots": 1,
+   "weight": 150.0,
+   "equip_lv": 27,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Acolyte",
+    "Alchemist",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Monk",
+    "Priest",
+    "Swordman"
+   ],
+   "price": 41000,
+   "shops": [
+    {
+     "npc": "Nun",
+     "map": "prt_church",
+     "x": 108,
+     "y": 124
+    }
+   ]
+  },
+  {
+   "id": 1146,
+   "name": "Town Sword",
+   "aegis": "Town_Sword",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 100,
+   "defense": 0,
+   "slots": 1,
+   "weight": 80.0,
+   "equip_lv": 30,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Novice",
+    "SuperNovice"
+   ],
+   "price": 42000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 165,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 1126,
+   "name": "Saber",
+   "aegis": "Saber",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 115,
+   "defense": 0,
+   "slots": 2,
+   "weight": 100.0,
+   "equip_lv": 27,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 49000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1123,
+   "name": "Haedonggum",
+   "aegis": "Haedonggum",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 120,
+   "defense": 0,
+   "slots": 1,
+   "weight": 90.0,
+   "equip_lv": 27,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 50000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1119,
+   "name": "Tsurugi",
+   "aegis": "Tsurugi",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 130,
+   "defense": 0,
+   "slots": 1,
+   "weight": 120.0,
+   "equip_lv": 27,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Alchemist",
+    "Assassin",
+    "Blacksmith",
+    "Crusader",
+    "Knight",
+    "Merchant",
+    "Rogue",
+    "Swordman",
+    "Thief"
+   ],
+   "price": 51000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1460,
+   "name": "Trident",
+   "aegis": "Trident",
+   "type": "Weapon",
+   "subtype": "2hSpear",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 150,
+   "defense": 0,
+   "slots": 2,
+   "weight": 120.0,
+   "equip_lv": 33,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 51000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 1463,
+   "name": "Halberd",
+   "aegis": "Halberd",
+   "type": "Weapon",
+   "subtype": "2hSpear",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 165,
+   "defense": 0,
+   "slots": 1,
+   "weight": 250.0,
+   "equip_lv": 33,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 54000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 13165,
+   "name": "Jungle Carbine",
+   "aegis": "Jungle_Carbine",
+   "type": "Weapon",
+   "subtype": "Rifle",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 170,
+   "defense": 0,
+   "slots": 0,
+   "weight": 70.0,
+   "equip_lv": 70,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 56000,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  },
+  {
+   "id": 1129,
+   "name": "Flamberge",
+   "aegis": "Flamberge",
+   "type": "Weapon",
+   "subtype": "1hSword",
+   "locations": [
+    "Right_Hand"
+   ],
+   "attack": 150,
+   "defense": 0,
+   "slots": 0,
+   "weight": 150.0,
+   "equip_lv": 27,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight"
+   ],
+   "price": 60000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 172,
+     "y": 130
+    }
+   ]
+  },
+  {
+   "id": 1157,
+   "name": "Two-Handed Sword",
+   "aegis": "Two_Hand_Sword",
+   "type": "Weapon",
+   "subtype": "2hSword",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 160,
+   "defense": 0,
+   "slots": 1,
+   "weight": 220.0,
+   "equip_lv": 33,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 60000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 1410,
+   "name": "Lance",
+   "aegis": "Lance",
+   "type": "Weapon",
+   "subtype": "2hSpear",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 185,
+   "defense": 0,
+   "slots": 0,
+   "weight": 250.0,
+   "equip_lv": 33,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 60000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "prt_in",
+     "x": 171,
+     "y": 140
+    }
+   ]
+  },
+  {
+   "id": 1160,
+   "name": "Broad Sword",
+   "aegis": "Broad_Sword",
+   "type": "Weapon",
+   "subtype": "2hSword",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 140,
+   "defense": 0,
+   "slots": 1,
+   "weight": 200.0,
+   "equip_lv": 33,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Crusader",
+    "Knight",
+    "Swordman"
+   ],
+   "price": 65000,
+   "shops": [
+    {
+     "npc": "Weapon Dealer",
+     "map": "izlude_in",
+     "x": 60,
+     "y": 127
+    }
+   ]
+  },
+  {
+   "id": 13168,
+   "name": "Thunder P",
+   "aegis": "Thunder_P",
+   "type": "Weapon",
+   "subtype": "Shotgun",
+   "locations": [
+    "Both_Hand"
+   ],
+   "attack": 80,
+   "defense": 0,
+   "slots": 1,
+   "weight": 70.0,
+   "equip_lv": 70,
+   "weapon_lv": 3,
+   "gender": "Both",
+   "jobs": [
+    "Gunslinger",
+    "Rebellion"
+   ],
+   "price": 76000,
+   "shops": [
+    {
+     "npc": "Trading Merchant",
+     "map": "izlude_in",
+     "x": 72,
+     "y": 102
+    }
+   ]
+  }
+ ],
+ "items": {
+  "1040": {
+   "name": "Elder Pixie's Moustache",
+   "aegis": "Elder_Pixie's_Beard",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 1121,
+     "mob": "Giearth",
+     "level": 42,
+     "rate_pct": 27.5,
+     "mvp": false,
+     "maps": {
+      "mjo_dun02": 41,
+      "mjo_dun03": 5,
+      "anthell02": 3,
+      "anthell01": 1
+     }
+    },
+    {
+     "mob_id": 2786,
+     "mob": "Knocker Ringleader",
+     "level": 126,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "thor_v02": 1
+     }
+    },
+    {
+     "mob_id": 1838,
+     "mob": "Knocker",
+     "level": 126,
+     "rate_pct": 27.5,
+     "mvp": false,
+     "maps": {
+      "thor_v02": 55
+     }
+    },
+    {
+     "mob_id": 21392,
+     "mob": "Gutsy Giearth",
+     "level": 168,
+     "rate_pct": 40.0,
+     "mvp": false,
+     "maps": {
+      "ant_d02_i": 15
+     }
+    }
+   ],
+   "drop_mobs_total": 4,
+   "spawning_mobs": 4
+  },
+  "7006": {
+   "name": "Wing of Red Bat",
+   "aegis": "Wing_Of_Red_Bat",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2847,
+     "mob": "Elusive Drainliar",
+     "level": 47,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "in_sphinx1": 1
+     }
+    },
+    {
+     "mob_id": 1111,
+     "mob": "Drainliar",
+     "level": 47,
+     "rate_pct": 27.5,
+     "mvp": false,
+     "maps": {
+      "in_sphinx1": 76,
+      "alde_dun03": 55,
+      "alde_dun01": 47,
+      "in_sphinx2": 24
+     }
+    },
+    {
+     "mob_id": 2837,
+     "mob": "Furious Explosion",
+     "level": 100,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "mag_dun01": 1
+     }
+    },
+    {
+     "mob_id": 1383,
+     "mob": "Explosion",
+     "level": 100,
+     "rate_pct": 27.5,
+     "mvp": false,
+     "maps": {
+      "mag_dun01": 30
+     }
+    },
+    {
+     "mob_id": 2766,
+     "mob": "Manananggal Ringleader",
+     "level": 107,
+     "rate_pct": 50.0,
+     "mvp": false,
+     "maps": {
+      "ma_dun01": 2
+     }
+    },
+    {
+     "mob_id": 2311,
+     "mob": "Manananggal",
+     "level": 107,
+     "rate_pct": 10.0,
+     "mvp": false,
+     "maps": {
+      "ma_dun01": 40
+     }
+    },
+    {
+     "mob_id": 3750,
+     "mob": "Matt Drainliar",
+     "level": 137,
+     "rate_pct": 50.0,
+     "mvp": false,
+     "maps": {
+      "gef_d01_i": 25
+     }
+    },
+    {
+     "mob_id": 20376,
+     "mob": "Rigid Explosion",
+     "level": 171,
+     "rate_pct": 13.25,
+     "mvp": false,
+     "maps": {
+      "mag_dun03": 20
+     }
+    }
+   ],
+   "drop_mobs_total": 10,
+   "spawning_mobs": 8
+  },
+  "931": {
+   "name": "Orcish Voucher",
+   "aegis": "Orcish_Voucher",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2722,
+     "mob": "Furious Orc Warrior",
+     "level": 44,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "gef_fild10": 2
+     }
+    },
+    {
+     "mob_id": 1023,
+     "mob": "Orc Warrior",
+     "level": 44,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {
+      "gef_fild10": 179,
+      "gef_fild03": 73
+     }
+    },
+    {
+     "mob_id": 2805,
+     "mob": "Solid High Orc",
+     "level": 81,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "alde_dun02": 2
+     }
+    },
+    {
+     "mob_id": 1213,
+     "mob": "High Orc",
+     "level": 81,
+     "rate_pct": 37.5,
+     "mvp": false,
+     "maps": {
+      "alde_dun02": 50
+     }
+    },
+    {
+     "mob_id": 1588,
+     "mob": "Christmas Orc",
+     "level": 24,
+     "rate_pct": 30.0,
+     "mvp": false,
+     "maps": {}
+    },
+    {
+     "mob_id": 1235,
+     "mob": "Smoking Orc",
+     "level": 24,
+     "rate_pct": 27.5,
+     "mvp": false,
+     "maps": {}
+    }
+   ],
+   "drop_mobs_total": 6,
+   "spawning_mobs": 4
+  },
+  "1057": {
+   "name": "Moth Dust",
+   "aegis": "Moth_Dust",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2842,
+     "mob": "Furious Dustiness",
+     "level": 62,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "mjolnir_12": 2
+     }
+    },
+    {
+     "mob_id": 1114,
+     "mob": "Dustiness",
+     "level": 62,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {
+      "mjolnir_12": 162,
+      "yuno_fild01": 52,
+      "prt_maze01": 5
+     }
+    },
+    {
+     "mob_id": 1199,
+     "mob": "Punk",
+     "level": 82,
+     "rate_pct": 15.0,
+     "mvp": false,
+     "maps": {
+      "c_tower1": 107,
+      "c_tower2": 55
+     }
+    },
+    {
+     "mob_id": 2919,
+     "mob": "Neo Punk",
+     "level": 155,
+     "rate_pct": 15.0,
+     "mvp": false,
+     "maps": {
+      "c_tower2_": 55
+     }
+    }
+   ],
+   "drop_mobs_total": 4,
+   "spawning_mobs": 4
+  },
+  "903": {
+   "name": "Reptile Tongue",
+   "aegis": "Reptile_Tongue",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2808,
+     "mob": "Elusive Grove",
+     "level": 55,
+     "rate_pct": 25.0,
+     "mvp": false,
+     "maps": {
+      "cmd_fild01": 2
+     }
+    },
+    {
+     "mob_id": 1687,
+     "mob": "Grove",
+     "level": 55,
+     "rate_pct": 5.0,
+     "mvp": false,
+     "maps": {
+      "cmd_fild01": 202
+     }
+    },
+    {
+     "mob_id": 1119,
+     "mob": "Frilldora",
+     "level": 57,
+     "rate_pct": 7.5,
+     "mvp": false,
+     "maps": {
+      "moc_fild17": 13,
+      "moc_fild16": 10
+     }
+    },
+    {
+     "mob_id": 20649,
+     "mob": "Red Pitaya",
+     "level": 162,
+     "rate_pct": 12.5,
+     "mvp": false,
+     "maps": {
+      "ba_lost": 50
+     }
+    },
+    {
+     "mob_id": 20650,
+     "mob": "Yellow Pitaya",
+     "level": 164,
+     "rate_pct": 12.5,
+     "mvp": false,
+     "maps": {
+      "ba_lost": 50
+     }
+    },
+    {
+     "mob_id": 20651,
+     "mob": "Blue Pitaya",
+     "level": 165,
+     "rate_pct": 12.5,
+     "mvp": false,
+     "maps": {
+      "ba_lost": 50
+     }
+    },
+    {
+     "mob_id": 20652,
+     "mob": "Violet Pitaya",
+     "level": 165,
+     "rate_pct": 12.5,
+     "mvp": false,
+     "maps": {
+      "ba_lost": 50
+     }
+    },
+    {
+     "mob_id": 20653,
+     "mob": "Green Pitaya",
+     "level": 166,
+     "rate_pct": 12.5,
+     "mvp": false,
+     "maps": {
+      "ba_lost": 30
+     }
+    }
+   ],
+   "drop_mobs_total": 16,
+   "spawning_mobs": 9
+  },
+  "1028": {
+   "name": "Mane",
+   "aegis": "Wild_Boar's_Mane",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2672,
+     "mob": "Solid Savage",
+     "level": 59,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "prt_maze01": 2
+     }
+    },
+    {
+     "mob_id": 2673,
+     "mob": "Savage Ringleader",
+     "level": 59,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "mjolnir_07": 3
+     }
+    },
+    {
+     "mob_id": 1166,
+     "mob": "Savage",
+     "level": 59,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {
+      "mjolnir_07": 161,
+      "pay_fild10": 64,
+      "mjolnir_08": 36,
+      "prt_maze01": 8
+     }
+    },
+    {
+     "mob_id": 1311,
+     "mob": "Gullinbursti",
+     "level": 120,
+     "rate_pct": 17.5,
+     "mvp": false,
+     "maps": {
+      "gld_dun01": 30
+     }
+    },
+    {
+     "mob_id": 1221,
+     "mob": "Savage",
+     "level": 26,
+     "rate_pct": 30.0,
+     "mvp": false,
+     "maps": {}
+    }
+   ],
+   "drop_mobs_total": 5,
+   "spawning_mobs": 4
+  },
+  "1042": {
+   "name": "Bug Leg",
+   "aegis": "Short_Leg",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2890,
+     "mob": "Furious Argos",
+     "level": 47,
+     "rate_pct": 12.5,
+     "mvp": false,
+     "maps": {
+      "mjolnir_10": 2
+     }
+    },
+    {
+     "mob_id": 1100,
+     "mob": "Argos",
+     "level": 47,
+     "rate_pct": 2.5,
+     "mvp": false,
+     "maps": {
+      "mjolnir_10": 194,
+      "mjolnir_11": 45,
+      "moc_fild03": 23,
+      "moc_fild13": 15
+     }
+    },
+    {
+     "mob_id": 2891,
+     "mob": "Elusive Argiope",
+     "level": 75,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "mjolnir_11": 2
+     }
+    },
+    {
+     "mob_id": 2892,
+     "mob": "Swift Argiope",
+     "level": 75,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "mjolnir_05": 2
+     }
+    },
+    {
+     "mob_id": 1099,
+     "mob": "Argiope",
+     "level": 75,
+     "rate_pct": 26.68,
+     "mvp": false,
+     "maps": {
+      "mjolnir_11": 170,
+      "mjolnir_05": 166,
+      "dew_fild01": 75,
+      "mosk_fild02": 42
+     }
+    },
+    {
+     "mob_id": 1304,
+     "mob": "Giant Spider",
+     "level": 117,
+     "rate_pct": 6.0,
+     "mvp": false,
+     "maps": {
+      "gld_dun02": 15
+     }
+    },
+    {
+     "mob_id": 1999,
+     "mob": "Centipede Larva",
+     "level": 118,
+     "rate_pct": 26.68,
+     "mvp": false,
+     "maps": {
+      "man_fild01": 42,
+      "dic_fild01": 30,
+      "dic_fild02": 10
+     }
+    },
+    {
+     "mob_id": 1305,
+     "mob": "Ancient Worm",
+     "level": 121,
+     "rate_pct": 22.07,
+     "mvp": false,
+     "maps": {
+      "gld_dun02": 25
+     }
+    }
+   ],
+   "drop_mobs_total": 11,
+   "spawning_mobs": 11
+  },
+  "950": {
+   "name": "Heart of Mermaid",
+   "aegis": "Heart_Of_Mermaid",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 1044,
+     "mob": "Obeaune",
+     "level": 53,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {
+      "iz_dun02": 40
+     }
+    },
+    {
+     "mob_id": 2795,
+     "mob": "Solid Iara",
+     "level": 79,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "bra_dun02": 3
+     }
+    },
+    {
+     "mob_id": 2069,
+     "mob": "Iara",
+     "level": 79,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {
+      "bra_dun02": 110,
+      "bra_dun01": 30
+     }
+    },
+    {
+     "mob_id": 20802,
+     "mob": "Deep Sea Obeaune",
+     "level": 149,
+     "rate_pct": 25.0,
+     "mvp": false,
+     "maps": {
+      "iz_d04_i": 45
+     }
+    },
+    {
+     "mob_id": 1970,
+     "mob": "Obeune",
+     "level": 31,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {}
+    },
+    {
+     "mob_id": 20647,
+     "mob": "Elder of Chung-Geum",
+     "level": 141,
+     "rate_pct": 50.0,
+     "mvp": false,
+     "maps": {}
+    },
+    {
+     "mob_id": 2184,
+     "mob": "Deep Sea Obeaune",
+     "level": 151,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {}
+    }
+   ],
+   "drop_mobs_total": 7,
+   "spawning_mobs": 4
+  },
+  "1032": {
+   "name": "Maneater Blossom",
+   "aegis": "Blossom_Of_Maneater",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 1118,
+     "mob": "Flora",
+     "level": 59,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {
+      "cmd_fild01": 67,
+      "cmd_fild03": 64,
+      "mjolnir_11": 45,
+      "mjolnir_10": 41
+     }
+    },
+    {
+     "mob_id": 2824,
+     "mob": "Swift Geographer",
+     "level": 73,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "yuno_fild12": 1
+     }
+    },
+    {
+     "mob_id": 2825,
+     "mob": "Solid Geographer",
+     "level": 73,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "yuno_fild01": 2
+     }
+    },
+    {
+     "mob_id": 1368,
+     "mob": "Geographer",
+     "level": 73,
+     "rate_pct": 31.0,
+     "mvp": false,
+     "maps": {
+      "yuno_fild01": 75,
+      "yuno_fild12": 68,
+      "yuno_fild11": 55,
+      "yuno_fild09": 42
+     }
+    },
+    {
+     "mob_id": 1413,
+     "mob": "Hermit Plant",
+     "level": 90,
+     "rate_pct": 24.0,
+     "mvp": false,
+     "maps": {
+      "gon_dun03": 26
+     }
+    },
+    {
+     "mob_id": 2844,
+     "mob": "Solid Drosera",
+     "level": 101,
+     "rate_pct": 50.0,
+     "mvp": false,
+     "maps": {
+      "ve_fild02": 2
+     }
+    },
+    {
+     "mob_id": 1781,
+     "mob": "Drosera",
+     "level": 101,
+     "rate_pct": 10.0,
+     "mvp": false,
+     "maps": {
+      "ve_fild02": 177,
+      "ve_fild07": 64,
+      "ve_fild04": 55,
+      "ve_fild03": 38
+     }
+    },
+    {
+     "mob_id": 2738,
+     "mob": "Elusive Muscipular",
+     "level": 105,
+     "rate_pct": 75.0,
+     "mvp": false,
+     "maps": {
+      "ve_fild04": 2
+     }
+    }
+   ],
+   "drop_mobs_total": 9,
+   "spawning_mobs": 9
+  },
+  "966": {
+   "name": "Clam Flesh",
+   "aegis": "Flesh_Of_Clam",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2666,
+     "mob": "Swift Shellfish",
+     "level": 50,
+     "rate_pct": 25.0,
+     "mvp": false,
+     "maps": {
+      "hu_fild06": 1
+     }
+    },
+    {
+     "mob_id": 1074,
+     "mob": "Shellfish",
+     "level": 50,
+     "rate_pct": 5.0,
+     "mvp": false,
+     "maps": {
+      "hu_fild06": 87,
+      "cmd_fild07": 34,
+      "cmd_fild02": 27,
+      "cmd_fild04": 24
+     }
+    },
+    {
+     "mob_id": 2689,
+     "mob": "Elusive Red Eruma",
+     "level": 91,
+     "rate_pct": 50.0,
+     "mvp": false,
+     "maps": {
+      "mal_dun01": 2
+     }
+    },
+    {
+     "mob_id": 2197,
+     "mob": "Red Eruma",
+     "level": 91,
+     "rate_pct": 10.0,
+     "mvp": false,
+     "maps": {
+      "mal_dun01": 60
+     }
+    },
+    {
+     "mob_id": 2178,
+     "mob": "Deep Sea Shellfish",
+     "level": 100,
+     "rate_pct": 5.0,
+     "mvp": false,
+     "maps": {}
+    }
+   ],
+   "drop_mobs_total": 5,
+   "spawning_mobs": 4
+  },
+  "7031": {
+   "name": "Old Frying Pan",
+   "aegis": "Old_Frying_Pan",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2768,
+     "mob": "Elusive Magnolia",
+     "level": 53,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "prt_fild09": 2
+     }
+    },
+    {
+     "mob_id": 1138,
+     "mob": "Magnolia",
+     "level": 53,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {
+      "prt_fild09": 212,
+      "moc_fild13": 15
+     }
+    },
+    {
+     "mob_id": 1856,
+     "mob": "Magnolia",
+     "level": 26,
+     "rate_pct": 45.0,
+     "mvp": false,
+     "maps": {}
+    },
+    {
+     "mob_id": 2026,
+     "mob": "Runaway Dandelion Member",
+     "level": 90,
+     "rate_pct": 25.0,
+     "mvp": false,
+     "maps": {}
+    }
+   ],
+   "drop_mobs_total": 4,
+   "spawning_mobs": 2
+  },
+  "946": {
+   "name": "Snail's Shell",
+   "aegis": "Snail's_Shell",
+   "shops": [],
+   "drops": [
+    {
+     "mob_id": 2905,
+     "mob": "Elusive Ambernite",
+     "level": 19,
+     "rate_pct": 100.0,
+     "mvp": false,
+     "maps": {
+      "prt_fild04": 2
+     }
+    },
+    {
+     "mob_id": 1094,
+     "mob": "Ambernite",
+     "level": 19,
+     "rate_pct": 80.0,
+     "mvp": false,
+     "maps": {
+      "prt_fild04": 111,
+      "prt_fild00": 65,
+      "gef_fild01": 28
+     }
+    }
+   ],
+   "drop_mobs_total": 2,
+   "spawning_mobs": 2
+  }
+ }
+}
