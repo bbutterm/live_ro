@@ -42,6 +42,7 @@ class GateResult:
     llm: str = None                                 # повод для LLM или None
     llm_kind: str = "event"                         # event | chat
     note: str = ""                                  # почему так решено (в журнал)
+    stranger: bool = False                          # strangers: шёпот не-жителя (при BRAIN_LLM=off — шаблон strangers.py)
 
 
 @dataclass
@@ -103,7 +104,7 @@ class RuleGate:
             return GateResult(note=f"лимит разговоров с {sender} ({ctx.peer_replies_per_hour}/ч)")
         who = "житель" if sender in ctx.peers else "игрок"
         return GateResult(llm=f"{sender} ({who}) пишет мне в личку", llm_kind="chat",
-                          note="личное сообщение")
+                          note="личное сообщение", stranger=sender not in ctx.peers)   # strangers: флаг
 
     def on_party_invite(self, event, state, ctx):
         """Принять только группу жителя (LR_<имя жителя>); остальные OpenKore отклонит сам (partyAuto 1)."""
