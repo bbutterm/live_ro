@@ -53,7 +53,7 @@ class FakeOpenRouter(BaseHTTPRequestHandler):
             content = json.dumps(DECISION, ensure_ascii=False)
         assert "Arkady" in system
         payload = {"choices": [{"message": {"content": content}}],
-                   "usage": {"prompt_tokens": 100, "completion_tokens": 50}}
+                   "usage": {"prompt_tokens": 100, "completion_tokens": 50, "cost": 0.01}}
         data = json.dumps(payload).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

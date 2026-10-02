@@ -29,6 +29,8 @@ class Memory:
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(llm_calls)")}
         if "provider" not in cols:   # файл памяти из версии до JEV
             self.db.execute("ALTER TABLE llm_calls ADD COLUMN provider TEXT NOT NULL DEFAULT 'openrouter'")
+        if "cost" not in cols:       # стоимость по usage.cost (OpenRouter), USD
+            self.db.execute("ALTER TABLE llm_calls ADD COLUMN cost REAL")
         self.db.commit()
 
     def close(self):
@@ -101,11 +103,16 @@ class Memory:
     def log_llm_call(self, ok, latency=None, usage=None, error=None, provider="openrouter"):
         usage = usage or {}
         self.db.execute(
-            "INSERT INTO llm_calls (ts, ok, latency, prompt_tokens, completion_tokens, error, provider) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO llm_calls (ts, ok, latency, prompt_tokens, completion_tokens, error, provider, cost) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (time.time(), 1 if ok else 0, latency, usage.get("prompt_tokens"),
-             usage.get("completion_tokens"), (error or "")[:300] or None, provider))
+             usage.get("completion_tokens"), (error or "")[:300] or None, provider,
+             usage.get("cost") if isinstance(usage.get("cost"), (int, float)) else None))
         self.db.commit()
+
+    def cost_since(self, since, provider="openrouter"):
+        return self.db.execute("SELECT COALESCE(SUM(cost), 0) FROM llm_calls WHERE ts >= ? AND provider = ?",
+                               (since, provider)).fetchone()[0]
 
     def llm_calls_since(self, since, provider="openrouter"):
         return self.db.execute("SELECT COUNT(*) FROM llm_calls WHERE ts >= ? AND provider = ?",

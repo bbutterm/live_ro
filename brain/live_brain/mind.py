@@ -23,6 +23,19 @@ log = logging.getLogger("mind")
 MAX_ACTIONS = 2
 
 
+def fit_json(data, limit):
+    """JSON не длиннее limit символов: сначала старые события, затем менее важные воспоминания."""
+    data = dict(data)
+    text = json.dumps(data, ensure_ascii=False, default=str)
+    for key in ("последние_события", "воспоминания"):
+        items = list(data.get(key) or [])
+        while len(text) > limit and items:
+            items.pop(0) if key == "последние_события" else items.pop()
+            data[key] = items
+            text = json.dumps(data, ensure_ascii=False, default=str)
+    return text if len(text) <= limit else text[:limit]
+
+
 class Mind:
     def __init__(self, settings, persona, memory, bridge_send, decisions_path, gate,
                  fast=None, peers=()):
@@ -47,6 +60,7 @@ class Mind:
         self.last_chat_decision = 0.0
         self.backoff_until = 0.0
         self.sent = {}                 # id действия -> действие
+        self.jev_inflight = 0          # вызовы JEV в полёте: учитываются в лимите сразу
 
     # ---------- входящие сообщения плагина ----------
 
@@ -68,6 +82,8 @@ class Mind:
 
     async def on_event(self, msg):
         event = {k: v for k, v in msg.items() if k not in ("type", "ts")}
+        if isinstance(event.get("text"), str):
+            event["text"] = event["text"][:200]        # реплика игрока не раздувает память и промпт
         kind = event.get("kind")
         self.mem.add_event(kind, {k: v for k, v in event.items() if k != "kind"})
         if kind in ("chat_private", "chat_public") and event.get("from"):
@@ -91,10 +107,18 @@ class Mind:
     async def fast_decide(self, event, result):
         """JEV: быстрая оценка. Не вышло — решение остаётся за правилами (повод для LLM)."""
         provider = self.fast.provider
-        if self.mem.llm_calls_since(time.time() - 86400, "jev") >= provider.daily_limit:
+        # Резерв до вызова: параллельные события не могут вместе превысить лимит.
+        if self.mem.llm_calls_since(time.time() - 86400, "jev") + self.jev_inflight >= provider.daily_limit:
             self.write_decision({"type": "jev_skip", "why": f"лимит JEV {provider.daily_limit}/сутки"})
             self.trigger(result.llm, event, result.llm_kind)
             return
+        self.jev_inflight += 1
+        try:
+            await self._fast_decide(event, result, provider)
+        finally:
+            self.jev_inflight -= 1
+
+    async def _fast_decide(self, event, result, provider):
         relation = self.mem.relation(str(event.get("from"))) if event.get("from") else None
         messages = self.fast.messages(event, self.state, self.ctx, self.persona, relation)
         loop = asyncio.get_running_loop()
@@ -226,6 +250,8 @@ class Mind:
             why_not = self.s.llm_off_reason
         elif self.budget_left() <= 0:
             why_not = f"исчерпан дневной лимит {self.s.daily_limit}"
+        elif self.s.daily_usd_limit and self.mem.cost_since(now - 86400) >= self.s.daily_usd_limit:
+            why_not = f"исчерпан денежный лимит ${self.s.daily_usd_limit:.2f}/сутки (по usage.cost)"
         elif now < self.backoff_until:
             why_not = "пауза после ошибки API"
         if why_not:
@@ -290,7 +316,7 @@ class Mind:
             user["отношение_к_собеседнику"] = self.mem.relation(speaker)
         return [
             {"role": "system", "content": system},
-            {"role": "user", "content": json.dumps(user, ensure_ascii=False, default=str)},
+            {"role": "user", "content": fit_json(user, self.s.max_prompt_chars)},
         ]
 
     async def apply(self, d, reason, latency, usage):

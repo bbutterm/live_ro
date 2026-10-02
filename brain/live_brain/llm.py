@@ -23,6 +23,8 @@ def chat(settings, messages, json_mode=True, max_tokens=None):
     }
     if json_mode:
         body["response_format"] = {"type": "json_object"}
+    if "openrouter.ai" in settings.api_base:
+        body["usage"] = {"include": True}       # OpenRouter вернёт usage.cost (USD)
     req = urllib.request.Request(
         settings.api_base + "/chat/completions",
         data=json.dumps(body).encode("utf-8"),

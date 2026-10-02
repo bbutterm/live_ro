@@ -8,7 +8,9 @@ Gate решает, БЕЗ LLM:
 Два слоя:
   1. RuleGate — всегда, без сети: критические и простые правила, лимиты разговоров
      с другими ботами-жителями.
-  2. JevGate (BRAIN_GATE=jev) — быстрая модель по OpenAI-совместимому API (JEV_*):
+  2. JevGate (BRAIN_GATE=jev) — быстрая модель JEV. Транспорт JEV_PROVIDER:
+     typesafe — нативный TypeSafe Decisions API (typesafe.py, выбор deepseek/ignore);
+     openai — любой OpenAI-совместимый chat/completions (может предложить короткую реплику).
      для чата и значимых событий за несколько секунд решает важность события,
      нужен ли дорогой LLM и, если хватит, короткую реплику. Ошибка или таймаут —
      решение остаётся за RuleGate.
@@ -157,8 +159,8 @@ class JevGate:
 
     def call(self, messages):
         """Блокирующий вызов (в executor). Возвращает (решение, usage, latency)."""
-        if self.provider.api_base == "https://api.typesafe.ai/v1/systemone":
-            from .typesafe import decide
+        if self.provider.kind == "typesafe":
+            from .typesafe import decide       # закрытый выбор deepseek/ignore, без quick-текста
             return decide(self.provider, messages)
         text, usage, latency = llm.chat(self.provider, messages, max_tokens=self.provider.max_tokens)
         d = llm.parse_json_object(text)

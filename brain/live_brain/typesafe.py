@@ -3,9 +3,8 @@ import json
 import time
 import urllib.request
 import urllib.error
+from .config import TYPESAFE_ENDPOINT as ENDPOINT
 from .llm import LLMError, redact
-
-ENDPOINT = 'https://api.typesafe.ai/v1/systemone'
 
 def decide(provider, messages):
     if provider.api_base != ENDPOINT:

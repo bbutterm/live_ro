@@ -22,6 +22,24 @@ def _int(env, key, default):
     return int(value) if value.isdigit() else default
 
 
+def _float(env, key, default):
+    try:
+        return float(env.get(key, "") or default)
+    except ValueError:
+        return default
+
+
+TYPESAFE_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+
+
+def _jev_kind(env):
+    """JEV_PROVIDER=typesafe|openai; без него — по адресу (совместимость с env до этой версии)."""
+    kind = env.get("JEV_PROVIDER", "").strip().lower()
+    if kind in ("typesafe", "openai"):
+        return kind
+    return "typesafe" if env.get("JEV_API_BASE", "").rstrip("/") == TYPESAFE_ENDPOINT else "openai"
+
+
 @dataclass
 class Provider:
     """OpenAI-совместимый провайдер (те же поля читает llm.chat)."""
@@ -32,6 +50,7 @@ class Provider:
     timeout: int
     max_tokens: int
     daily_limit: int
+    kind: str = "openai"      # typesafe | openai (транспорт JEV)
 
     @property
     def ready(self):
@@ -55,6 +74,8 @@ class Settings:
     jev: Provider
     peer_replies_per_hour: int
     peer_smalltalk_every: int
+    daily_usd_limit: float
+    max_prompt_chars: int
 
     @property
     def llm_enabled(self):
@@ -91,6 +112,7 @@ class Settings:
             safe_hp=_int(env, "BRAIN_SAFE_HP", 30),
             jev=Provider(
                 name="jev",
+                kind=_jev_kind(env),
                 api_base=env.get("JEV_API_BASE", "").rstrip("/"),
                 api_key=env.get("JEV_API_KEY", ""),
                 model=env.get("JEV_MODEL", ""),
@@ -100,6 +122,8 @@ class Settings:
             ),
             peer_replies_per_hour=_int(env, "BRAIN_PEER_REPLIES_PER_HOUR", 6),
             peer_smalltalk_every=_int(env, "BRAIN_PEER_SMALLTALK", 1800),
+            daily_usd_limit=_float(env, "BRAIN_DAILY_USD_LIMIT", 1.0),
+            max_prompt_chars=_int(env, "BRAIN_MAX_PROMPT_CHARS", 8000),
         )
 
 
