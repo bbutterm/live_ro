@@ -117,6 +117,9 @@ class Mind:
         party_cfg = (world or {}).get("party", {})
         self.party = (Party(self, party_cfg) if world and party_cfg.get("enabled", True) and self.ctx.peers
                       and feat("party") else None)
+        if self.routine and self.routine.cfg.get("auto_hunt_maps"):
+            for m in self.mem.get("learned_hunt_maps", []):      # выученные места охоты (атлас) — после рестарта тоже
+                self.learn_hunt_map(m, save=False)
 
     # ---------- входящие сообщения плагина ----------
 
@@ -366,6 +369,19 @@ class Mind:
         if self.safety.pause_expired():
             log.warning("пауза дольше %d с — продолжаю охоту по правилу", self.safety.max_pause)
             await self.execute([{"action": "resume"}], source="rule", reason="правило: пауза истекла")
+
+    def learn_hunt_map(self, hmap, save=True):
+        """Рост: новое место охоты (совет атласа) становится своим — для распорядка, safety и модели."""
+        if hmap in self.persona["hunt_maps"]:
+            return False
+        self.persona["hunt_maps"].append(hmap)
+        self.safety.hunt_maps.append(hmap)
+        self.safety.point_maps.add(hmap)
+        self.point_maps.add(hmap)
+        if save:
+            learned = self.mem.get("learned_hunt_maps", [])
+            self.mem.set("learned_hunt_maps", (learned + [hmap])[-6:])
+        return True
 
     def check_job_ready(self):
         job, jlv = self.state.get("job"), self.state.get("job_lv")

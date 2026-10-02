@@ -70,13 +70,39 @@ class MapStats:
         hours = m["minutes"] / 60
         return (m["kills"] - DEATH_PENALTY * m["deaths"]) / hours
 
-    def choose(self, maps, bans):
+    def choose(self, maps, bans, level=None):
         allowed = [m for m in maps if m not in bans] or list(maps)
+        if level:
+            allowed = self.safe_for_level(allowed, level)
         for m in allowed:
             if self.score(m) is None:
                 return m, "мало опыта на карте — попробую"
         best = max(allowed, key=lambda m: self.score(m))
         return best, f"лучшая по опыту: {self.score(best):.0f} очков/час"
+
+    def safe_for_level(self, maps, level):
+        """Атлас мира (atlas.py): не идти туда, где монстры заведомо сильнее уровня. Нет атласа — без фильтра."""
+        try:
+            from . import atlas
+            ok, rejected = atlas.default().filter_hunt_maps(maps, level)
+        except (OSError, ValueError, KeyError):
+            return maps
+        for name, why in rejected.items():
+            log.info("карта %s не по уровню %s: %s", name, level, why)
+        return ok or maps
+
+    def advice(self, maps, level, job=None):
+        """Подсказка о росте: все свои карты слишком лёгкие — какие места атлас считает подходящими."""
+        try:
+            from . import atlas
+            a = atlas.default()
+            easy = all((a.maps.get(m, {}).get("level") or {}).get("max", 0) < level - 10 for m in maps)
+            if not easy:
+                return None
+            return [m["map"] if isinstance(m, dict) else m[0]
+                    for m in a.suitable_maps(level, atlas.archetype(job) if job else "melee", top=3)]
+        except (OSError, ValueError, KeyError, TypeError, IndexError):
+            return None
 
     def summary(self):
         out = {}

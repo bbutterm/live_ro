@@ -493,10 +493,36 @@ class Routine:
             return
         pm = getattr(self.mind, "postmortem", None)
         bans = pm.bans(self.clock()) if pm else {}
-        choice, why = maps.choose(self.mind.persona["hunt_maps"], bans)
+        self.grow(maps)
+        choice, why = maps.choose(self.mind.persona["hunt_maps"], bans, level=self.mind.state.get("lv"))
         if choice != self.st.get("prefer_map"):
             self.note("routine_map_choice", f"На охоту пойду на {choice}: {why}.", 1)
         self.st["prefer_map"] = choice
+
+    def grow(self, maps):
+        """Свои карты стали слишком лёгкими для уровня — атлас советует места по силам.
+        auto_hunt_maps: true — житель сам добавляет одно новое место в сутки; иначе только запись и
+        оповещение владельцу (карты нужно включить на сервере: scripts/lab doctor, «карты мира»)."""
+        state = self.mind.state
+        if not state.get("lv") or self.st.get("grow_day") == self.st.get("day"):
+            return
+        advice = maps.advice(self.mind.persona["hunt_maps"], state["lv"], state.get("job"))
+        if not advice:
+            return
+        self.st["grow_day"] = self.st.get("day")
+        learn = getattr(self.mind, "learn_hunt_map", None)
+        if self.cfg.get("auto_hunt_maps") and learn:
+            new = next((m for m in advice if m not in self.mind.persona["hunt_maps"]), None)
+            if new and learn(new):
+                self.note("routine_grow", f"Мои места охоты стали слишком лёгкими для {state['lv']} уровня — "
+                                          f"осваиваю {new}.", 3)
+            return
+        self.note("routine_grow_advice", f"Мои места охоты слишком лёгкие для {state['lv']} уровня; по атласу "
+                                         f"подойдут: {', '.join(advice)}.", 2)
+        alert = getattr(self.mind, "alert", None)
+        if alert:
+            alert("growth", f"{state.get('name')}: lv {state['lv']}, места охоты слишком лёгкие; атлас советует "
+                            f"{', '.join(advice)} (включить карты и auto_hunt_maps)", every=86400)
 
     def prefer(self, hunt_map):
         """Модель выбрала карту: в охоте — сразу, в городе — на следующую сессию."""

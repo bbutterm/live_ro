@@ -25,6 +25,14 @@ MAP_BAN = 7200
 MAP_DEATHS = 2
 
 
+def monster_info(name):
+    try:
+        from . import atlas
+        return atlas.default().monster_info(name)
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 class Postmortem:
     def __init__(self, mind, clock=time.time):
         self.mind = mind
@@ -97,6 +105,9 @@ class Postmortem:
             r = risk.setdefault(rep["cause"], {"killed_me": 0, "beaten": 0, "last": 0})
             r["killed_me"] += 1
             r["last"] = now
+            info = monster_info(rep["cause"])
+            if info:                                   # справка из атласа: уровень, агрессивность, стихия
+                r.update(level=info["level"], aggressive=info["aggressive"], element=info["element"])
             self.mind.mem.set("monster_risk", risk)
         self.ban_map(rep["map"], now)
         return rep

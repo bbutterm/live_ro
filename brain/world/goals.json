@@ -16,7 +16,11 @@
     "town": {"map": "prontera", "x": 156, "y": 185, "radius": 3},
     "town_smalltalk_seconds": 600,
     "sit_in_town": true,
-    "vend_in_town": true
+    "vend_in_town": true,
+    "min_hp_to_hunt": 80,
+    "after_death_rest_minutes": 10,
+    "_auto_hunt_maps": "true — житель сам осваивает новые места охоты по атласу (одно в сутки), когда свои стали лёгкими. Включать, когда на сервере включены нужные карты (scripts/lab doctor).",
+    "auto_hunt_maps": false
   },
 
   "economy": {
