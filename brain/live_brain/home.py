@@ -143,6 +143,9 @@ class Home:
         explorer = getattr(self.mind, "explorer", None)        # review2: экспедиция ведёт тело (ещё в городе) —
         if explorer and explorer.busy():                       # review2: Kafra после возвращения
             return "экспедиция"
+        trek = getattr(self.mind, "trek", None)                # review4: поход (сбор группы, привал) — тоже
+        if trek and trek.busy():                               # review4: (explorer свободен между плечами)
+            return "поход"
         may_move = getattr(self.mind, "may_move", None)
         if may_move and not may_move("plan")[0]:
             return "телом владеет другая задача"

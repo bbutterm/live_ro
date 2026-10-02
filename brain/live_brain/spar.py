@@ -46,6 +46,7 @@ DEFAULTS = {
 WING = "602"
 ROOMS = ("Prontera", "Izlude", "Payon", "Alberta", "Morocc")   # пункты приёмной #8 (npc/other/pvp.txt:297)
 ACTIVE = ("going", "arena", "fight", "after")
+ARENA = re.compile(r"pvp_y_\d-\d$")                            # review4: комнаты арены (bots/plugins/spar inArenaMap)
 PHRASES = {   # ≤ 60 символов без метки
     "spar_ask": ["Разомнёмся на арене?", "Пойдём на арену, разомнёмся?", "Спарринг на арене? По-дружески."],
     "spar_peace": ["Мир? Тогда разомнёмся на арене!", "Помирились — давай на арену, по-дружески?"],
@@ -63,8 +64,10 @@ class Spar:
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "spar", "spar", "spar", False, ("peers",), "world"
     TICK_ORDER = 195                          # после rivalry (190): соперник недели уже выбран
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 47   # после boss (45), до crew (50)
-    EVENTS = {"spar_step": {"call": "on_step", "own": True}, "spar_result": {"call": "on_result", "own": True}}
+    EVENTS = {"spar_step": {"call": "on_step", "own": True}, "spar_result": {"call": "on_result", "own": True},
+              "spar_fall": {"call": None, "own": True}}     # review4: падение на арене (mind.on_event) — не в gate/LLM
     EVENT_ORDER = 85
+    KEEP = (WING,)                            # review4: economy.for_sale не продаёт крыло жителям и в лавке
     # Поля промпта нет: выключенный по умолчанию модуль добавлял бы пустой ключ всем жителям (как boss).
 
     def __init__(self, mind, world=None, clock=None, rng=None):
@@ -129,6 +132,13 @@ class Spar:
         cur = self.cur
         return bool((cur and cur.get("phase") in ACTIVE) or (self.mind.state.get("spar") or {}).get("running"))
 
+    def arena_fall(self, event):
+        """review4: событие тела died на арене PvP Yoyo во время спарринга — падение в дружеском бою (nopenalty),
+        а не гибель: разбор смерти ушёл бы в шину мира и летопись, [party:dead:] — группе, смерть — в счёт
+        распорядка, настроения, имён мест и в hurt следующего спарринга. Итог боя придёт spar_result down."""
+        where = event.get("map") or self.mind.state.get("map") or ""
+        return self.busy() and bool(ARENA.match(str(where)))
+
     def today(self, now):
         day = self.day(now)
         return sum(1 for ts in self.st["history"] if self.day(ts) == day)
@@ -162,6 +172,10 @@ class Spar:
         explorer = getattr(m, "explorer", None)
         if m.plans.store.active() or (explorer and explorer.busy()):
             return "busy"
+        for attr in ("trek", "herbal", "refine"):              # review4: поход между плечами, поездка травника,
+            mod = getattr(m, attr, None)                       # review4: заточка — тело занято не explorer-ом
+            if mod is not None and callable(getattr(mod, "busy", None)) and mod.busy():
+                return "busy"
         may_move = getattr(m, "may_move", None)
         if may_move and not may_move("routine")[0]:
             return "busy"

@@ -488,6 +488,9 @@ class Economy:
         keep = set(self.share) | set(self.wishlist(state))
         orders = getattr(self.mind, "orders", None)                        # orders: ORG-070 взятый заказ —
         keep |= set(orders.reserved()) if orders else set()                # orders: не продаю другим
+        keep |= {str(i) for i in ((state.get("craft") or {}).get("kept") or [])}   # review4: craft_setup keep (травник,
+        spar = getattr(self.mind, "spar", None)                                     # review4: Roberto) — и от жителей;
+        keep |= set(getattr(spar, "KEEP", ())) if spar else set()                   # review4: крыло — выход с арены
         coll = getattr(self.mind, "collection", None)                      # collect: ORG-074 карта альбома
         items = coll.sellable(state.get("items") or {}) if coll else state.get("items") or {}   # collect: дубли — можно
         return self.prices.valuables(items, keep=keep)

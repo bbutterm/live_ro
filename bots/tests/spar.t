@@ -205,4 +205,28 @@ menu('Gate Keeper#gke3', ['Something else']);
 is(lastEvent()->{outcome}, 'aborted', 'меню не из сценария — отмена');
 like(lastEvent()->{reason}, qr/menu/, 'причина menu');
 
+# ---- review4: выход OpenKore посреди спарринга — настройки профиля возвращаются после перезапуска ----
+fresh();
+spar::start({to => 'Vera', role => 'first', room => 'Prontera'});
+at('pvp_y_room', 54, 83);
+tick();
+at('pvp_y_8-1', 156, 185);
+tick();                                                       # fightMode: survival 0, зелья выключены
+my ($kept) = reverse grep { /^conf -f spar_saved / } @Commands::ran;
+ok($kept, 'прежние значения продублированы в config (spar_saved)');
+like($kept // '', qr/useSelf_item_0_disabled=none/, 'и флаг зелья — тоже');
+like($kept // '', qr/attackAuto=2/, 'attackAuto профиля');
+# перезапуск: %run пуст (новый процесс), config.txt — с правками спарринга и spar_saved
+%spar::run = ();
+@Commands::ran = ();
+($Globals::config{spar_saved}) = ($kept // '') =~ /^conf -f spar_saved (.*)$/;
+tick();
+@c = confs();
+ok((grep { $_ eq 'conf -f attackAuto 2' } @c) && (grep { $_ eq 'conf -f lockMap prt_fild08' } @c)
+	&& (grep { $_ eq 'conf -f useSelf_item_0_disabled none' } @c), 'после перезапуска настройки возвращены');
+ok((grep { $_ eq 'conf -f spar_saved none' } @c), 'spar_saved очищен');
+@Commands::ran = ();
+tick();
+ok(!confs(), 'второй раз не возвращает');
+
 done_testing();

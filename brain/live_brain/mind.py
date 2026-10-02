@@ -19,6 +19,7 @@ from contextlib import contextmanager
 
 from . import llm
 from . import modules                                   # W8: реестр модулей (создание, тик, метки, события, промпт)
+from . import arrows as arrows_mod, herbal as herbal_mod, trek as trek_mod   # review4: MODULE_JOB_PATHS
 from . import topics                                    # talk: темы разговора из жизни мира (ORG-066)
 from .gate import GateContext, JevGate
 from .lifecycle import STALE_SEC, Lifecycle
@@ -28,6 +29,10 @@ from .plans import TAG, PlanExecutor, PlanStore
 from .postmortem import Postmortem
 from .routine import diary_only                         # ops: ORG-049 фильтр ответа на повод diary
 from .safety import SafetyPolicy
+
+# review4: path этапов jobChange, чьи итоги забирают модули реестра (consume "result"); выключенный модуль не отдаёт
+# свой итог карьере — career.on_result записал бы «этап herbal/pharmacist пройден» или копил бы провалы до паузы.
+MODULE_JOB_PATHS = (herbal_mod.PATH, arrows_mod.PATH, trek_mod.PATH)
 
 log = logging.getLogger("mind")
 
@@ -43,6 +48,9 @@ PROMISE = re.compile(r"(уже\s+иду|иду\s+к\s+тебе|бегу\s+к|с�
 FIRST_JOBS = {"Swordsman": "Knight/Crusader", "Swordman": "Knight/Crusader", "Acolyte": "Priest/Monk",
               "Mage": "Wizard/Sage", "Archer": "Hunter/Bard/Dancer", "Thief": "Assassin/Rogue",
               "Merchant": "Blacksmith/Alchemist"}
+# review4: служебная метка протокола жителей ([offer:..:ok], [spar:yield], [trek:no:..], [mentor:grad], [meet:..]):
+# в шёпоте модели её примет другой житель как протокол — постороннему хватило бы уговорить модель в личке.
+MACHINE_TAG = re.compile(r"\[[a-z]{2,12}:")
 INBOX_TTL = 600           # команда оператора старше 10 минут не исполняется
 PLAN_LLM_ACTIONS = ("propose_meeting", "accept_meeting", "decline_meeting", "cancel_plan")
 
@@ -229,6 +237,8 @@ class Mind:
         if isinstance(event.get("text"), str):
             event["text"] = event["text"][:200]        # реплика игрока не раздувает память и промпт
         kind = event.get("kind")
+        if kind == "died" and self.spar and self.spar.arena_fall(event):   # review4: упал(а) в спарринге — не гибель
+            kind = event["kind"] = "spar_fall"                               # review4: (spar.arena_fall)
         if kind != "attack":                            # начало боя частое: только отметка времени
             data = {k: v for k, v in event.items() if k != "kind"}
             if self.strangers and self.strangers.private(event):   # strangers: текст незнакомца при BRAIN_LLM=off не храним
@@ -284,6 +294,10 @@ class Mind:
             if self.home:                                                 # home:
                 self.home.on_result(event)                                # home:
             return                                                        # home:
+        if kind == "job_change_result" and event.get("path") in MODULE_JOB_PATHS:   # review4: модуль выключен —
+            self.write_decision({"type": "job_change_stray", "path": event.get("path"),   # review4: не этап карьеры
+                                 "ok": bool(event.get("ok"))})                             # review4:
+            return                                                                         # review4:
         if kind == "job_change_result":
             if self.career:
                 self.career.on_result(event)
@@ -376,6 +390,9 @@ class Mind:
             if a.get("action") == "set_hunt_map" and a.get("map") == self.state.get("lock_map"):
                 continue
             clean, why = self.safety.check(a, self.state, protocol=protocol)
+            if (not why and source in ("llm", "jev") and a.get("action") in ("say", "whisper")   # review4: подделка
+                    and MACHINE_TAG.search(str(a.get("text", "")))):                           # review4: протокола
+                why = "служебная метка [вид:...] — только у правил протокола, не у модели"     # review4:
             if why:
                 rejected.append({"action": a, "why": why})
             else:

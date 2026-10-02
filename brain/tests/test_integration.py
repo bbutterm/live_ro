@@ -209,7 +209,7 @@ class BodyMixin:
         self.addCleanup(self.mem.close)
         persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
         self.mind = Mind(Settings.from_env({}), persona, self.mem, send, root / "d.jsonl", RuleGate(),
-                         peers={"Arkady", "Vera"}, world=WORLD)
+                         peers={"Arkady", "Vera"}, world=getattr(self, "WORLD", WORLD))   # review4: мир теста
 
     def state(self, **kw):
         s = {"type": "state", "ts": self.clock.t, "name": "Arkady", "job": "Swordsman", "lv": 41, "job_lv": 20,
@@ -731,6 +731,290 @@ class Review3JointsTest(BodyMixin, unittest.TestCase):
         self.assertLessEqual(len(log), 250, "имён в истории отношений — ограниченно")
         self.assertIn("Vera", log, "свежая пара остаётся")
         self.assertLessEqual(max(len(v) for v in log.values()), RELATION_LOG)
+
+
+# review4: модули раунда 7, выключенные по умолчанию, — включены (синтетическое тело, не игра)
+WORLD7 = dict(WORLD, **{k: dict(WORLD.get(k) or {}, enabled=True) for k in ("spar", "trek", "herbal", "refine")})
+
+
+class Review4JointsTest(BodyMixin, unittest.TestCase):
+    """review4: стыки модулей раунда 7 (спарринг, поход, травник, стрелы, заточка, рынок, взгляд, достижения) с ядром."""
+    WORLD = WORLD7
+
+    def ev(self, **kw):
+        asyncio.run(self.mind.on_message(dict(type="event", ts=self.clock.t, **kw)))
+
+    def kinds(self):
+        return [r[0] for r in self.mem.db.execute("SELECT kind FROM events ORDER BY id")]
+
+    def test_spar_fall_is_not_death(self):
+        """Упал(а) в дружеском спарринге на арене (nopenalty) — не гибель: ни разбора смерти (он идёт в шину мира и
+        летопись), ни [party:dead:] группе, ни счёта смертей распорядка, ни блокировки следующего спарринга (hurt)."""
+        self.state(party="LR_Arkady", party_members=[{"name": "Vera", "online": True, "map": "prontera"}])
+        spar = self.mind.spar
+        self.assertIsNotNone(spar)
+        spar.st["cur"] = {"peer": "Vera", "role": "first", "phase": "fight", "room": "Prontera",
+                          "ts": self.clock.t, "started": self.clock.t}
+        self.state(map="pvp_y_8-1", x=156, y=185, hp_pct=40, spar={"running": True, "phase": "fight", "to": "Vera"})
+        self.clock.t += 5
+        self.ev(kind="died", map="pvp_y_8-1")
+        kinds = self.kinds()
+        self.assertNotIn("death_report", kinds, "падение на арене — не разбор смерти")
+        self.assertEqual(self.mem.count_events("died", 0), 0, "смертей не прибавилось")
+        self.assertFalse([a for a in self.sent if "[party:dead:" in str(a.get("text", ""))], "группе не «погиб»")
+        self.assertIn("spar_fall", kinds, "падение записано как факт спарринга")
+        self.ev(kind="spar_result", to="Vera", outcome="down", reason="упал(а) на арене", room="Prontera")
+        self.assertIsNone(spar.cur)
+        self.assertIn("spar_bout", self.kinds())
+        # обычная смерть вне спарринга — по-прежнему смерть
+        self.state(map="prt_fild08", x=100, y=100, hp_pct=10, spar={"running": False})
+        self.ev(kind="died", map="prt_fild08")
+        self.assertIn("death_report", self.kinds())
+
+    def test_market_keeps_craft_and_spar_items(self):
+        """Рынок жителей и лавка (economy.for_sale) не продают то, что держат модули раунда 7: крыло бабочки —
+        единственный выход с арены спарринга; травы/бутылки травника и материалы Roberto (state.craft.kept —
+        craft_setup keep держит их только от NPC-продажи OpenKore, не от [offer:] и лавки)."""
+        self.state(items={"501": 30, "602": 2, "509": 40, "713": 10, "4001": 2},
+                   craft={"items": {}, "kept": [509, 713]})
+        lots = {lot[0] for lot in self.mind.economy.for_sale(self.mind.state)}
+        self.assertNotIn("602", lots, "крыло для арены не продаётся")
+        self.assertNotIn("509", lots, "травы травника не продаются")
+        self.assertNotIn("713", lots, "бутылки травника не продаются")
+        self.assertIn("4001", lots, "прочее ценное — продаётся")
+
+    def test_spar_holds_body_against_quest_modules(self):
+        """Спарринг владеет телом как «plan» — тем же владельцем, которого спрашивают дом (Kafra), карьера, травник,
+        стрелы и заточка (may_move("plan")): без отдельной проверки они слали свой этап jobChange посреди похода
+        к Gate Keeper. И наоборот: поход (trek) держит тело — спарринг не начинается."""
+        self.state()
+        r = self.mind.routine
+        r.new_day(self.clock.t, keep_mode="town")
+        r.st.update(arrived=True, rest_until=self.clock.t + 3600)
+        home = self.mind.home
+        self.assertIsNone(home.why_not_now(self.clock.t, self.mind.state), "без спарринга дом пошёл бы к Kafra")
+        self.mind.spar.st["cur"] = {"peer": "Vera", "role": "first", "phase": "going", "room": "Prontera",
+                                    "ts": self.clock.t, "started": self.clock.t}
+        self.assertIsNotNone(home.why_not_now(self.clock.t, self.mind.state), "спарринг идёт — дом ждёт")
+        self.clock.t += 5
+        asyncio.run(self.mind.step())
+        self.assertFalse([a for a in self.sent if a["action"] in ("job_change", "refine")], self.sent)
+        self.mind.spar.st["cur"] = None
+        self.mind.trek.st["trip"] = {"target": "payon", "legs": [], "i": 0, "phase": "saved", "led_by": None,
+                                     "members": ["Vera"], "started": self.clock.t}
+        self.state(items={"501": 30, "602": 2})
+        self.assertEqual(self.mind.spar.blocker(self.clock.t), "busy", "поход идёт — на арену не зову")
+
+    def test_tick_exception_keeps_memory_consistent(self):
+        """perf: исключение в модуле посреди такта — записи такта до него зафиксированы (как при коммите на запись),
+        кэш такта сброшен (следующий такт читает БД), счётчик вложенности вернулся к нулю."""
+        import sqlite3
+        self.state()
+
+        async def boom():
+            self.mem.set("review4_probe", {"n": 1})
+            self.mem.update_relation("Vera", 1, "до сбоя")
+            raise RuntimeError("модуль упал")
+
+        self.mind.gaze.tick = boom
+        self.clock.t += 5
+        with self.assertRaises(RuntimeError):
+            asyncio.run(self.mind.step())
+        self.assertEqual(self.mem._scope, 0)
+        other = sqlite3.connect(str(self.mem.path))
+        try:
+            row = other.execute("SELECT value FROM kv WHERE key = 'review4_probe'").fetchone()
+        finally:
+            other.close()
+        self.assertEqual(json.loads(row[0]), {"n": 1}, "запись такта до сбоя зафиксирована")
+        self.mem.db.execute("UPDATE kv SET value = '{\"n\": 2}' WHERE key = 'review4_probe'")
+        with self.mem.tick():
+            self.assertEqual(self.mem.get("review4_probe"), {"n": 2}, "кэш прошлого такта не устарел")
+
+    def test_trek_gather_vs_kafra_stage(self):
+        """Поход: пока группа собирается (gather, explorer ещё свободен), дом не шлёт этап Kafra; если этап jobChange
+        всё же идёт (карьера, отправлен только что), поход не выводит тело плечом-экспедицией из-под этапа."""
+        self.state()
+        r = self.mind.routine
+        r.new_day(self.clock.t, keep_mode="town")
+        r.st.update(arrived=True, rest_until=self.clock.t + 3600)
+        trek = self.mind.trek
+        legs = trek.legs_to("payon") or [{"to": "payon", "hops": 3, "path": ["prontera", "prt_fild08", "payon"]}]
+        trek.st["trip"] = {"target": "payon", "legs": legs, "i": 0, "phase": "gather", "led_by": None,
+                           "members": ["Vera"], "invited": ["Vera"], "started": self.clock.t,
+                           "until": self.clock.t + 600}
+        self.assertIsNotNone(self.mind.home.why_not_now(self.clock.t, self.mind.state), "сбор похода — дом ждёт")
+        self.mind.job_change_sent = self.clock.t                     # этап карьеры отправлен в этом такте
+        asyncio.run(trek.begin(self.clock.t))
+        self.assertFalse([a for a in self.sent if a["action"] == "explore"], self.sent)
+        self.assertIsNone(self.mind.explorer.trip)
+
+    def test_foreign_job_change_path_not_career(self):
+        """Итог этапа jobChange чужого модуля (herbal/arrows/trek), когда сам модуль выключен (перезапуск с
+        BRAIN_DISABLE, правка goals.json), — не этап карьеры: career не пишет «этап пройден» и не копит провалы."""
+        self.state()
+        for attr in ("herbal", "arrows", "trek"):
+            setattr(self.mind, attr, None)
+        before = dict(self.mind.career.st)
+        for path in ("herbal", "arrows", "trek"):
+            self.ev(kind="job_change_result", path=path, stage="x", ok=False, reason="timeout")
+            self.ev(kind="job_change_result", path=path, stage="x", ok=True, reason="ok")
+        kinds = self.kinds()
+        self.assertNotIn("career_stage_done", kinds)
+        self.assertNotIn("career_stage_failed", kinds)
+        self.assertEqual(self.mind.career.st.get("fails", 0), before.get("fails", 0))
+
+    def test_model_cannot_forge_protocol_tags(self):
+        """Шёпот модели (LLM/JEV) со служебной меткой ([offer:..:ok], [spar:yield], [trek:no:..], [mentor:grad]) —
+        подделка протокола другому жителю (например, по наущению постороннего в личке): не отправляется."""
+        self.state()
+        for text in ("Беру. [offer:ab12cd:ok]", "Сдаюсь [spar:yield]", "[trek:no:payon]", "Ты молодец [mentor:grad]"):
+            self.clock.t += 60                                       # не упираться в паузу между шёпотами
+            asyncio.run(self.mind.execute([{"action": "whisper", "to": "Vera", "text": text}], source="llm",
+                                          reason="тест"))
+        self.assertFalse([a for a in self.sent if a["action"] == "whisper"], self.sent)
+        self.clock.t += 60
+        asyncio.run(self.mind.execute([{"action": "whisper", "to": "Vera", "text": "Привет! Как охота?"}],
+                                      source="llm", reason="тест"))
+        self.assertEqual(len([a for a in self.sent if a["action"] == "whisper"]), 1, "обычная реплика уходит")
+
+
+class SimBody7(SimBody):
+    """review4: SimBody + плагин spar упрощённо: spar -> через TRAVEL с на арене (spar_step arena/fight), затем падение
+    (died на pvp_y_8-1, spar_result down) и возрождение у точки сохранения; look_at — без следствий."""
+    ARENA = "pvp_y_8-1"
+
+    def __init__(self, t0):
+        super().__init__(t0)
+        self.s["items"]["602"] = 2                       # Butterfly Wing — выход с арены
+        self.spar = None                                  # (этап, когда, соперник)
+
+    def apply(self, a):
+        if a.get("action") == "spar":
+            self.spar = ["going", self.t + self.TRAVEL, a.get("to")]
+            self.s["spar"] = {"running": True, "phase": "gate", "to": a.get("to"), "room": a.get("room")}
+            return
+        if a.get("action") == "spar_stop" and self.spar:
+            self.spar = None
+            self.s["spar"] = {"running": False}
+            self.event(kind="spar_result", outcome="stopped", reason=a.get("why"), to=None)
+            return
+        super().apply(a)
+
+    def tick(self, t, rng):
+        sp = self.spar
+        if sp and t >= sp[1]:
+            if sp[0] == "going":
+                self.s.update(map=self.ARENA, x=156, y=185, lock_map=None)
+                self.event(kind="spar_step", phase="arena", room="Prontera", to=sp[2])
+                self.event(kind="spar_step", phase="fight", room="Prontera", to=sp[2])
+                sp[:2] = ["fight", t + 30]
+            elif sp[0] == "fight":
+                self.spar = None
+                self.die()                                # died на арене (map pvp_y_8-1)
+                self.s["spar"] = {"running": False}
+                self.event(kind="spar_result", outcome="down", reason="упал(а) на арене", to=sp[2], room="Prontera")
+        super().tick(t, rng)
+        if self.s["map"] == self.ARENA:
+            self.s["players"] = [{"name": "Vera", "x": 157, "y": 186, "job": "Acolyte", "lv": 38}]
+
+
+class LongDayRound7Test(unittest.TestCase):
+    """review4: долгий рыночный день со ВСЕМИ модулями раундов 5–7 (включая выключенные по умолчанию spar, trek,
+    herbal, refine) на отзывчивом синтетическом теле: город и рынок, достижения, разговоры (взгляд), спарринг с
+    падением на арене, охота, вечер. Это проверка стыков на заглушке тела, а не игра."""
+
+    def test_market_day_spar_achievements_gaze(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        base = datetime(2025, 3, 1, 10, 0, tzinfo=TZ).timestamp()
+        clock, rng = Clock(), random.Random(3)
+        clock.t = base
+        sent, marks = [], {}
+        with mock.patch("time.time", clock):
+            mem = Memory(root / "m.sqlite")
+            persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+            mind, body = None, None
+
+            async def send(a):
+                sent.append((clock.t, dict(a), dict(mind.state)))
+                body.apply(dict(a, id=len(sent)))
+                return len(sent)
+
+            mind = Mind(Settings.from_env({}), persona, mem, send, root / "d.jsonl", RuleGate(),
+                        peers={"Arkady", "Vera"}, world=WORLD7, world_bus_db=WorldBus(root / "w.sqlite", "Arkady"))
+            for name in ("home", "routine", "economy", "party", "crew", "social", "society", "gossip", "habits",
+                         "healer", "orders", "dream", "savings", "memoir", "mentor", "bestiary", "places",
+                         "market_day", "refine", "gaze", "spar", "achieve", "herbal", "arrows", "trek", "director"):
+                self.assertIsNotNone(getattr(mind, name, None), f"модуль {name} включён")
+            t0 = next(base + d * 86400 for d in range(14) if mind.market_day.is_market(base + d * 86400))
+            clock.t = t0
+            body = SimBody7(t0)
+            mind.routine.rng = mind.activities.rng = random.Random(7)
+            mind.spar.rng = random.Random(1)
+            mind.spar.willing = lambda peer, now: True               # согласие по характеру — не предмет теста
+            for _ in range(2):
+                mem.update_relation("Vera", 2, "давняя подруга")         # друг: affinity >= friend_min
+            mind.routine.new_day(t0, keep_mode="town")
+            mind.routine.st["rest_until"] = t0 + 3 * 3600
+            trades_base = mind.market_day.base["trades_per_day"]
+
+            async def day():
+                body.event(kind="achievement_list", points=10, rank=1, done=[[1, int(t0) - 86400, 1]])
+                while clock.t < t0 + 6 * 3600:
+                    body.tick(clock.t, rng)
+                    t = clock.t - t0
+                    if t == 300:
+                        body.event(kind="achievement", id=2, at=int(clock.t), reward=0, points=20, rank=1)
+                    if t % 90 == 0 and t < 2 * 3600 and body.s["map"] == "prontera":
+                        body.event(kind="chat_private", **{"from": "Vera"}, text=f"Как дела? [chat:hello:{t % 3 + 1}]")
+                    if "yes" not in marks and [1 for _, a, _ in sent if "[spar:ask]" in str(a.get("text", ""))]:
+                        marks["yes"] = clock.t                        # Vera отвечает на вызов Arkady согласием
+                        body.event(kind="chat_private", **{"from": "Vera"}, text="Давай! [spar:yes]")
+                    if mind.market_day.active:
+                        marks.setdefault("market", mind.economy.market["trades_per_day"])
+                    for m in body.msgs:
+                        await mind.on_message(m)
+                    body.msgs.clear()
+                    await mind.step()
+                    clock.t += 1
+
+            asyncio.run(day())
+            kinds = [r[0] for r in mem.db.execute("SELECT kind FROM events ORDER BY id")]
+            calls = mem.db.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0]
+            bus_kinds = [r[0] for r in mind.world.bus.db.execute("SELECT kind FROM world_events")]
+            mem.close()
+        decisions = [json.loads(l) for l in (root / "d.jsonl").read_text().splitlines()]
+        acts = [a["action"] for _, a, _ in sent]
+        bad = replay.invariants(sent, llm_calls=calls)
+        if bad:
+            m = int(bad[0].split()[1].rstrip(":")) if bad[0].startswith("минута") else None
+            print([(t - t0, a) for t, a, _ in sent if m is not None and int(t // 60) == m])
+        self.assertEqual(bad, [])
+        # рыночный день: пороги стояли, без двойного множителя
+        self.assertEqual(marks.get("market"), trades_base + WORLD7["market_day"]["trades_bonus"])
+        # достижения: первый список молча, новое — объявлено
+        self.assertIn("achievement_done", kinds)
+        self.assertEqual([d.get("id") for d in decisions if d.get("type") == "achieve" and d.get("event") == "done"], [2])
+        # взгляд: не чаще gap_seconds
+        looks = [t for t, a, _ in sent if a["action"] == "look_at"]
+        self.assertTrue(looks, "поворачивался к собеседнице")
+        self.assertTrue(all(b - a >= mind.gaze.cfg["gap_seconds"] for a, b in zip(looks, looks[1:])), looks)
+        # спарринг: согласие, поход, падение на арене — не гибель (ни разбора смерти, ни слуха, ни [party:dead:])
+        self.assertIn("yes", marks, [d for d in decisions if d.get("type") == "spar"])
+        self.assertIn("[spar:in:Prontera]", " ".join(str(a.get("text", "")) for _, a, _ in sent), "ждёт на арене")
+        self.assertIn("spar", acts)
+        self.assertIn("spar_fall", kinds)
+        self.assertIn("spar_bout", kinds)
+        self.assertNotIn("died", kinds)
+        self.assertNotIn("death_report", kinds)
+        self.assertNotIn("death_report", bus_kinds)
+        self.assertFalse([a for a in acts if a == "whisper"] and
+                         [1 for _, a, _ in sent if "[party:dead:" in str(a.get("text", ""))])
+        # пока тело у плагина spar — мозг не двигает его (мост отклонил бы, но и не шлёт)
+        self.assertFalse([(t, a) for t, a, s in sent if (s.get("spar") or {}).get("running")
+                          and a["action"] in replay.MOVES + ("meet_point", "sleep", "job_change", "refine")])
 
 
 class TownWorld:

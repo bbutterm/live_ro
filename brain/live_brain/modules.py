@@ -53,7 +53,7 @@ market_day (ORG-071) — тик 15 (пороги дня до economy).  # market
 refine (ORG-072) — тик 105, событие refine_result 65 (own).  # refine:
 gaze (ORG-067) — тик 75, эхо social [chat:] 20.  # look:
 achieve (ORG-080) — события achievement/achievement_list/achievement_reward 80 (own), тик 227, промпт 237.  # achieve:
-spar (ORG-061) — метка [spar:] 47, события spar_step/spar_result 85 (own), тик 195 (без поля промпта).  # spar:
+spar (ORG-061) — метка [spar:] 47, события spar_step/spar_result/spar_fall 85 (own; spar_fall — review4), тик 195 (без поля промпта).  # spar:
 herbal (ORG-076) — событие job_change_result 15 (consume "result": поглощает только свой path herbal), тик 103,
 промпт 207.  # herbal:
 arrows (ORG-075) — события job_change_result 16 (consume "result", path arrows), arrowcraft_result 16 (own), тик 104,

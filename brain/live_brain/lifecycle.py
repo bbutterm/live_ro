@@ -38,7 +38,8 @@ def quest_busy(mind, state, now):
     """review2: плагин jobChange занят — арбитр жизненного цикла (с окном отправки) или, без него, state."""
     life = getattr(mind, "life", None)
     return life.quest_busy(now) if life else bool((state.get("job_change") or {}).get("running")
-                                                  or (state.get("refine") or {}).get("running"))   # refine:
+                                                  or (state.get("refine") or {}).get("running")    # refine:
+                                                  or (state.get("spar") or {}).get("running"))     # review4:
 
 
 class Lifecycle:
@@ -110,7 +111,14 @@ class Lifecycle:
         now = now or self.clock()
         return bool((self.mind.state.get("job_change") or {}).get("running")
                     or (self.mind.state.get("refine") or {}).get("running")      # refine: заточка ведёт тело (ORG-072)
+                    or self.spar_busy()                                          # review4: спарринг — тоже «plan»
                     or now - (getattr(self.mind, "job_change_sent", 0) or 0) < QUEST_SENT_SEC)
+
+    def spar_busy(self):
+        """review4: спарринг ведёт тело (владелец «plan», как этап квеста): дом, карьера, травник, стрелы и заточка
+        спрашивают may_move("plan") — им же он разрешён, поэтому спарринг входит в quest_busy (их общий запрет)."""
+        spar = getattr(self.mind, "spar", None)
+        return bool((spar and spar.busy()) or (self.mind.state.get("spar") or {}).get("running"))
 
     def active_owners(self, now=None):
         now = now or self.clock()
