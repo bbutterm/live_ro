@@ -30,6 +30,8 @@
 #   unstuck {radius}      -> ai clear; move <случайная проходимая клетка в радиусе radius (5..30, по умолчанию 10)>
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
+#   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
+#   service {}            -> autostorage (если есть что сдать на склад) или autosell — продать/сдать/докупить
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
 #   emote {id}            -> e <команда> (Commands.pm cmdEmotion, tables/emotions.txt); только номера
 #                            из %EMOTES (приветствие, смех, сердце, вопрос, спасибо...), как safety.EMOTES
@@ -434,6 +436,13 @@ sub actionToCommand {
 		my $id = $a->{id} // '';
 		return (0, 'эмоция не из списка') unless $id =~ /^\d{1,2}$/ && exists $EMOTES{$id};
 		return (1, "e $EMOTES{$id}");
+	} elsif ($kind eq 'sleep') {
+		my $sec = $a->{seconds} // '';
+		return (0, 'неверная длительность сна') unless $sec =~ /^\d+$/ && $sec >= 600 && $sec <= 43200;
+		return (1, "relog $sec");
+	} elsif ($kind eq 'service') {
+		my $store = $config{storageAuto} && eval { AI::ai_storageAutoCheck() };
+		return (1, $store ? 'autostorage' : 'autosell');
 	} elsif ($kind eq 'pause') {
 		return (1, []) if ($config{brainBridge_paused} // '') ne '';      # уже на паузе
 		my $saved = join(' ', map { defined $config{$_} && $config{$_} ne '' ? $config{$_} : 0 } qw(attackAuto route_randomWalk));

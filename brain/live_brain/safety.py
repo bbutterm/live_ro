@@ -19,7 +19,7 @@ import time
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
            "party_create", "party_invite", "party_accept", "party_leave", "follow", "unfollow")
 # Только исполнители плана (plans.py), распорядка (routine.py), экономики (economy.py) и общения (social.py) — модель их не получает.
-PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close",
+PLAN_ACTIONS = ("sleep", "service", "meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close",
                 "emote")
 # Безопасные эмоции (номер -> команда OpenKore «e <команда>», tables/emotions.txt); тот же список в brainBridge.pl.
 EMOTES = {1: "?", 2: "ho", 3: "lv", 5: "ic", 9: "...", 12: "wav", 15: "thx", 17: "sry", 18: "heh",
@@ -95,6 +95,13 @@ class SafetyPolicy:
                 return None, f"лимит эмоций {EMOTE_LIMIT}/10 мин"
             self.emoted.append(now)
             return {"action": "emote", "id": eid}, None
+        if kind == "service":
+            return {"action": "service"}, None
+        if kind == "sleep":
+            sec = action.get("seconds")
+            if not isinstance(sec, int) or not 600 <= sec <= 43200:
+                return None, "сон от 10 минут до 12 часов"
+            return {"action": "sleep", "seconds": sec}, None
         if kind == "unstuck":
             try:
                 radius = max(5, min(30, int(action.get("radius", 10))))

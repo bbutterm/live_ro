@@ -22,6 +22,12 @@
     из города на охоту не уходит, пока HP ниже min_hp_to_hunt (норма охоты подождёт).
 Застревание (AUT-037): не считается, пока персонаж сидит, торгует, говорит с NPC или в бою.
 Цель (AUT-098): при смене режима мозг записывает цель из распорядка — текст цели не расходится с телом.
+Сон (ORG-012, characters sleep {start "HH:MM", hours [от, до]}): в своё время житель уходит в город и
+    выходит из игры (действие sleep -> OpenKore relog <секунды>: выход и вход через заданное время).
+    Режим sleep до пробуждения; новый день жителя начинается с пробуждения (а не в 00:00 у всех).
+    Не уснул (тело в игре через SLEEP_RETRY после команды) — повтор, после трёх неудач — оповещение.
+Поездка по делам (ORG-018): в городе при тяжёлом рюкзаке или нехватке зелий — действие service
+    (OpenKore autostorage/autosell -> продажа, склад, закупка); не чаще SERVICE_GAP.
 Лавка (vend_in_town, только Merchant с навыком и тележкой): открыть по прибытии в город,
 закрыть перед охотой — с открытой лавкой персонаж не двигается.
 """
@@ -35,6 +41,8 @@ from pathlib import Path
 log = logging.getLogger("routine")
 
 RESEND = 60
+SLEEP_RETRY = 600
+SERVICE_GAP = 1800
 SAVE_EVERY = 30
 MAX_TICK_GAP = 5          # не засчитывать охоту за время, когда мозг не работал
 STUCK_SEC = 300           # на охоте без движения и без боя дольше — «застрял»
@@ -93,8 +101,34 @@ class Routine:
         self.last_saved, self.saved_mode = now, self.st.get("mode")
         self.mind.mem.set("routine", self.st)
 
+    def day_shift(self):
+        """Часы от полуночи до начала «дня» жителя: час пробуждения (середина диапазона сна), иначе 0."""
+        sl = self.mind.persona.get("sleep")
+        if not sl:
+            return 0.0
+        h, m = map(int, sl["start"].split(":"))
+        return (h + m / 60 + sum(sl["hours"]) / 2) % 24
+
     def today(self, now):
-        return datetime.fromtimestamp(now, self.tz).strftime("%Y-%m-%d")
+        return datetime.fromtimestamp(now - self.day_shift() * 3600, self.tz).strftime("%Y-%m-%d")
+
+    def sleep_window(self, now):
+        """(начало, конец) ближайшей ночи жителя по местному времени мира; None — сна в характере нет."""
+        sl = self.mind.persona.get("sleep")
+        if not sl:
+            return None
+        local = datetime.fromtimestamp(now, self.tz)
+        h, m = map(int, sl["start"].split(":"))
+        start = local.replace(hour=h, minute=m, second=0, microsecond=0)
+        if start.timestamp() > now + 12 * 3600:
+            start -= timedelta(days=1)
+        elif start.timestamp() + 18 * 3600 < now:
+            start += timedelta(days=1)
+        key = start.strftime("%Y-%m-%d")
+        if self.st.get("sleep_night") != key:                  # длительность сна — своя каждую ночь
+            self.st["sleep_night"] = key
+            self.st["sleep_hours"] = self.rng.uniform(*sl["hours"])
+        return start.timestamp(), start.timestamp() + self.st["sleep_hours"] * 3600
 
     def minutes(self, key):
         lo, hi = self.cfg[key]
@@ -172,6 +206,9 @@ class Routine:
                 self.st["rest_until"] = now          # новый день: можно идти охотиться сразу
         gap = (now - self.last_tick) if self.last_tick else 0
         self.last_tick = now
+        if await self.sleep_tick(now, state):
+            self.save(throttle=True)
+            return
         if self.mind.plans.store.active():
             if (state.get("vend") or {}).get("open") and now - self.last_vend >= RESEND:
                 self.last_vend = now
@@ -206,6 +243,56 @@ class Routine:
             await self.in_town(now, state)
         await self.enforce(now, state)
         self.save(throttle=True)
+
+    # ---------- сон ----------
+
+    async def sleep_tick(self, now, state):
+        """True — распорядок сейчас занят сном (остальное не делать)."""
+        win = self.sleep_window(now)
+        if self.st.get("mode") == "sleep":
+            if now >= self.st.get("wake_at", 0):
+                self.st.update(mode="town", mode_since=now, arrived=False, rest_until=now)
+                self.note("routine_wake", "Проснулся — начинаю новый день.", 2)
+                self.last_sent = 0
+                return False
+            if now - self.st.get("sleep_sent", 0) >= SLEEP_RETRY:   # тело всё ещё в игре — не уснуло
+                tries = self.st.get("sleep_tries", 0) + 1
+                self.st.update(sleep_tries=tries, sleep_sent=now)
+                if tries > 3:
+                    alert = getattr(self.mind, "alert", None)
+                    if alert:
+                        alert("sleep", "житель не выходит из игры по команде relog")
+                await self.send({"action": "sleep", "seconds": int(self.st["wake_at"] - now)}, "распорядок: сон (повтор)")
+            return True
+        if not win or not (win[0] <= now < win[1]) or self.mind.plans.store.active():
+            return False
+        if self.st.get("mode") == "hunt":
+            self.note("routine_bedtime", "Поздно — заканчиваю охоту и иду спать в город.", 1)
+            await self.to_town(now)
+            return False
+        if not self.st.get("arrived") and now - win[0] < 1200:
+            return False                                     # сначала дойти до города (не дольше 20 мин)
+        self.st.update(mode="sleep", mode_since=now, wake_at=win[1], sleep_sent=now, sleep_tries=0)
+        hours = (win[1] - now) / 3600
+        self.note("routine_sleep", f"Ложусь спать на {hours:.1f} ч.", 2)
+        self.set_goal("сплю")
+        await self.send({"action": "sleep", "seconds": int(win[1] - now)}, f"распорядок: сон {hours:.1f} ч")
+        return True
+
+    # ---------- поездка по делам ----------
+
+    async def service_check(self, now, state):
+        """ORG-018: тяжело (>= 40%) или мало зелий при деньгах на закупку — продать/сдать/докупить сейчас."""
+        if now - self.st.get("service_at", 0) < SERVICE_GAP or not self.st.get("arrived"):
+            return
+        heal = self.heal_items(state)
+        heavy = (state.get("weight_pct") or 0) >= 40
+        short = heal is not None and heal < 10 and (state.get("zeny") or 0) > 3000
+        if not (heavy or short) or state.get("activity") in BUSY:
+            return
+        self.st["service_at"] = now
+        self.note("routine_service", "Схожу по делам: " + ("рюкзак тяжёлый" if heavy else "мало зелий") + ".", 1)
+        await self.send({"action": "service"}, "распорядок: продать/сдать/докупить")
 
     # ---------- самостоятельность: застревание, смерти, дневник ----------
 
@@ -314,7 +401,8 @@ class Routine:
 
     def diary(self, day_state):
         """Итог прошедшего дня — одно воспоминание без LLM."""
-        start = datetime.strptime(day_state["day"], "%Y-%m-%d").replace(tzinfo=self.tz).timestamp()
+        start = datetime.strptime(day_state["day"], "%Y-%m-%d").replace(tzinfo=self.tz).timestamp() \
+            + self.day_shift() * 3600                         # «день» жителя — с пробуждения
         end = start + 86400
         mem = self.mind.mem
         count = lambda kind: mem.db.execute(
@@ -399,6 +487,7 @@ class Routine:
                 and now - self.last_vend >= RESEND):
             self.last_vend = now
             await self.send({"action": "shop_open"}, "распорядок: открыть лавку в городе")
+        await self.service_check(now, state)
         if not self.hp_ok(state):
             await self.check_recover_blocked(now, state)
         if own_schedule and self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
@@ -559,3 +648,7 @@ class Routine:
     @property
     def in_town_mode(self):
         return self.st.get("mode") == "town"
+
+    @property
+    def sleeping(self):
+        return self.st.get("mode") == "sleep"

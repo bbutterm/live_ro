@@ -30,6 +30,7 @@ class Clock:
 class FakeMind:
     def __init__(self, mem):
         self.persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        self.persona.pop("sleep", None)            # сон — отдельные тесты ниже (SleepTest)
         self.mem = mem
         self.state = {"name": "Arkady", "map": "prt_fild08", "x": 100, "y": 100, "lock_map": "prt_fild08",
                       "lock_x": None, "lock_y": None, "dead": False, "lv": 41, "job_lv": 20}
@@ -278,6 +279,68 @@ class RoutineTest(unittest.TestCase):
         self.run_for(301, step=5)
         self.assertIn("blocked", self.r.st)
         self.assertIn("routine_blocked", [d.get("event") for d in self.mind.decisions])
+
+
+    def test_service_run_when_heavy(self):
+        self.run_for(2)
+        asyncio.run(self.r.force("rest"))
+        self.mind.state.update(weight_pct=45, items={"501": 30})
+        self.run_for(120, step=5, on_tick=self.walk_to_town)
+        self.assertEqual([a for a in self.mind.sent if a["action"] == "service"], [{"action": "service"}])
+        self.run_for(600, step=5, on_tick=self.walk_to_town)
+        self.assertEqual(len([a for a in self.mind.sent if a["action"] == "service"]), 1, "не чаще раза в 30 мин")
+
+
+class SleepTest(RoutineTest.__bases__[0]):
+    """ORG-012: сон в своё время, выход из игры, новый день с пробуждения."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.mem = Memory(Path(self.tmp.name) / "m.sqlite")
+        self.mind = FakeMind(self.mem)
+        self.mind.persona["sleep"] = {"start": "02:30", "hours": [7.0, 7.0]}
+        tz = timezone(timedelta(hours=WORLD["timezone_offset_hours"]))
+        self.clock = Clock(datetime(2026, 10, 2, 22, 0, tzinfo=tz).timestamp())
+        self.r = Routine(self.mind, WORLD, rng=random.Random(1), clock=self.clock)
+
+    def tearDown(self):
+        self.mem.close()
+        self.tmp.cleanup()
+
+    def go(self, seconds, step=5.0, online=lambda: True):
+        async def run():
+            end = self.clock.t + seconds
+            while self.clock.t < end:
+                self.clock.t += step
+                self.mind.fresh_state = online()
+                town = WORLD["routine"]["town"]
+                if self.mind.state.get("lock_map") == town["map"]:
+                    self.mind.state.update(map=town["map"], x=town["x"], y=town["y"])
+                if self.mind.fresh_state:
+                    await self.r.tick()
+        asyncio.run(run())
+
+    def test_sleep_then_new_day_on_wake(self):
+        self.go(60)
+        day0 = self.r.st["day"]
+        self.go(4.6 * 3600, step=10)                         # до 02:36: пора спать
+        sleeps = [a for a in self.mind.sent if a["action"] == "sleep"]
+        self.assertEqual(len(sleeps), 1)
+        self.assertAlmostEqual(sleeps[0]["seconds"], 7 * 3600 - 6 * 60, delta=600)
+        self.assertEqual(self.r.st["mode"], "sleep")
+        self.go(6.8 * 3600, step=60, online=lambda: False)   # спит: тело офлайн
+        self.go(30 * 60, step=10)                            # 09:30 + вход в игру
+        self.assertEqual(self.r.st["mode"] in ("town", "hunt"), True)
+        self.assertNotEqual(self.r.st["day"], day0, "новый день — с пробуждения")
+        self.assertIn("routine_wake", [d.get("event") for d in self.mind.decisions])
+
+    def test_not_sleeping_body_retried(self):
+        self.go(4.6 * 3600, step=10)
+        self.go(SLEEP_RETRY_S + 30, step=10)                 # тело осталось в игре
+        self.assertEqual(len([a for a in self.mind.sent if a["action"] == "sleep"]), 2)
+
+
+SLEEP_RETRY_S = 600
 
 
 if __name__ == "__main__":

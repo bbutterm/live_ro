@@ -1,6 +1,7 @@
 """Явные состояния жителя и арбитр движения тела (AUT-001, 002, 003, 005). Без LLM.
 
 Состояние вычисляется каждый тик из данных тела и модулей мозга (первое подходящее):
+    SLEEPING    — распорядок: сон (житель вышел из игры по своей воле, ORG-012)
     OFFLINE     — нет свежего состояния тела дольше STALE_SEC (или нет связи)
     DEAD        — тело сообщает dead
     ESCAPING    — за ESCAPE_SEC было событие survival/danger/escape
@@ -49,6 +50,8 @@ class Lifecycle:
     def compute(self, now=None):
         now = now or self.clock()
         m, s = self.mind, self.mind.state
+        if m.routine and m.routine.st and m.routine.st.get("mode") == "sleep":
+            return "SLEEPING", "сон до " + time.strftime("%H:%M", time.localtime(m.routine.st.get("wake_at", 0)))
         if not m.fresh_state:
             return "OFFLINE", "нет свежего состояния тела"
         if s.get("dead"):

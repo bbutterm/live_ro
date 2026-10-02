@@ -135,4 +135,12 @@ delete $Globals::ai_v{sitAuto_forcedBySitCommand};
 ($okF, $resF) = brainBridge::actionToCommand({action => 'follow', to => 'Vera'});
 is_deeply($resF, ['follow Vera'], 'стоит — без лишнего stand');
 
+# ---- сон (relog) и поездка по делам ----
+my ($okSl, $resSl) = brainBridge::actionToCommand({action => 'sleep', seconds => 25200});
+is($resSl, 'relog 25200', 'сон 7 ч — relog');
+ok(!(brainBridge::actionToCommand({action => 'sleep', seconds => 60}))[0], 'короче 10 мин — нельзя');
+ok(!(brainBridge::actionToCommand({action => 'sleep', seconds => 'x; quit'}))[0], 'не число — нельзя');
+$Globals::config{storageAuto} = 0;
+is((brainBridge::actionToCommand({action => 'service'}))[1], 'autosell', 'без склада — продать и докупить');
+
 done_testing();
