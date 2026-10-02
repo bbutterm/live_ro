@@ -84,22 +84,65 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 
 Чего нет: торговли с людьми через переговоры, цен «по рынку», закупки у других игроков.
 
-## Модули автономности (backlog AUT, состояние — docs/AUTONOMY_STATUS.md)
-| Модуль | Что делает |
-|---|---|
-| `lifecycle.py` | состояние жителя (OFFLINE…HUNTING) и арбитр движения: survival > plan > economy > party > routine |
-| `party.py` | группа LR_<лидер>, темп лидера, поводок, помощь в опасности, heal_confirmed по пакету сервера |
-| `postmortem.py` | разбор смерти по фактам, исключение опасных карт, каталог опасных монстров |
-| `maps.py` | опыт по картам (победы/смерти/опыт/зени в час), выбор карты, места и слухи |
-| `budget.py` | общий бюджет моделей на всех жителей (резерв до вызова) |
-| `economy.py` | взаимопомощь зельями и зени |
-| `routine.py` | распорядок, сон по хронотипу, восстановление, поездка по делам, лестница застревания |
-| `needs.py` | мотивы (безопасность, снабжение, прогресс, общение, любопытство, отдых, богатство, забота) и характер числами |
-| `social.py` | город: прогулки по местам, разговоры без LLM, эмоции, реакции на события |
-| `atlas.py` | атлас мира из rAthena: карты, варпы, монстры, магазины, Kafra, маршруты, карты по уровню |
-| `career.py` + `progression.py` | цели прогрессии, сценарии смены профессии, снаряжение |
-| `chronicle.py` | хроника мира за день (`scripts/lab chronicle`) |
-| `social.py` | городской распорядок, разговоры жителей без LLM, реакции на события, эмоции, отношения по времени вместе |
+## Структура модулей
+Назначение, выключатели и что включено по умолчанию — [`docs/STATUS.md`](../docs/STATUS.md), раздел «Мозг: модули».
+Состояние AUT — `docs/AUTONOMY_STATUS.md`, ORG — `docs/ORGANIC_BACKLOG.md`.
+
+**Ядро** (создаёт `mind.py`, не выключается): `__main__.py` (запуск, `--report`, `--routine`, метрики ORG-046),
+`config.py` (env, `BRAIN_DISABLE`), `bridge.py` (сокет плагина brainBridge), `mind.py` (тик 1 с, события, промпт),
+`gate.py` + `typesafe.py` (decision gate: правила или JEV), `safety.py` (SafetyPolicy), `lifecycle.py` (состояние и
+арбитр движения survival > plan > economy > party > routine), `plans.py` (встреча, тикает первым после safety),
+`postmortem.py` (разбор смерти), `maps.py` (опыт по картам, выбор карты), `needs.py` (мотивы и характер числами),
+`memory.py` (SQLite жителя), `llm.py` + `budget.py` (модель и общий бюджет).
+
+**Модули реестра** `modules.py` (W8): модуль объявляет о себе атрибутами класса (`ATTR`, `FEATURE`, `CONFIG`,
+`ENABLED`, `REQUIRES`, `TICK_ORDER`, `TAGS`, `EVENTS`, `PROMPT` — описание в начале `modules.py`); новый модуль —
+одна строка в `MODULES`, `mind.py` не правится. Порядок вызовов фиксирует `tests/test_mind_order.py`.
+
+| Файл | `mind.<ATTR>` | Тик (`TICK_ORDER`) | До SafetyPolicy | Нужно для создания |
+|---|---|---|---|---|
+| `home.py` | `home` | 100 | да | мир |
+| `mood.py` | `mood` | — |  | — |
+| `world_calendar.py` | `calendar` | — |  | мир |
+| `career.py` | `career` | 40 |  | мир |
+| `routine.py` | `routine` | 10 |  | мир |
+| `economy.py` | `economy` | 20 |  | мир, раздел `economy` |
+| `party.py` | `party` | 30 |  | мир, другие жители |
+| `activity.py` | `activities` | 50 |  | routine |
+| `bonds.py` | `bonds` | 60 |  | другие жители |
+| `crew.py` | `crew` | 90 |  | party |
+| `pets.py` | `pets` | 80 |  | мир |
+| `social.py` | `social` | 70 |  | мир, другие жители |
+| `rumors.py` | `rumors` | 120 |  | — |
+| `society.py` | `society` | 130 |  | другие жители |
+| `aims.py` | `aims` | 150 |  | — |
+| `guild.py` | `guild` | 160 |  | мир, другие жители |
+| `explore.py` | `explorer` | 110 |  | routine |
+| `boss.py` | `boss` | 115 |  | мир, party, crew, explorer |
+| `strangers.py` | `strangers` | 140 |  | — |
+| `world_bus.py` | `world` | 180 |  | — |
+| `rivalry.py` | `rivalry` | 190 |  | другие жители |
+| `crowd.py` | `crowd` | 200 |  | — |
+| `episodes.py` | `episodes` | 210 |  | другие жители |
+| `tradition.py` | `tradition` | 170 |  | мир |
+| `collection.py` | `collection` | 220 |  | — |
+| `gossip.py` | `gossip` | 125 |  | другие жители |
+| `habits.py` | `habits` | 205 |  | — |
+| `healer.py` | `healer` | 135 |  | мир |
+| `orders.py` | `orders` | 25 |  | другие жители, economy |
+| `dream.py` | `dream` | 145 |  | — |
+| `savings.py` | `savings` | 147 |  | dream |
+| `memoir.py` | `memoir` | 230 |  | — |
+| `director.py` | `director` | 230 |  | мир |
+
+**Чистые функции и данные** (не модули реестра): `atlas.py` (атлас мира `world/atlas.json`), `prices.py` (цены
+`world/prices.json`), `progression.py` (сценарии профессий `world/progression.json`), `topics.py` (темы разговора
+для `social`), `weather.py` (погода мира), `replay.py` (запись и прогон потока тела, ORG-050).
+
+**Только чтение, для владельца** (`python3 -m live_brain.<имя>`, обёртки в `scripts/lab`): `chronicle.py`
+(`chronicle`), `dashboard.py` (`dashboard`), `episode.py` (`episode`), `memoir.py` (`memoir`, он же модуль
+реестра), `census.py` (`census`, ORG-088), `resources.py` (`resources`, ORG-047).
+
 Тело: плагины `brainBridge` (мост), `combatProfile` (бой по классу), `economy` (склад/сделки/лавка),
 `survival` (экстренное выживание), `lowHpGuard`, `gracefulStop`.
 Оповещения владельцу: `scripts/lab alerts`. Выключить модуль: `BRAIN_DISABLE=party,economy,routine`.

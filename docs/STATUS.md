@@ -86,6 +86,71 @@
 | Два бота (bot01 Arkady, bot02 Vera), мозг на каждого | ✅ | ✅ песочница | ✅ LIVE-JEV: существующие аккаунты, оба мозга подключены |
 | Общение ботов-жителей с лимитами | ✅ | ✅ тесты | ✅ LIVE-JEV: автономные реплики Arkady ↔ Vera, получение в console.log обоих |
 
+## Мозг: модули в ветке claude/brain-routine (на 2026-10-02: b62eaef + ветка agent/census)
+
+Только то, что есть в коде и покрыто локальными тестами (`cd brain && python3 -m unittest discover -s tests`).
+**В игре эти модули не проверялись**, пока в колонке «Hermes / VPS» выше или в `docs/qa/` нет фактического отчёта.
+
+Ядро (`mind.py`, не выключается): `bridge.py` (сокет к плагину brainBridge), `gate.py` (decision gate: правила или
+JEV), `safety.py` (SafetyPolicy — через неё любое действие), `lifecycle.py` (состояние жителя и арбитр движения
+survival > plan > economy > party > routine), `plans.py` (план встречи и сверка после перезапуска), `postmortem.py`
+(разбор смерти, опасные карты), `maps.py` (опыт по картам, выбор карты), `needs.py` (мотивы), `memory.py`
+(SQLite жителя), `llm.py` + `budget.py` (модель и общий бюджет; **LLM выключен по умолчанию**, `BRAIN_LLM=off`).
+
+Модули реестра `brain/live_brain/modules.py` — в порядке создания. Выключатель: `BRAIN_DISABLE=<имя>[,<имя>…]` в env
+и/или `"<раздел>": {"enabled": …}` в `brain/world/goals.json`. «Нужно» — без этого модуль не создаётся (например,
+«другие жители»: при одном боте в `LAB_BOTS` социальные модули молчат).
+
+| Файл | Назначение | Выключатель | По умолчанию | Нужно |
+|---|---|---|---|---|
+| `home.py` | дом и точка сохранения у Kafra, отдых распорядка в доме (ORG-014) | `BRAIN_DISABLE=home` | вкл. | мир |
+| `mood.py` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров (ORG-064) | `BRAIN_DISABLE=mood`; `mood.enabled` (умолч. true) | вкл. | — |
+| `world_calendar.py` | день недели, праздники, дни рождения — множитель мотивов, темы разговора (ORG-059) | `BRAIN_DISABLE=calendar`; `calendar.enabled` (умолч. true) | вкл. | мир |
+| `career.py` | цель прогрессии и этапы смены профессии (сам идёт к NPC только при `progression.auto_job_change`) | `BRAIN_DISABLE=career` | вкл. | мир |
+| `routine.py` | распорядок: охота/отдых, сон по хронотипу, восстановление, застревание, лавка в городе | `BRAIN_DISABLE=routine` | вкл. | мир |
+| `economy.py` | взаимопомощь зельями и зени, рынок лута между жителями, почта RODEX, лавка Merchant (ORG-033–035) | `BRAIN_DISABLE=economy` | вкл. | мир, раздел `economy` |
+| `party.py` | группа `LR_<лидер>`, темп лидера, поводок, помощь в опасности | `BRAIN_DISABLE=party`; `party.enabled` (умолч. true) | вкл. | мир, другие жители |
+| `activity.py` | выбор занятия по мотивам с инерцией и шумом, цепочки предусловий (ORG-016–018) | `BRAIN_DISABLE=activity` | вкл. | routine |
+| `bonds.py` | встреча с продолжением, друзья (friend_request), весточки и поздравления (ORG-023–025) | `BRAIN_DISABLE=bonds` | вкл. | другие жители |
+| `crew.py` | жизнь группы: карта решается вместе, чат группы, прогулка за лидером (ORG-053) | `BRAIN_DISABLE=crew` | вкл. | party |
+| `pets.py` | питомец: кого приручить, приручение, вылупление, корм (ORG-051) | `BRAIN_DISABLE=pets`; `pets.enabled` (умолч. true) | вкл. | мир |
+| `social.py` | город: прогулки по местам, разговоры без LLM, реакции, эмоции | `BRAIN_DISABLE=social`; `social.enabled` (умолч. true) | вкл. | мир, другие жители |
+| `rumors.py` | слухи v2: автор, hops, доверие, затухание, проверка слуха (ORG-031, 032, 039) | нет | вкл. | — |
+| `society.py` | эмоции на события, чат-комнаты как вывески, ссоры и примирения (ORG-022, 026, 027) | `BRAIN_DISABLE=society`; `society.enabled` (умолч. true) | вкл. | другие жители |
+| `aims.py` | цели недели по фактам, усиливают мотивы (ORG-038) | `BRAIN_DISABLE=aims` | вкл. | — |
+| `guild.py` | гильдия жителей: основатель, согласие, `guild create`/`request` (ORG-052) | `BRAIN_DISABLE=guild`; `guild.enabled` (умолч. false) | **выкл.** | мир, другие жители |
+| `explore.py` | экспедиции на известные, не посещённые карты, группой — за лидером (ORG-054) | `BRAIN_DISABLE=explore`; `explore.enabled` (умолч. false) | вкл. (goals.json) | routine |
+| `boss.py` | мини-босс группой: Vocal, Eclipse, оценка группы, поход экспедицией (ORG-079) | `BRAIN_DISABLE=boss`; `boss.enabled` (умолч. false) | **выкл.** | мир, party, crew, explorer |
+| `strangers.py` | незнакомцы-люди: «знакомый в лицо», приветствие, шаблонный ответ при LLM off (ORG-063) | `BRAIN_DISABLE=strangers`; `strangers.enabled` (умолч. true) | вкл. | — |
+| `world_bus.py` | шина мира `state/shared/world.sqlite`: публикация событий, новости жителей (ORG-045) | `BRAIN_DISABLE=world_bus` | вкл. | — |
+| `rivalry.py` | соперник недели, счёт по фактам через шину, подначка (ORG-060) | `BRAIN_DISABLE=rivalry`; `rivalry.enabled` (умолч. true) | вкл. | другие жители |
+| `crowd.py` | стигмергия: `presence` в шине, штраф людных карт и занятий (ORG-089) | `BRAIN_DISABLE=crowd`; `crowd.enabled` (умолч. true) | вкл. | — |
+| `episodes.py` | «помнишь?»: эпизоды пары из памяти, тема `remember` (ORG-055) | `BRAIN_DISABLE=episodes`; `episodes.enabled` (умолч. true) | вкл. | другие жители |
+| `tradition.py` | вечерний круг у фонтана, сила традиции в шине (ORG-058) | `BRAIN_DISABLE=tradition`; `tradition.enabled` (умолч. true) | вкл. | мир |
+| `collection.py` | альбом карт и трофеи по `kill`/`loot`, тема `card` (ORG-074) | `BRAIN_DISABLE=collection`; `collection.enabled` (умолч. true) | вкл. | — |
+| `gossip.py` | сплетни о жителях и репутация, история пары, остывание (ORG-056, W5, W6) | `BRAIN_DISABLE=gossip`; `gossip.enabled` (умолч. true) | вкл. | другие жители |
+| `habits.py` | привычки и скука по занятиям 7 суток, причуда (ORG-068) | `BRAIN_DISABLE=habits`; `habits.enabled` (умолч. true) | вкл. | — |
+| `healer.py` | лекарь у собора: пост, лечение по просьбе `[heal:ask:]`, Blessing/Inc AGI (ORG-069) | `BRAIN_DISABLE=healer`; `healer.enabled` (умолч. true) | вкл. | мир |
+| `orders.py` | заказы между жителями через шину, доставка сделкой рынка (ORG-070) | `BRAIN_DISABLE=orders`; `orders.enabled` (умолч. true) | вкл. | другие жители, economy |
+| `dream.py` | мечта на месяцы, этапы по фактам, бонус в целях недели (ORG-081) | `BRAIN_DISABLE=dream`; `dream.enabled` (умолч. true) | вкл. | — |
+| `savings.py` | копилка мечты; банк rAthena — флаг `savings.bank` (ORG-073) | `BRAIN_DISABLE=savings`; `savings.enabled` (умолч. true) | вкл. | dream |
+| `memoir.py` | мемуары: раз в неделю `state/<bot>/memoir.md` по фактам памяти (ORG-082) | `BRAIN_DISABLE=memoir`; `memoir.enabled` (умолч. true) | вкл. | — |
+| `director.py` | рассказчик мира без LLM: день осторожности, «помочь», повод в тишину (ORG-086) | `BRAIN_DISABLE=director`; `director.enabled` (умолч. true) | вкл. | мир |
+
+Выключено по умолчанию и почему (всё — решение владельца после проверки в игре):
+
+| Что | Где | Почему выключено |
+|---|---|---|
+| гильдия (ORG-052) | `goals.json` `guild.enabled: false` | в игре не проверено; Emperium жителю недоступен (Guild Clerk 1 000 000 z, дроп MVP) — нужен выданный Emperium или `server/conf/optional/guild_no_emperium.txt` (docs/GUILD.md) |
+| мини-босс группой (ORG-079) | `goals.json` `boss.enabled: false` | опасно для жителей, в игре не проверено; мост не умеет целиться в босса по имени — тело бьёт по attackAuto (docs/WORLD_EVENTS.md) |
+| банк rAthena (ORG-073) | `goals.json` `savings.bank: false` | пакеты банка (09A6–09AB) в игре не проверены; копилка мечты работает без банка (docs/LIFE.md) |
+| авто-смена профессии | `goals.json` `progression.auto_job_change: false` | сценарии выведены из скриптов rAthena, в игре не проходились; цель видна в отчёте и промпте, сменить может оператор (docs/PROGRESSION.md) |
+| стартовая точка в Пронтере | `server/conf/optional/char_start_point.txt` не подключён, `progression.json` `start.override.enabled: false` | изменение сервера; без него новичок появляется в iz_int, выход в izlude есть по данным (NB-1), в игре не проверен (docs/POPULATION.md §6) |
+| освоение новых мест охоты | `goals.json` `routine.auto_hunt_maps: false` | включать, когда нужные карты включены на сервере (`scripts/lab doctor`); без флага новые места только записываются и советуются |
+| лавка Merchant (ORG-034) | код включён (`routine.vend_in_town: true`) | спит: среди жителей нет Merchant (`scripts/lab census`) |
+
+Экспедиции (`explore.py`) по умолчанию класса выключены, но включены в `goals.json` (`explore.enabled: true`).
+
 ## Известные проблемы
 - Бот продолжал бой при низком HP и пытался телепортироваться без навыка/предмета.
   На VPS подтверждено: телепорта нет, защита включается. Полный цикл восстановления не подтверждён.
