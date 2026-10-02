@@ -121,6 +121,7 @@ sub start {
 	return (0, 'нет крыла бабочки — с арены не выйти') unless findItem($WING);
 	%run = (to => $to, role => $role, room => $room, expect => ($role eq 'first' ? 0 : 1), phase => 'gate',
 	        since => time, phase_since => time, saved => {map { $_ => $config{$_} } @SAVE});
+	keepSaved();                                                                   # review4: до первой правки
 	conf(lockMap => 'none', lockMap_x => 'none', lockMap_y => 'none', route_randomWalk => 0, autoTalkCont => 1,
 	     attackAuto => 1);
 	message "[spar] спарринг с $to ($role), комната $room\n", 'system';
@@ -143,7 +144,34 @@ sub fightMode {
 		$run{saved}{"useSelf_item_${i}_disabled"} = $config{"useSelf_item_${i}_disabled"};
 		$kv{"useSelf_item_${i}_disabled"} = 1;
 	}
+	keepSaved();                                                                   # review4: и флаги зелий
 	conf(%kv);
+}
+
+# review4: «conf» пишет config.txt (Misc::configModify -> файл). Выход OpenKore посреди спарринга (gracefulStop,
+# падение, перезапуск лаборатории) оставлял бы в профиле survival 0, attackAuto 0, useSelf_item_*_disabled 1 и
+# lockMap none — следующая охота без зелий и без выживания. Прежние значения дублируются в config (spar_saved) и
+# возвращаются первым тактом без спарринга (restoreSaved), если finish до них не дошёл.
+sub keepSaved {
+	my $saved = $run{saved} || {};
+	my @kv;
+	for my $k (sort keys %$saved) {
+		my $v = $saved->{$k};
+		$v = 'none' if !defined $v || $v eq '';
+		next if $v =~ /[\s,=]/;                       # значения профиля для этих ключей — без пробелов и запятых
+		push @kv, "$k=$v";
+	}
+	Commands::run('conf -f spar_saved ' . join(',', @kv)) if @kv;
+}
+
+sub restoreSaved {
+	my $line = $config{spar_saved};
+	return unless defined $line && $line ne '' && $line ne 'none';
+	my %kv = map { /^([^=]+)=(.*)$/ ? ($1 => $2) : () } split /,/, $line;
+	warning "[spar] спарринг прервался выходом — возвращаю настройки профиля\n";
+	conf(%kv) if %kv;
+	conf(spar_saved => 'none');
+	$config{spar_saved} = undef;                    # заглушки тестов conf не исполняют; OpenKore сделал бы то же
 }
 
 sub finish {
@@ -156,6 +184,7 @@ sub finish {
 	my %restore = %{$r{saved}};
 	$restore{$_} //= 0 for grep { /_disabled$/ } keys %restore;
 	conf(%restore);
+	conf(spar_saved => 'none');                                                    # review4: вернули сами
 	my $wing = 'none';
 	if ($char && !$char->{dead} && inPvpArea()) {
 		if (my $item = findItem($WING)) {
@@ -175,6 +204,7 @@ sub finish {
 # ---------- такт ----------
 
 sub onTick {
+	restoreSaved() unless %run;                                                    # review4: после выхода посреди боя
 	return unless %run;
 	my $now = time;
 	return if $now - $lastTick < 0.3;

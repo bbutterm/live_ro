@@ -30,6 +30,8 @@ import re
 import time
 from pathlib import Path
 
+from .lifecycle import quest_busy                 # review4: begin — тело занято этапом
+
 log = logging.getLogger("trek")
 
 WORLD = Path(__file__).resolve().parents[1] / "world"
@@ -342,6 +344,9 @@ class Trek:
         trip = self.trip
         if self.mind.explorer.trip:                     # пока собирались, ушёл в обычную экспедицию
             self.cancel(now, "уже в экспедиции")
+            return
+        if quest_busy(self.mind, self.mind.state, now):  # review4: пока собирались, начат этап jobChange/заточка/
+            self.cancel(now, "тело занято этапом")        # review4: спарринг — плечо увело бы тело из-под него
             return
         trip["started"] = now
         self.st["last"] = now
