@@ -66,7 +66,7 @@ class Mind:
                                last=memory.get("gate_last", {}),
                                peers=set(peers) - {persona["name"]},
                                peer_replies_per_hour=settings.peer_replies_per_hour)
-        self.safety = SafetyPolicy(persona["hunt_maps"], safe_hp=settings.safe_hp)
+        self.safety = SafetyPolicy(persona["hunt_maps"], safe_hp=settings.safe_hp, peers=self.ctx.peers)
         self.state = memory.get("last_state", {})
         self.lock = asyncio.Lock()
         self.pending = None            # (повод, контекст, вид) — ждёт свободного LLM
@@ -340,7 +340,13 @@ class Mind:
             '{"action": "whisper", "to": "имя", "text": "..."} — личное сообщение; '
             f'{{"action": "set_hunt_map", "map": "..."}} — сменить место охоты, только из: {maps}; '
             '{"action": "pause"} — остановиться (тело перестаёт охотиться); '
-            '{"action": "resume"} — продолжить охоту. '
+            '{"action": "resume"} — продолжить охоту; '
+            '{"action": "party_create"} — создать свою группу; '
+            '{"action": "party_invite", "to": "житель"} — позвать жителя в свою группу; '
+            '{"action": "party_leave"} — выйти из группы; '
+            '{"action": "follow", "to": "житель"} — идти за жителем (охотиться рядом с ним); '
+            '{"action": "unfollow"} — перестать идти за ним. '
+            "Группа и следование — только с другими жителями; лечение в группе тело делает само. "
             "Реплики короткие (до 100 символов), на языке собеседника, в твоём стиле. "
             "Не отвечай каждому сообщению, не спамь в общий чат без повода. "
             "Другие жители — такие же обитатели мира, с ними можно разговаривать в личке, "

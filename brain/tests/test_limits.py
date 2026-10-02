@@ -100,3 +100,30 @@ class IdentityDeliveryTest(BrainHarness):
         self.assertIn("не угадывай", prompt[0]["content"])
         deliveries = [r for r in self.decisions() if r["type"] == "delivery"]
         self.assertEqual([(d["ok"], d["code"]) for d in deliveries], [(True, 0), (False, 1)])
+
+
+class PartyFollowTest(unittest.TestCase):
+    def setUp(self):
+        from live_brain.gate import GateContext, RuleGate
+        from live_brain.safety import SafetyPolicy
+        self.p = SafetyPolicy(["prt_fild08"], peers={"Vera"})
+        self.gate, self.ctx = RuleGate(), GateContext(name="Arkady", hunt_maps=[], peers={"Vera"})
+
+    def test_follow_and_invite_only_peers(self):
+        self.assertIsNone(self.p.check({"action": "follow", "to": "Vera"}, STATE)[1])
+        self.assertIsNotNone(self.p.check({"action": "follow", "to": "Stranger"}, STATE)[1])
+        self.assertIsNotNone(self.p.check({"action": "party_invite", "to": "Stranger"}, STATE)[1])
+
+    def test_party_create_named_and_once(self):
+        clean, why = self.p.check({"action": "party_create", "name": "Evil"}, STATE)
+        self.assertIsNone(why)
+        self.assertEqual(clean["name"], "LR_Arkady")              # имя задаёт safety, не модель
+        self.assertIsNotNone(self.p.check({"action": "party_create"}, dict(STATE, party="LR_Arkady"))[1])
+        self.assertIsNotNone(self.p.check({"action": "party_create"}, dict(STATE, name="Аркадий"))[1])
+        self.assertIsNotNone(self.p.check({"action": "party_leave"}, STATE)[1])
+
+    def test_party_invite_rule(self):
+        ok = self.gate.evaluate({"kind": "party_invite", "party": "LR_Vera"}, STATE, self.ctx)
+        self.assertEqual(ok.actions, [{"action": "party_accept"}])
+        no = self.gate.evaluate({"kind": "party_invite", "party": "LR_Stranger"}, STATE, self.ctx)
+        self.assertEqual(no.actions, [])

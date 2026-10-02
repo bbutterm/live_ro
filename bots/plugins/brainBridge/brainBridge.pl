@@ -16,6 +16,11 @@
 #   whisper {to, text}    -> pm "<to>" <text>
 #   set_hunt_map {map}    -> conf lockMap <map>
 #   pause {} / resume {}  -> ai manual / ai auto
+#   party_create {name}   -> party create "LR_<имя>"   (только имена LR_*)
+#   party_invite {to}     -> party request "<to>"
+#   party_accept {}       -> party join 1               (мозг решает по событию party_invite)
+#   party_leave {}        -> party leave
+#   follow {to} / unfollow {} -> follow <to> / follow stop
 package brainBridge;
 
 use strict;
@@ -52,6 +57,7 @@ my $hooks = Plugins::addHooks(
 	['packet_privMsg',     \&onPrivMsg],
 	['packet_pre/private_message_sent', \&onPMResult],
 	['packet_selfChat',    \&onSelfChat],
+	['party_invite',       sub { event('party_invite', party => "$_[1]{partyName}") }],
 );
 
 sub onUnload {
@@ -128,6 +134,8 @@ sub sendState {
 		lock_map  => $config{lockMap},
 		ai        => (AI::state() == AI::AUTO() ? 'auto' : 'manual'),
 		%{identity($char)},
+		party     => ($char->{party} && $char->{party}{joined} ? "$char->{party}{name}" : undef),
+		follow    => ($config{follow} ? $config{followTarget} : undef),
 		activity  => (AI::action() || 'idle'),
 		players   => nearbyPlayers(),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
@@ -241,6 +249,24 @@ sub actionToCommand {
 		my $map = $a->{map} || '';
 		return (0, 'неверное имя карты') unless $map =~ /^[a-z0-9_]{3,16}$/;
 		return (1, "conf lockMap $map");
+	} elsif ($kind eq 'party_create') {
+		my $name = $a->{name} || '';
+		return (0, 'имя группы должно быть LR_<имя>') unless $name =~ /^LR_[A-Za-z0-9_]{1,20}$/;
+		return (1, qq{party create "$name"});
+	} elsif ($kind eq 'party_invite') {
+		my $to = cleanText($a->{to});
+		return (0, 'неверный адресат') unless $to =~ /^[^"]{1,23}$/;
+		return (1, qq{party request "$to"});
+	} elsif ($kind eq 'party_accept') {
+		return (1, 'party join 1');
+	} elsif ($kind eq 'party_leave') {
+		return (1, 'party leave');
+	} elsif ($kind eq 'follow') {
+		my $to = cleanText($a->{to});
+		return (0, 'неверная цель') unless $to =~ /^[^"]{1,23}$/ && $to ne 'stop';
+		return (1, "follow $to");
+	} elsif ($kind eq 'unfollow') {
+		return (1, 'follow stop');
 	} elsif ($kind eq 'pause') {
 		return (1, 'ai manual');
 	} elsif ($kind eq 'resume') {

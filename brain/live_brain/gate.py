@@ -105,6 +105,16 @@ class RuleGate:
         return GateResult(llm=f"{sender} ({who}) пишет мне в личку", llm_kind="chat",
                           note="личное сообщение")
 
+    def on_party_invite(self, event, state, ctx):
+        """Принять только группу жителя (LR_<имя жителя>); остальные OpenKore отклонит сам (partyAuto 1)."""
+        party = str(event.get("party", ""))
+        owner = party[3:] if party.startswith("LR_") else None
+        if owner in ctx.peers:
+            return GateResult(actions=[{"action": "party_accept"}],
+                              memory=[(f"Вступил в группу {owner} ({party}).", 3)],
+                              note=f"правило: приглашение в группу жителя {owner}")
+        return GateResult(note=f"приглашение в чужую группу {party!r} — отклонит OpenKore")
+
     def on_chat_public(self, event, state, ctx):
         sender = str(event.get("from", ""))
         if ctx.name and ctx.name.lower() in str(event.get("text", "")).lower():
