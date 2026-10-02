@@ -2147,6 +2147,163 @@ kv trek {trip {target, legs [{to, hops, path}], i, phase gather|leg|save|saved, 
 
 **Готово.** Тесты зелёные; `docs/EXPLORE.md`; статус ORG-078 «код, выкл., в игре не проверено».
 
+### Т-35 · ORG-062 · Помолвка и свадьба — мечта пары
+
+**Цель.** Близость пары растёт по фактам и видна ступенями: друзья → близкие → помолвка. Помолвка — символический
+ритуал жителей целиком в мозге: предложение шёпотом, согласие по характеру и отношению, обмен подарками почтой,
+эмоция-сердце, обещание в памяти, событие в шине и летописи, тема разговора. Настоящая свадьба rAthena — долгая
+общая мечта пары в `dream.py` (вид `wedding`, копилка `savings.py`); сам обряд у NPC только описан и подготовлен
+шагами, по умолчанию выключен (`goals.json → wed.ceremony: false`): дорого и необратимо. Без давления: отказ
+по характеру — нормальный исход, после `max_asks` отказов предложений этому жителю больше нет; ссора — разрыв.
+
+**Данные (сверено).** `npc/other/marriage.txt` загружен (`npc/scripts_athena.conf:186`), однополые браки — только
+`npc/custom/etc/marriage.txt` (`npc/scripts_custom.conf:50`, закомментирован), штатный скрипт — разнополая пара
+(:13, проверки `Sex` :208, :293, :316). Wedding Staff `prt_church,97,100` (:28): «Apply for Wedding» (меню :81, п. 3)
+→ «Yes» (:251) → проверки: уже в браке (`getpartnerid`, :252), `BaseLevel < 45` (:273), Diamond Ring 2613 (:283),
+невеста — 1 200 000 z и Wedding Dress 2338 (:294, :305), жених — 1 300 000 z и Tuxedo 7170 (:317, :327) → ввод своего
+имени (:352) → плата и вещи списываются СРАЗУ, ставится `wedding_sign` (:392–409). VIP-ветка (:35) не действует:
+`VIP_ENABLE` выключен (`src/config/core.hpp:52`). Bishop `prt_church,100,128` (:591): в группе ровно 2 (:607–608),
+первым говорит жених и вводит имя невесты (:629), затем невеста за 180 с (`OnTimer180000`, :845) — «I do.» → «Yes,
+I do.» → `marriage()`, кольца 2634/2635 (:720–733), объявление на карте «I now pronounce you, <жених> and <невеста>,
+husband and wife.» (:734, `bc_map`). Развода для игрока нет: Divorce Staff (:897) только для GM (`F_GM_NPC`) и лишь
+удаляет кольцо; развод — GM-команда `@divorce` (`src/map/atcommand.cpp:6777`) или скриптовая `divorce`
+(`pc_divorce`, `src/map/pc.cpp:12834`). Вещи: Tuxedo и Wedding Dress — Wedding Shop Dealer `prt_in,211,169`
+(`npc/merchants/shops.txt:253`, по 43 000 z — `Buy` в `db/re/item_db_*.yml`), Diamond Ring (45 000 z) — Jeweler в
+Морокке (`npc/re/merchants/shops.txt:122, 126, 132, 133`) и Лайтхальцене (:101): путь до Морокка в таблицах OpenKore
+не найден (Т-33). OpenKore статус брака не хранит (только `marriage_partner_name`, `divorced` — `Receive.pm:4161`,
+`:10813`): «в браке» — по кольцу 2634/2635 в рюкзаке или по объявлению сервера с моим именем.
+
+**Файлы.** `brain/live_brain/wed.py` (модуль реестра), `brain/live_brain/dream.py` (вид мечты `wedding`, метка
+`# wed:`), `brain/live_brain/rumors.py` (передать объявление `on_announce`, `# events2:`), `modules.py`,
+`world_bus.py` (PUBLISH), `chronicle.py`, `memoir.py` (строки глав), `goals.json` (`wed`), `brain/tests/test_wed.py`,
+`docs/LIFE.md`. `mind.py` не трогается.
+
+**Протокол.**
+```text
+[wed:ask]            предложение (житель рядом, ≤ near_cells, в городе, днём); текст — обещание
+[wed:yes]            согласие   /  [wed:no:<why>] отказ (why: busy|taken|stage|quarrel|heart)
+[wed:off:<why>]      разрыв помолвки (why: quarrel|cold)
+kv wed {pairs {peer: {stage, since}}, engaged {peer, since, by}, married {peer, since}, asked {peer: [ts]},
+        pending {peer, since}, gift {peer, sent}, told {peer: метка}, last_check, ready}
+события памяти: wed_stage {peer, stage}, wed_engaged {peer} (предложивший; шина 4), wed_accepted {peer},
+                wed_declined {peer, why}, wed_broken {peer, why} (шина 3), wed_married {peer, via} (шина 5),
+                wed_ready {peer, cost} — «готовы к обряду, обряд — решение владельца»
+```
+- Ступень пары: `friends` — affinity ≥ `friend_min` (3); `close` — affinity ≥ `close_min` (7) и эпизодов пары
+  (`episodes.with_peer`, сумма `times`) ≥ `close_episodes` (10); `engaged` / `married` — по kv. Смена ступени — событие.
+- Предложение: не помолвлен и не в браке; кандидат на ступени `close`, affinity ≥ `engage_min` (8), не в ссоре;
+  виден рядом; режим «отдых в городе», не ночь; раз в `check_hours` бросок `0.2 + 0.5 × общительность`; этому
+  жителю не чаще `ask_gap_days` и не больше `max_asks` раз.
+- Согласие: та же ступень у меня, не помолвлен с другим, не в ссоре, бросок `0.4 + 0.5 × общительность`.
+- Помолвка: оба — воспоминание 5, отношение +2, эмоция 3 (сердце), подарок — письмо `economy.send_mail` с
+  `gift_zeny` (событие `gift_given` пишет economy по ответу сервера); почта занята или зени мало — подарок позже.
+- Разрыв: ссора (`society.quarrel`) или affinity < `break_below` → `[wed:off:<why>]`, событие у обоих; мечта
+  `wedding` уходит (`dream.impossible`).
+- Мечта `wedding` (`dream.py`): доступна помолвленным, когда известны оба пола и они разные, и никто не в браке.
+  Этапы: «уровень 45» (`lv`), «копилка N зени» (`wealth`: плата по полу + кольцо + наряд), «обряд у епископа»
+  (`married`). Помолвка сбрасывает текущую мечту другого вида один раз («теперь общая мечта — свадьба»).
+  Копилка берёт сумму из `save_target()`.
+- Обряд: `ceremony_plan(role)` — шаги (наряд, кольцо, заявка у Wedding Staff, группа из двоих, Bishop: жених, затем
+  невеста за 180 с) с источниками; исполнителя нет. Достигнуты уровень и сумма — `wed_ready` один раз и запись
+  «обряд — решение владельца». Брак подтверждается кольцом или объявлением сервера → `wed_married`.
+
+**Тесты.** Ступени по affinity и эпизодам; предложение и согласие (два настоящих Mind, шёпоты вручную); отказ по
+характеру, лимит предложений; подарок письмом; разрыв по ссоре; мечта `wedding` (только разнополая пара, этапы,
+сумма копилки, сброс другой мечты один раз, уход при разрыве); брак по кольцу и по объявлению; выключатель;
+`ceremony_plan` — NPC и строки совпадают со скриптом (при наличии upstream).
+
+**Готово.** Тесты зелёные; `docs/LIFE.md`; статус ORG-062 «код: помолвка; свадьба — мечта, обряд выкл.».
+
+### Т-36 · ORG-083 · Наследие и уход на покой
+
+**Цель.** Житель, проживший долгий путь, решает «уйти на покой»: передаёт ценное (карты, лишние зени) ученику,
+спутнику или лучшему другу почтой, пишет прощальную главу мемуаров, событие в шине и летописи. Сам уход — только
+рекомендация владельцу в переписи (`scripts/lab census`): `active: false` в `roster.json` ставит владелец. Мозг не
+останавливает процессы, не трогает реестр и БД. По умолчанию выключено (`goals.json → legacy.enabled: false`).
+
+**Условия (любое).** Мечта сбылась после долгого пути (`dream_done.days` ≥ `long_dream_days`, 30); уровень ≥
+`elder_level` (90); возраст ≥ `elder_days` (90) — от `born` в `roster.json` (`mentor.roster_born`), иначе от первого
+события памяти. Не уходит: идёт помолвка без брака, есть ученик под опекой, тело занято (квест, экспедиция,
+сделка, почта). Проверка раз в `check_hours`.
+
+**Файлы.** `brain/live_brain/legacy.py` (модуль реестра), `memoir.py` (прощальная глава, `# legacy:`), `census.py`
+(раздел «уход на покой», `# legacy:`), `modules.py`, `world_bus.py`, `chronicle.py`, `goals.json` (`legacy`),
+`brain/tests/test_legacy.py`, `docs/LIFE.md`, `docs/POPULATION.md`.
+
+**Протокол.**
+```text
+kv legacy {phase ready|bequest|farewell|retired, since, reasons [...], heir, parcels [{item, amount} | {zeny}], sent, done}
+kv legacy_farewell {ts, name, reasons, heir, gifts [...], days, dreams [...]}   -> глава «Прощание» в memoir.md
+события памяти: legacy_ready {reasons}, legacy_parcel {to, item, amount, zeny}, legacy_retired {heir, gifts, reasons}
+                (шина 5), memoir_farewell
+```
+- Наследник: ученик (kv `mentor` с ролью mentor или событие `mentor_graduated`), затем супруг/жених (`wed`), затем
+  друг с наибольшим affinity ≥ `heir_min` (4); в ссоре — нет. Наследника нет — уход без передачи.
+- Посылки: карты из рюкзака (`prices.is_card`) по одной стопке на письмо, зени сверх `keep_zeny` (не больше
+  `max_zeny`, сбор почты 2 %) — не больше `max_parcels` писем (лимит `safety.MAIL_PER_DAY`); отправка через
+  `economy.send_mail(kind gift)` по одной, когда почта свободна. «Передал» — только события `gift_given` (ответ
+  сервера), их и считает прощание.
+- Прощание: kv `legacy_farewell` и пересборка `memoir.md` (Memoir дописывает главу «Прощание» по фактам), событие
+  `legacy_retired`, воспоминание 5, тема разговора `legacy` («ухожу на покой, наследник — …»).
+- Перепись: раздел «уход на покой (совет владельцу)» — кто готов, почему, кому передал и что сделать
+  (`active: false` в `brain/world/roster.json`, `scripts/lab roster sync`, остановить тело штатно).
+
+**Тесты.** Условия (долгая мечта, уровень, возраст из реестра), запреты (помолвка, ученик, занятость), выбор
+наследника, посылки (карты, зени, лимиты, очередь при занятой почте), прощальная глава в мемуарах, событие в шине,
+раздел переписи, модуль выключен по умолчанию, процессов и реестра не касается.
+
+**Готово.** Тесты зелёные; `docs/LIFE.md`, `docs/POPULATION.md`; статус ORG-083 «код, выкл.; уход — решение владельца».
+
+### Т-37 · ORG-087 · Штатные ивенты rAthena по расписанию
+
+**Цель.** На сервере бывают ивенты (грибная охота каждый час, «угадай монстра» раз в 2 часа). Конфиг готов, но не
+включён: включает владелец. Жители узнают ивент из объявления сервера и реагируют по-своему: идут к месту, если
+ивент в их городе и тело свободно; иначе — говорят о нём и пишут в летопись.
+
+**Данные (сверено).** Пользовательские ивенты — `npc/custom/events/` (в `npc/re/` своих нет; праздничные
+`npc/events/*.txt` привязаны к датам и почти все закомментированы в `npc/scripts_athena.conf:66-117`). Подключение —
+строки `npc: …` в `npc/scripts_custom.conf:85-89` (все закомментированы) или в `conf/import/map_conf.txt`: map-server
+читает `npc:` в любом файле конфига карты (`src/map/map.cpp:4170`), `conf/import/map_conf.txt` импортируется последним
+(`conf/map_athena.conf:128`). Оговорка: `@reloadscript` перечитывает только `npc/re/scripts_main.conf`
+(`map.cpp:4258-4266`) — ивенты из `map_conf.txt` до перезапуска map-server пропадут.
+
+| Ивент | Когда | Что | Объявления | Жителям |
+|---|---|---|---|---|
+| `mushroom_event.txt` | `OnMinute10` (:47) — каждый час в :10 | 1–10 Black Mushroom (1084: ур. 1, HP 5) в случайной клетке одного из izlude, geffen, morocc, prontera; за каждый — 10 × Apple (512) | «Find the Mushroom : Total of N Mushrooms have been spawned in <карта>!» (:55), «[ <имя> ] has killed a Mushroom…» (:66, только на карте), «The Find the Mushroom Event has ended…» (:68) | можно: собраться в своём городе (тело бьёт грибы штатно) |
+| `disguise.txt` | `OnClock0000…2200` (:150-161) — каждые 2 ч | NPC `prontera,160,155` принимает облик монстра, угадавший имя в общем чате получает 1 × Apple; 10 раундов | «The Disguise Event will begin in 3 minutes.» (:166), «…has begun!» (:200), «<имя> is correct! I was disguised as: <монстр>» (:236) | смотреть у NPC; угадывание — нет (облик NPC мост не передаёт) |
+| `devil_square.txt` | `OnClock` каждые 2 ч (:94-105) | арена `ordeal_1-1`, волны сильных монстров | «Devil Square is OPEN…» (:113) | не включать: опасно для уровней жителей; только разговор |
+| `cluckers.txt` | старт — только GM (:60-69) | курица убивает/оглушает нажавших (`unitkill`, :29) | «[Cluck! Cluck! Boom!] is about to start in Prontera!» (:69) | не включать; только разговор |
+| `mvp_ladder.txt` | по желанию группы | MVP подряд | «The party [<группа>] has started the MvP ladder game.» (:104) | не включать; только разговор |
+
+**Файлы.** `server/conf/optional/events_custom.txt` (готовые строки `npc:` для грибной охоты и маскарада с
+инструкцией, НЕ включено), `server/README.md`, `brain/live_brain/fest.py` (модуль реестра), `rumors.py`
+(`on_world_msg` → `fest.on_announce`, `# events2:`), `modules.py`, `chronicle.py`, `goals.json` (`fest`),
+`brain/tests/test_fest.py`, `docs/WORLD_EVENTS.md`.
+
+**Протокол.**
+```text
+kv fest {cur {event, map, since, until, gathered, kills, round}, last {event: ts}, told {peer: ключ}, seen [...]}
+события памяти: fest_seen {event, map} (одно на ивент), fest_join {event, map, x, y}, fest_result {event, kills,
+                minutes}, fest_round {event, winner, monster} (маскарад: кто угадал)
+```
+- Каталог `fest.CATALOG`: регулярные выражения объявлений из скриптов (старт, ход, конец), карта, действие
+  `gather` / `watch` / `talk`, точка сбора (грибы — точка города `social.points`, маскарад — `prontera 160,151`).
+- Реакция на старт (`on_announce`): `fest_seen`, тема `fest` («Сервер объявил: грибная охота в Пронтере!»).
+  Собраться, если ивент на карте моего города и я в режиме «отдых в городе», дошёл, не ночь, HP ≥ `min_hp`, нет
+  плана, квеста, экспедиции, сделки и спарринга, арбитр даёт `routine`, не «день осторожности»; по характеру
+  (бросок `0.3 + 0.6 × max(любопытство, общительность)`). Действие — `social.visit` к точке, прогулки ждут до
+  `until`. Грибы: `kill` Black Mushroom во время ивента считаются; конец (объявление или срок) — `fest_result`,
+  точка отдыха распорядка возвращается.
+- Опасные и GM-ивенты (`devil_square`, `cluckers`, `mvp_ladder`) — только `fest_seen` и разговор.
+
+**Тесты.** Разбор объявлений по строкам скриптов upstream (при наличии); сбор при свободном теле в своём городе;
+отказ (другой город, ночь, занят, HP, характер); подсчёт грибов и итог; конец по объявлению и по сроку; опасные —
+без движения; конфиг `server/conf/optional/events_custom.txt` — пути существуют, метки `OnMinute10`/`OnClock` на
+указанных строках; выключатель.
+
+**Готово.** Тесты зелёные; `server/README.md`, `docs/WORLD_EVENTS.md`; статус ORG-087 «код; конфиг сервера готов,
+не включён — решение владельца».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности
