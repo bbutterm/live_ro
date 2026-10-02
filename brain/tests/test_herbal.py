@@ -87,7 +87,7 @@ class HerbalCase(unittest.TestCase):
             self.tmp.cleanup()
 
     def state(self, **kw):
-        s = {"type": "state", "name": "Arkady", "map": "prontera", "x": 156, "y": 185, "hp_pct": 100, "lv": 41,
+        s = {"type": "state", "name": "Arkady", "map": "prontera", "x": 156, "y": 185, "hp_pct": 100, "lv": 50,
              "job": "Swordsman", "dead": False, "weight_pct": 20, "zeny": 60000,
              "items": {"501": 30, "504": 0, "505": 0}, "players": [],
              "craft": {"items": herbs(), "kept": [507, 508, 509, 510, 511, 713], "weight_free": 1500,
@@ -253,6 +253,8 @@ class HerbalTest(HerbalCase):
         self.state(map="prontera")
         self.mind.routine.sleep_window = lambda n: (n + 3600, n + 8 * 3600)
         self.assertEqual(self.h.why_not_now(now, self.mind.state), "скоро сон")
+        self.state(lv=41)                       # moc_fild03: Argos ур. 47 — путь опасен до ~46 уровня
+        self.assertIn("опасно по пути: moc_fild03", self.h.why_not_now(now, self.mind.state))
 
     def test_no_route_waits(self):
         self.make()

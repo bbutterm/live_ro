@@ -43,6 +43,7 @@ DEFAULTS = {
     "reserve_zeny": 2000,       # не тратить последнее
     "weight_margin": 100,       # к свободному весу NPC (500) — запас на зелья
     "min_hp": 80,
+    "max_risk": 0.35,           # риск карт пути для своего уровня (atlas.danger_for); pay_fild04 (Ghostring) — 0.3
     "sleep_guard_hours": 3,
     "wait_result_minutes": 240,
     "verify_minutes": 5,
@@ -204,6 +205,9 @@ class Herbal:
             return f"нет пути из {self.town()} к фармацевту (crafts.json)"
         if now < self.st.get("next_try", 0):
             return "пауза после неудачи"
+        risky = self.risky(state.get("lv"))
+        if risky:
+            return risky
         if now - self.st.get("last", 0) < cfg["gap_hours"] * 3600:
             return f"не чаще раза в {cfg['gap_hours']} ч"
         if self.st.get("back"):
@@ -256,6 +260,21 @@ class Herbal:
             return "сделка или почта"
         if (state.get("vend") or {}).get("open"):
             return "открыта лавка"
+        return None
+
+    def risky(self, level):
+        """Причина, если путь опасен для уровня level (карта пути с риском ≥ max_risk), иначе None."""
+        if not isinstance(level, int) or level <= 0:
+            return "уровень неизвестен"
+        from . import atlas
+        try:
+            a = atlas.default()
+        except (OSError, ValueError):
+            return "атлас недоступен"
+        for m in dict.fromkeys(self.route()["path"][1:]):
+            risk, why = a.danger_for(m, level)
+            if risk >= self.cfg["max_risk"]:
+                return f"опасно по пути: {m} (риск {risk:.2f}: {'; '.join(why)})"
         return None
 
     async def want_bottles(self, now, state):
