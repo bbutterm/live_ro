@@ -144,7 +144,8 @@ class Director:
         out = {self.me()} if self.awake() else set()
         if getattr(self.mind, "crowd", None) is not None:
             for rec in self.recent("presence", now - self.cfg["presence_minutes"] * 60):
-                if rec["bot"] in self.mind.ctx.peers:
+                # review3: спящий (presence mode sleep) — не онлайн, как и я сам в awake(): иначе он держит роль
+                if rec["bot"] in self.mind.ctx.peers and (rec.get("data") or {}).get("mode") != "sleep":
                     out.add(rec["bot"])
         else:
             out |= set(self.mind.ctx.peers)

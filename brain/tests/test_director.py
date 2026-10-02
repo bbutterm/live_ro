@@ -115,6 +115,14 @@ class DirectorTest(unittest.TestCase):
         self.mind.routine.st["mode"] = "sleep"
         self.assertFalse(self.d.is_director(), "спящий — не режиссёр")
 
+    def test_sleeping_peer_is_not_online(self):
+        """review3: житель с именем меньше спит (presence mode sleep, relog не удался — состояние свежее) —
+        сам он не режиссёр (awake), и другие не должны уступать ему роль: иначе режиссёра нет ни у кого."""
+        self.mind.ctx.peers.add("Abel")
+        self.others["Abel"].replace("presence", {"map": "prontera", "mode": "sleep"}, 1, now=self.clock.t - 60)
+        self.assertNotIn("Abel", self.d.online())
+        self.assertTrue(self.d.is_director(), "спящий Abel — не онлайн, режиссёр — Arkady")
+
     # ---------- тишина → повод ----------
 
     def test_quiet_world_gets_a_nudge_backstage(self):
