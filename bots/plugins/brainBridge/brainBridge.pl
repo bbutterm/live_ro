@@ -8,7 +8,8 @@
 #
 # Наружу: hello, state (каждые brainBridge_stateInterval с, по умолчанию 15),
 # события in_game, died, level_up, attack, kill, loot, chat_public, chat_private, ack.
-# В state: HP/SP, уровень, карта, координаты, lockMap, режим AI и текущее занятие (activity).
+# В state: HP/SP, уровень, карта, координаты, lockMap, режим AI, текущее занятие (activity)
+# и до 10 игроков в зоне видимости (players).
 # Внутрь (только эти действия, всё остальное отклоняется):
 #   say {text}            -> c <text>
 #   whisper {to, text}    -> pm "<to>" <text>
@@ -24,7 +25,7 @@ use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use JSON::PP;
 use Time::HiRes qw(time);
 use Plugins;
-use Globals qw($char $field $net $monstersList %config);
+use Globals qw($char $field $net $monstersList $playersList %config);
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -121,8 +122,15 @@ sub sendState {
 		lock_map  => $config{lockMap},
 		ai        => (AI::state() == AI::AUTO() ? 'auto' : 'manual'),
 		activity  => (AI::action() || 'idle'),
+		players   => nearbyPlayers(),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 	});
+}
+
+sub nearbyPlayers {
+	return [] unless $playersList;
+	my @names = grep { defined && length } map { $_->{name} } @{$playersList->getItems() || []};
+	return [@names[0 .. ($#names < 9 ? $#names : 9)]];
 }
 
 sub onAttack {

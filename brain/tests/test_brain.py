@@ -36,14 +36,21 @@ DECISION = {
 
 
 class FakeOpenRouter(BaseHTTPRequestHandler):
+    """Один фейковый сервер для обоих провайдеров: модель test/jev отвечает как JEV."""
     requests = []
+    jev_reply = {"importance": 2, "call_llm": False,
+                 "quick": {"action": "whisper", "text": "Привет. Занят, охочусь."}, "why": "простое приветствие"}
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         FakeOpenRouter.requests.append({"auth": self.headers.get("Authorization"), "body": body})
         system = body["messages"][0]["content"]
-        content = json.dumps({"greeting": "Здорово."} if "Проверка связи" in body["messages"][1]["content"]
-                             else DECISION, ensure_ascii=False)
+        if body["model"] == "test/jev":
+            content = json.dumps(FakeOpenRouter.jev_reply, ensure_ascii=False)
+        elif "Проверка связи" in body["messages"][1]["content"]:
+            content = json.dumps({"greeting": "Здорово."}, ensure_ascii=False)
+        else:
+            content = json.dumps(DECISION, ensure_ascii=False)
         assert "Arkady" in system
         payload = {"choices": [{"message": {"content": content}}],
                    "usage": {"prompt_tokens": 100, "completion_tokens": 50}}
@@ -111,6 +118,7 @@ class BrainHarness(unittest.TestCase):
             "BRAIN_API_BASE": f"http://127.0.0.1:{self.http.server_port}/api/v1",
             "BRAIN_DECIDE_INTERVAL": "3600",
             "BRAIN_CHAT_MIN_GAP": "1",
+            "BRAIN_PEER_SMALLTALK": "0",
             **extra,
         }
         path = self.root / "live_ro.env"

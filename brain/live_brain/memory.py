@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS relations (
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS llm_calls (
     id INTEGER PRIMARY KEY, ts REAL NOT NULL, ok INTEGER NOT NULL, latency REAL,
-    prompt_tokens INTEGER, completion_tokens INTEGER, error TEXT);
+    prompt_tokens INTEGER, completion_tokens INTEGER, error TEXT,
+    provider TEXT NOT NULL DEFAULT 'openrouter');
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS llm_calls_ts ON llm_calls(ts);
 """
@@ -25,6 +26,9 @@ class Memory:
         self.db = sqlite3.connect(str(path))
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(llm_calls)")}
+        if "provider" not in cols:   # файл памяти из версии до JEV
+            self.db.execute("ALTER TABLE llm_calls ADD COLUMN provider TEXT NOT NULL DEFAULT 'openrouter'")
         self.db.commit()
 
     def close(self):
@@ -94,14 +98,15 @@ class Memory:
         self.db.commit()
 
     # --- бюджет LLM ---
-    def log_llm_call(self, ok, latency=None, usage=None, error=None):
+    def log_llm_call(self, ok, latency=None, usage=None, error=None, provider="openrouter"):
         usage = usage or {}
         self.db.execute(
-            "INSERT INTO llm_calls (ts, ok, latency, prompt_tokens, completion_tokens, error) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO llm_calls (ts, ok, latency, prompt_tokens, completion_tokens, error, provider) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (time.time(), 1 if ok else 0, latency, usage.get("prompt_tokens"),
-             usage.get("completion_tokens"), (error or "")[:300] or None))
+             usage.get("completion_tokens"), (error or "")[:300] or None, provider))
         self.db.commit()
 
-    def llm_calls_since(self, since):
-        return self.db.execute("SELECT COUNT(*) FROM llm_calls WHERE ts >= ?", (since,)).fetchone()[0]
+    def llm_calls_since(self, since, provider="openrouter"):
+        return self.db.execute("SELECT COUNT(*) FROM llm_calls WHERE ts >= ? AND provider = ?",
+                               (since, provider)).fetchone()[0]

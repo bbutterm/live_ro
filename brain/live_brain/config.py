@@ -23,6 +23,22 @@ def _int(env, key, default):
 
 
 @dataclass
+class Provider:
+    """OpenAI-совместимый провайдер (те же поля читает llm.chat)."""
+    name: str
+    api_base: str
+    api_key: str
+    model: str
+    timeout: int
+    max_tokens: int
+    daily_limit: int
+
+    @property
+    def ready(self):
+        return self.api_key not in UNSET and bool(self.model) and bool(self.api_base)
+
+
+@dataclass
 class Settings:
     llm_provider: str
     api_key: str
@@ -36,11 +52,19 @@ class Settings:
     max_tokens: int
     gate: str
     safe_hp: int
+    jev: Provider
+    peer_replies_per_hour: int
+    peer_smalltalk_every: int
 
     @property
     def llm_enabled(self):
         # Платные вызовы только по явному согласию: BRAIN_LLM=openrouter и ключ.
         return self.llm_provider == "openrouter" and self.api_key not in UNSET
+
+    @property
+    def fast_enabled(self):
+        # JEV — быстрый gate: только при BRAIN_GATE=jev и заполненных JEV_*.
+        return self.gate == "jev" and self.jev.ready
 
     @property
     def llm_off_reason(self):
@@ -65,6 +89,17 @@ class Settings:
             max_tokens=_int(env, "BRAIN_MAX_TOKENS", 500),
             gate=(env.get("BRAIN_GATE", "") or "rules").lower(),
             safe_hp=_int(env, "BRAIN_SAFE_HP", 30),
+            jev=Provider(
+                name="jev",
+                api_base=env.get("JEV_API_BASE", "").rstrip("/"),
+                api_key=env.get("JEV_API_KEY", ""),
+                model=env.get("JEV_MODEL", ""),
+                timeout=_int(env, "JEV_TIMEOUT", 5),
+                max_tokens=_int(env, "JEV_MAX_TOKENS", 200),
+                daily_limit=_int(env, "JEV_DAILY_LIMIT", 2000),
+            ),
+            peer_replies_per_hour=_int(env, "BRAIN_PEER_REPLIES_PER_HOUR", 6),
+            peer_smalltalk_every=_int(env, "BRAIN_PEER_SMALLTALK", 1800),
         )
 
 

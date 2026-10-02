@@ -6,7 +6,8 @@ import json
 import time
 import unittest
 
-from live_brain.gate import GateContext, RuleGate, make_gate, status_line
+from live_brain.config import Settings
+from live_brain.gate import GateContext, RuleGate, make_fast_gate, status_line
 from live_brain.safety import SafetyPolicy
 from tests.test_brain import BrainHarness, FakeOpenRouter
 
@@ -43,8 +44,19 @@ class GateTest(unittest.TestCase):
         r = self.gate.evaluate({"kind": "kill", "monster": "Poring"}, STATE, self.ctx)
         self.assertEqual((r.actions, r.llm, r.memory), ([], None, []))
 
-    def test_jev_not_installed_falls_back_to_rules(self):
-        self.assertEqual(make_gate("jev").name, "rules")
+    def test_jev_without_settings_means_rules_only(self):
+        self.assertIsNone(make_fast_gate(Settings.from_env({"BRAIN_GATE": "jev"})))
+        self.assertIsNone(make_fast_gate(Settings.from_env({})))
+        full = {"BRAIN_GATE": "jev", "JEV_API_BASE": "http://x", "JEV_API_KEY": "k", "JEV_MODEL": "m"}
+        self.assertEqual(make_fast_gate(Settings.from_env(full)).name, "jev")
+
+    def test_peer_conversation_limited(self):
+        ctx = GateContext(name="Arkady", hunt_maps=[], peers={"Mirela"}, peer_replies_per_hour=2)
+        ev = {"kind": "chat_private", "from": "Mirela", "text": "как дела?"}
+        llm_asks = [self.gate.evaluate(ev, STATE, ctx).llm is not None for _ in range(3)]
+        self.assertEqual(llm_asks, [True, True, False])
+        human = {"kind": "chat_private", "from": "Tester", "text": "как дела?"}
+        self.assertTrue(all(self.gate.evaluate(human, STATE, ctx).llm for _ in range(5)))
 
     def test_status_line_fits_chat(self):
         self.assertLessEqual(len(status_line(STATE)), 100)
@@ -108,6 +120,94 @@ class FirstResultTest(BrainHarness):
         recs = self.decisions()
         self.assertEqual([r["source"] for r in recs if r["type"] == "decision"], ["rule", "rule"])
         self.assertEqual(sum(1 for r in recs if r["type"] == "ack" and r["ok"]), 2)
+
+
+
+class JevTest(BrainHarness):
+    def jev_env(self, llm="off", jev_base=None):
+        env = self.env_file()
+        base = jev_base or f"http://127.0.0.1:{self.http.server_port}/api/v1"
+        text = env.read_text().replace("BRAIN_LLM=openrouter", f"BRAIN_LLM={llm}")
+        env.write_text(text + f"BRAIN_GATE=jev\nJEV_API_BASE={base}\nJEV_API_KEY=jev-test-key\n"
+                       "JEV_MODEL=test/jev\nJEV_TIMEOUT=3\n")
+        return env
+
+    def private_message(self, env, text="привет, как ты?"):
+        proc = self.start_brain(env)
+        plugin = self.connect()
+        plugin.send(dict(STATE, type="state"))
+        plugin.send({"type": "event", "kind": "chat_private", "from": "Tester", "text": text})
+        return proc, plugin
+
+    def models(self):
+        return [r["body"]["model"] for r in FakeOpenRouter.requests]
+
+    def test_quick_reply_without_main_llm(self):
+        FakeOpenRouter.jev_reply = {"importance": 2, "call_llm": False,
+                                    "quick": {"action": "whisper", "text": "Привет. Занят, охочусь."},
+                                    "why": "простое приветствие"}
+        proc, plugin = self.private_message(self.jev_env(llm="openrouter"))
+        action = plugin.recv()
+        plugin.send({"type": "ack", "id": action["id"], "ok": True, "command": "pm"})
+        time.sleep(1.5)
+        plugin.close()
+        self.stop(proc)
+        self.assertEqual((action["action"], action["to"]), ("whisper", "Tester"))
+        self.assertEqual(self.models(), ["test/jev"])        # DeepSeek не вызывался
+        types = [r["type"] for r in self.decisions()]
+        self.assertIn("jev", types)
+        self.assertEqual([r["source"] for r in self.decisions() if r["type"] == "decision"], ["jev"])
+
+    def test_jev_escalates_to_main_llm(self):
+        FakeOpenRouter.jev_reply = {"importance": 4, "call_llm": True, "quick": None, "why": "важно"}
+        proc, plugin = self.private_message(self.jev_env(llm="openrouter"))
+        first = plugin.recv()
+        time.sleep(1)
+        plugin.close()
+        self.stop(proc)
+        self.assertEqual(self.models(), ["test/jev", "test/model"])
+        self.assertEqual(first["action"], "say")
+
+    def test_jev_failure_falls_back_to_rules(self):
+        proc, plugin = self.private_message(self.jev_env(llm="openrouter", jev_base="http://127.0.0.1:9/v1"))
+        first = plugin.recv()
+        time.sleep(1)
+        plugin.close()
+        self.stop(proc)
+        self.assertEqual(self.models(), ["test/model"])
+        self.assertIn("jev_error", [r["type"] for r in self.decisions()])
+        self.assertEqual(first["action"], "say")
+
+    def test_peer_smalltalk_whispers_other_resident(self):
+        env = self.env_file()
+        env.write_text(env.read_text().replace("BRAIN_PEER_SMALLTALK=0", "BRAIN_PEER_SMALLTALK=3600"))
+        decision = {"thought": "Давно не видел Mirela.", "actions": [
+            {"action": "whisper", "to": "Mirela", "text": "Mirela, ты где? На поле тихо."}]}
+        import tests.test_brain as tb
+        old, tb.DECISION = tb.DECISION, decision
+        try:
+            proc = self.start_brain(env)
+            plugin = self.connect()
+            plugin.send(dict(STATE, type="state"))
+            action = plugin.recv()
+            plugin.close()
+            self.stop(proc)
+        finally:
+            tb.DECISION = old
+        self.assertEqual((action["action"], action["to"]), ("whisper", "Mirela"))
+        reason = [r for r in self.decisions() if r["type"] == "decision"][0]["reason"]
+        self.assertIn("давно не общался с Mirela", reason)
+
+    def test_check_jev(self):
+        import subprocess, sys
+        from tests.test_brain import BRAIN_DIR
+        FakeOpenRouter.jev_reply = {"importance": 1, "call_llm": False, "quick": None, "why": "тест"}
+        out = subprocess.run([sys.executable, "-m", "live_brain", "--env", str(self.jev_env()),
+                              "--lab-root", str(self.root), "--check-jev"],
+                             cwd=BRAIN_DIR, capture_output=True, text=True, timeout=30)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("CHECK OK (JEV test/jev)", out.stdout)
+        self.assertNotIn("jev-test-key", out.stdout + out.stderr)
 
 
 if __name__ == "__main__":
