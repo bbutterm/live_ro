@@ -1,0 +1,16 @@
+{
+  "_comment": "Acolyte (как bot02/Vera): Blue Gemstone 717 на склад (пригодится Priest). Персона — своя (--persona).",
+  "base": "bot01",
+  "archetype": "Acolyte",
+  "job": "Acolyte",
+  "combat": "melee",
+  "sex": "F",
+  "default_name": null,
+  "keep_quest_items": [],
+  "config": {
+    "economy_storeIds": "984,985,756,757,717",
+    "autoCreate_hairStyle": "7",
+    "autoCreate_hairColor": "3"
+  },
+  "persona": null
+}

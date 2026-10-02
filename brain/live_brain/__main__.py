@@ -173,11 +173,36 @@ def organic_metrics(memory, since):
             "вызовов моделей": calls, "дневников": diaries}
 
 
+def roster_residents(persona_path):
+    """ORG-040: активные жители из brain/world/roster.json ({bot: запись}) или None, если реестра нет."""
+    path = Path(persona_path).resolve().parent.parent / "world" / "roster.json"
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    res = doc.get("residents")
+    if not isinstance(res, dict):
+        return None
+    return {b: r for b, r in res.items() if isinstance(r, dict) and r.get("active")}
+
+
 def peer_names(persona_path, bots=None):
     """Имена жителей. bots (LAB_BOTS) — только запущенные: иначе лидер группы звал бы офлайн-жителя,
-    а слухи уходили бы в пустоту (ORG-004). Без LAB_BOTS — все характеры (как раньше)."""
+    а слухи уходили бы в пустоту (ORG-004). Есть реестр brain/world/roster.json — активные жители реестра
+    ∩ LAB_BOTS, имя из персоны (поле persona), иначе из реестра. Реестра нет: без LAB_BOTS — все характеры."""
     names = set()
     folder = Path(persona_path).parent
+    roster = roster_residents(persona_path)
+    if roster is not None:
+        for b, r in roster.items():
+            if bots and b not in bots:
+                continue
+            try:
+                names.add(load_persona(folder / f"{r.get('persona') or b}.json")["name"])
+            except (ValueError, OSError, KeyError):
+                if r.get("name"):
+                    names.add(r["name"])
+        return names
     files = [folder / f"{b}.json" for b in bots] if bots else folder.glob("*.json")
     for f in files:
         try:

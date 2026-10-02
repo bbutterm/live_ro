@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "ORG-040: единый реестр жителей. Ключ — профиль бота (bots/<bot>, brain/personas/<persona>.json).",
+    "name — имя персонажа в игре (= name в персоне, 1-23 латинских букв/цифр); job — первая профессия (цель жителя);",
+    "template — архетип из bots/templates/<template>; home_town — город, где житель отдыхает и общается;",
+    "active — житель мира: только активные попадают в residents/dealAuto_names других (рендер при start, scripts/lab roster sync)",
+    "и в peer_names мозга (вместе с LAB_BOTS). born — дата рождения (UTC, YYYY-MM-DD), ставит оператор (docs/POPULATION.md).",
+    "Добавление жителя: scripts/lab new-resident botNN <шаблон> <Имя> (active: false), затем процедура scripts/lab birth botNN."
+  ],
+  "residents": {
+    "bot01": {
+      "name": "Arkady",
+      "job": "Swordsman",
+      "template": "swordsman",
+      "persona": "bot01",
+      "home_town": "prontera",
+      "active": true,
+      "born": null
+    },
+    "bot02": {
+      "name": "Vera",
+      "job": "Acolyte",
+      "template": "acolyte",
+      "persona": "bot02",
+      "home_town": "prontera",
+      "active": true,
+      "born": null
+    }
+  }
+}

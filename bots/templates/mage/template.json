@@ -1,0 +1,16 @@
+{
+  "_comment": "Mage: самоцветы 715-717 на склад (реагенты). Дистанцию и отдых по SP задаёт combatProfile (caster).",
+  "base": "bot01",
+  "archetype": "Mage",
+  "job": "Mage",
+  "combat": "caster",
+  "sex": "F",
+  "default_name": "Odette",
+  "keep_quest_items": [],
+  "config": {
+    "economy_storeIds": "984,985,756,757,717,716,715",
+    "autoCreate_hairStyle": "15",
+    "autoCreate_hairColor": "6"
+  },
+  "persona": "persona.json"
+}

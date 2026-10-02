@@ -1,0 +1,17 @@
+{
+  "_comment": "Swordsman (как bot01/Arkady): items_control хранит набор Sir Andrew для квеста Knight. Персона — своя (--persona) или копия brain/personas/bot01.json с новым именем.",
+  "base": "bot01",
+  "archetype": "Swordsman",
+  "job": "Swordsman",
+  "combat": "melee",
+  "sex": "M",
+  "default_name": null,
+  "keep_quest_items": [
+    "knight"
+  ],
+  "config": {
+    "autoCreate_hairStyle": "1",
+    "autoCreate_hairColor": "1"
+  },
+  "persona": null
+}
