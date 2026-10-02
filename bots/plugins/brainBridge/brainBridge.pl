@@ -30,6 +30,7 @@
 #   unstuck {radius}      -> ai clear; move <случайная проходимая клетка в радиусе radius (5..30, по умолчанию 10)>
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
+#   job_change {path,stage,steps,success} -> плагин jobChange: этап квеста смены профессии (шаги из progression.json)
 #   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
 #   service {}            -> autostorage (если есть что сдать на склад) или autosell — продать/сдать/докупить
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
@@ -175,6 +176,7 @@ sub sendState {
 		combat    => (%combatProfile::current ? {%combatProfile::current} : undef),
 		activity  => (AI::action() || 'idle'),
 		players   => nearbyPlayers(),
+		(defined &jobChange::status ? (job_change => jobChange::status()) : ()),
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
 		(defined &survival::status ? (survival => survival::status()) : ()),
@@ -436,6 +438,10 @@ sub actionToCommand {
 		my $id = $a->{id} // '';
 		return (0, 'эмоция не из списка') unless $id =~ /^\d{1,2}$/ && exists $EMOTES{$id};
 		return (1, "e $EMOTES{$id}");
+	} elsif ($kind eq 'job_change') {
+		return (0, 'плагин jobChange не загружен') unless defined &jobChange::start;
+		my ($ok, $desc) = jobChange::start($a);
+		return $ok ? (1, {note => $desc}) : (0, $desc);
 	} elsif ($kind eq 'sleep') {
 		my $sec = $a->{seconds} // '';
 		return (0, 'неверная длительность сна') unless $sec =~ /^\d+$/ && $sec >= 600 && $sec <= 43200;

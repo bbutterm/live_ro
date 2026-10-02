@@ -23,6 +23,11 @@
     "auto_hunt_maps": false
   },
 
+  "progression": {
+    "_comment": "Карьера (career.py): цель прогрессии всегда в памяти и промпте. auto_job_change — сам проходить этапы квеста смены профессии (плагин jobChange); сценарии выведены из скриптов rAthena, в игре не проверены — включать после проверки (docs/PROGRESSION.md).",
+    "auto_job_change": false
+  },
+
   "economy": {
     "_comment": "Взаимопомощь в городе (brain/live_brain/economy.py). share — чем делятся: просят, когда меньше need_below; просят ask; отдающему остаётся не меньше keep. Продажа лута, закупка и склад — в bots/<bot>/control/config.txt.",
     "share": {

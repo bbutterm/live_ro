@@ -17,6 +17,7 @@ import re
 import time
 
 from . import llm
+from .career import Career
 from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
 from .lifecycle import STALE_SEC, Lifecycle
@@ -114,6 +115,7 @@ class Mind:
         self.life = Lifecycle(self)
         self.maps = MapStats(self)
         self.needs = Needs(self)
+        self.career = Career(self, (world or {}).get("progression")) if world and settings.feature("career") else None
         feat = settings.feature
         self.routine = Routine(self, world) if world and feat("routine") else None
         self.economy = Economy(self, world["economy"]) if world and world.get("economy") and feat("economy") else None
@@ -262,6 +264,10 @@ class Mind:
             return
         if self.party and kind == "danger":
             await self.party.on_danger(event)
+        if kind == "job_change_result":
+            if self.career:
+                self.career.on_result(event)
+            return
         if kind == "deal_complete":
             if self.economy:
                 self.economy.on_deal_complete(event)
@@ -380,7 +386,7 @@ class Mind:
                              "actions": sent, "rejected": rejected, **(extra or {})})
         label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM", "plan": "план",
                  "operator": "оператор", "economy": "экономика", "routine": "распорядок", "party": "группа",
-                 "social": "общение"}.get(source, source)
+                 "social": "общение", "career": "карьера"}.get(source, source)
         log.info("%s (%s): действия %s%s", label, reason,
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
@@ -480,6 +486,8 @@ class Mind:
                 await self.economy.tick()
             if self.party:
                 await self.party.tick()
+            if self.career:
+                await self.career.tick()
             if self.social:                                    # social: тик общения
                 await self.social.tick()
             await self.read_inbox()
@@ -673,6 +681,7 @@ class Mind:
             "глобальные_цели": self.routine.goals() if self.routine else None,
             "хозяйство": self.economy.summary() if self.economy else None,
             "мотивы": dict(self.needs.top(4)),
+            "карьера": (self.mem.get("career") or {}).get("text"),
             "опасные_монстры": self.postmortem.risky_monsters(),
             "опыт_по_картам": self.maps.summary(),
             "закрытые_карты_до": {m: time.strftime("%H:%M", time.localtime(t))

@@ -7,6 +7,7 @@
     ESCAPING    — за ESCAPE_SEC было событие survival/danger/escape
     BLOCKED     — распорядок признал тупик (застревание после лестницы, восстановление невозможно)
     RECOVERING  — после смерти/крыла/низкого HP: отдых до min_hp_to_hunt
+    QUEST       — идёт этап квеста смены профессии (плагин jobChange)
     SOCIAL      — активный план встречи или передача вещей жителю
     SERVICING   — продажа, закупка, склад, разговор с NPC, сделка
     FIGHTING    — бой (activity attack или атака за FIGHT_SEC)
@@ -64,6 +65,8 @@ class Lifecycle:
             return "BLOCKED", st["blocked"]
         if st.get("recover"):
             return "RECOVERING", "восстановление после смерти или опасности"
+        if (s.get("job_change") or {}).get("running"):
+            return "QUEST", f"этап смены профессии {(s.get('job_change') or {}).get('stage')}"
         if m.plans.store.active():
             return "SOCIAL", "план встречи"
         econ = getattr(m, "economy", None)
@@ -98,8 +101,8 @@ class Lifecycle:
         owners = set()
         if s.get("dead") or now - self.last_alarm < ESCAPE_SEC:
             owners.add("survival")
-        if m.plans.store.active():
-            owners.add("plan")
+        if m.plans.store.active() or (s.get("job_change") or {}).get("running"):
+            owners.add("plan")                       # встреча или этап квеста профессии
         econ = getattr(m, "economy", None)
         if (econ and econ.giving) or s.get("give"):
             owners.add("economy")
