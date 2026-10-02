@@ -172,4 +172,34 @@ $Globals::char->{dead} = 1;
 tick();
 ok(!lastEvent()->{ok} && lastEvent()->{reason} =~ /мёртв/, 'смерть прерывает этап');
 
+# ---- newborn: Novice -> Mage (npc/re/jobs/1-1/mage.txt), долгий переход и успех по профессии ----
+$Globals::char->{dead} = 0;
+$Globals::char->{jobID} = 0;
+$Globals::jobs_lut{0} = 'Novice';
+$Globals::jobs_lut{2} = 'Mage';
+$Globals::field = FakeField->new('prontera');
+$Globals::char->{pos_to} = {x => 156, y => 180};
+%Globals::talk = ();
+@Commands::ran = ();
+($ok, $why) = start('mage/first_job');
+ok($ok, "этап Novice -> Mage начат: $why");
+tick();
+is_deeply([ran()], ['move 163 124 geffen_in'], 'иду в гильдию магов');
+$jobChange::run{step_since} -= 1000;
+tick();
+ok(%jobChange::run, 'переход дольше 900 с не провален: шаг задаёт time_limit 1800');
+$Globals::field = FakeField->new('geffen_in');
+$Globals::char->{pos_to} = {x => 163, y => 124};
+tick(); tick();
+is_deeply([ran()], ['talknpc 164 124'], 'у Mage Guildsman');
+%Globals::talk = (ID => 7);
+menu('Mage Guildsman', ['I want to be a Mage', 'What are the requirements to be a Mage?', 'Nothing, thanks.']);
+menu('Mage Guildsman', ['I want to be a Mage.', 'Nothing, thanks.']);
+is_deeply([ran()], ['talk resp 0', 'talk resp 0'], 'оба меню: первый пункт по точному тексту');
+%Globals::talk = ();
+Plugins::call('npc_talk_done', {ID => 7});
+$Globals::char->{jobID} = 2;
+tick(); tick();
+ok(lastEvent()->{ok} && lastEvent()->{stage} eq 'first_job', 'профессия Mage — этап пройден');
+
 done_testing();

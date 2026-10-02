@@ -135,12 +135,8 @@ scripts/lab new-resident bot04 swordsman Gerold --persona path/to/gerold.json
 
 Известные риски и пробелы (честно):
 
-- **Стартовая точка.** rAthena renewal ставит нового персонажа в `iz_int` (Training Grounds, `start_point` в
-  `conf/char_athena.conf:115`). Выход из учебного полигона OpenKore/мозг не умеют — не проверено, дойдёт ли житель до
-  `lockMap`. Варианты: владелец меняет `start_point` в `conf/import/char_conf.txt` (например, `prontera,156,180`;
-  в режиме existing — вручную, conf/import не рендерится) или оператор один раз выводит новичка через tmux.
-- **Novice → первая профессия** не автоматизирована: `brain/world/progression.json` содержит только Swordsman→Knight
-  и Acolyte→Priest. Поле `job` в реестре — цель, сменить профессию придётся вручную (или будущая задача).
+- **Стартовая точка и первая профессия** — см. раздел 6 «Первые шаги новичка»: без решения владельца по
+  `start_point` новичок застрянет в учебном полигоне iz_int.
 - Событие `world_events: new_resident` и слух о новом жителе не реализованы (mind/social вне зоны этой работы).
 - Генератор не создаёт боевой профиль, отличный от combatProfile; Archer без стрел в инвентаре — не проверено.
 
@@ -155,3 +151,73 @@ scripts/lab new-resident bot04 swordsman Gerold --persona path/to/gerold.json
 (`scripts/lab stop botNN`). Освобождение процесса во сне (мозг просит сторожа остановить тело на ночь) — следующий
 шаг, требует правки routine.py/brainBridge (вне зоны этой работы). Проверено: выбор (`brain/tests/test_roster.py`),
 `bash -n`; цикл сторожа с лимитом в работе не запускался.
+
+## 6. Первые шаги новичка (newborn)
+
+Статус: данные и правила проверены тестами разбора (`brain/tests/test_newborn.py`, `bots/tests/job_change.t`).
+**В игре ни один шаг не проходился.**
+
+### 6.1. Где появляется новичок и почему он там застрянет
+
+rAthena renewal ставит нового персонажа случайно в одну из `iz_int`, `iz_int01`…`iz_int04` 18,26
+(`conf/char_athena.conf:115`; в renewal читается `start_point`, `src/char/char.cpp:3008-3012`). Эта же точка
+становится точкой сохранения (`src/char/char.cpp:1503-1509`).
+
+Выход по скриптам — три перехода без меню, диалогов-тестов нет:
+
+1. iz_int 27,30 — warp `#room_out` → 51,30 (`npc/re/warps/cities/izlude.txt:57`);
+2. iz_int 56,15 — `#ship_out` (OnTouch): savepoint int_land 77,101, warp int_land 85,107 (`:69-77`);
+3. int_land 49,57 — `#intro_to_izlude` (OnTouch): без квеста 21008 меню нет, только `mes` и `close2` (OpenKore
+   закрывает такой диалог сам, `Task/TalkNPC.pm:348-353`); warp izlude 196,209, savepoint izlude 128,142 (`:83-109`).
+   Копии: iz_int0N → int_land0N → izlude_a…d.
+
+Бот этого не сделает, и сценарий выхода **не добавлен**: на данных OpenKore он не работает.
+
+- `fields/iz_int.fld2.gz` в OpenKore — старая карта 200x200, а у сервера iz_int 80x80 (`db/map_cache.dat`). Клетка
+  старта 18,26 для OpenKore непроходима, маршрут не строится. Обойти можно: `field_iz_int iz_int01` в `servers.txt`
+  (`src/Field.pm:856`), поле `iz_int01` совпадает с картой сервера клетка в клетку (проверено тестом).
+- Выход ведёт в izlude, а он в renewal перестроен: у сервера 268x300, поле OpenKore 268x268, переходы izlude в
+  `tables/portals.txt` старые. После выхода точка сохранения тоже izlude, поэтому после смерти житель вернётся в
+  город, где OpenKore не ориентируется. Нужен патч `portals.txt` (задача NB-1 в `docs/PROGRESSION.md`).
+- Старый полигон `new_1-1` в renewal не грузится (`npc/re/scripts_jobs.conf:37`, novice.txt закомментирован), поля
+  `new_1-1` в OpenKore нет. Как стартовая точка он не подходит.
+
+Мозг это видит: `progression.blocked()` и `plan()` для жителя на картах `start.maps` (iz_int*, int_land*) честно
+сообщают «учебный полигон …: выход не автоматизирован», и этап смены профессии не запускается.
+
+### 6.2. Решение владельца: стартовая точка в Пронтере
+
+Готовый файл: `server/conf/optional/char_start_point.txt` (`start_point: prontera,156,180`, у фонтана). **Не включён.**
+Это изменение сервера. Что оно даёт: новые персонажи появляются и возрождаются в Пронтере (`home_town` всех
+жителей), учебный полигон пропускается. Существующих персонажей и БД оно не трогает. Клетка проходима и на карте
+сервера, и на поле OpenKore (тест `MapsTest.test_start_point_walkable`).
+
+Включение, затем перезапуск char-server:
+
+- рендер conf/import (release или `RENDER_SERVER_CONF=1`): дописать строку `start_point: prontera,156,180` в
+  `server/conf/import-tmpl/char_conf.txt`, поставить `"enabled": true` в `start.override` файла
+  `brain/world/progression.json` (тест сверяет их), commit, доставка, `scripts/lab start`;
+- existing: дописать ту же строку в `$RATHENA/conf/import/char_conf.txt` вручную (её импортирует
+  `conf/char_athena.conf:305`, последнее значение побеждает).
+
+Без этого новичка придётся выводить вручную, и оба способа требуют решения владельца: GM-аккаунт оператора и
+`@warp`/`@recall` в нашей лаборатории или правка `last_map`/`save_map` персонажа в БД. Правка БД возможна только
+отдельной миграцией с бэкапом и при остановленном char-server.
+
+### 6.3. Novice → первая профессия
+
+Сценарии шести профессий выведены из `npc/re/jobs/1-1/*.txt`. Подробности, ссылки на строки и маршруты — в
+`docs/PROGRESSION.md`, раздел 9. Кратко: в renewal испытаний нет, нужен только NV_BASIC 9, то есть job 10, и
+диалог из 1–3 меню (Thief: два NPC). Путь выбирается по цели жителя — полю `job` в `roster.json`, без него — по
+`job` шаблона; поле `job` персоны важнее. Профиль Novice в `classes.json` уже учит NV_BASIC 9.
+
+| цель | путь | что мешает |
+|---|---|---|
+| Acolyte, Mage, Archer, Merchant | ok | ничего, кроме общего флага `progression.auto_job_change` (false) и того, что в игре не проверено |
+| Swordsman | blocked | izlude перестроен (как в 6.1); нужен патч OpenKore (NB-1) |
+| Thief | blocked | пешего пути в Морокко по таблицам OpenKore нет; телепорт Kafra не сверен (NB-2) |
+
+Порядок для нового жителя после включения 6.2: охота Novice до job 10 (NV_BASIC 9 ставит combatProfile) →
+`career` видит готовность → при `auto_job_change: true` (решение владельца) идёт в гильдию по шагам из
+`progression.json`. Пока флаг выключен, цель «первая профессия» только видна в промпте и отчёте, а сменить
+профессию оператор может вручную.

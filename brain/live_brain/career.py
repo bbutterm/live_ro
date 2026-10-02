@@ -1,7 +1,8 @@
 """Карьера жителя: цели прогрессии и смена профессии (AUT-079/080/083/084). Правила без LLM.
 
-Данные и чистые функции — progression.py (сценарии Knight/Priest выведены из скриптов rAthena со
-ссылками на строки, docs/PROGRESSION.md). Этот модуль:
+Данные и чистые функции — progression.py (сценарии Knight/Priest и Novice -> первая профессия выведены
+из скриптов rAthena со ссылками на строки, docs/PROGRESSION.md). Цель Novice (какую профессию брать) —
+поле job персоны или запись жителя в brain/world/roster.json (по имени персоны). Этот модуль:
     - раз в SUMMARY_EVERY с пишет цель прогрессии в kv "career" (промпт модели, report, хроника);
     - при goals.json progression.auto_job_change = true и готовности этапа (stage_action) в городе,
       без плана встречи и с разрешения арбитра — отправляет действие job_change плагину jobChange;
@@ -25,6 +26,7 @@ class Career:
         self.cfg = cfg or {}
         self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.data = None
+        self.target = None          # newborn: первая профессия жителя (Novice), из персоны или roster.json
         self.last_summary = 0.0
         self.st = mind.mem.get("career_state") or {"done": [], "fails": 0, "next_try": 0}
 
@@ -33,6 +35,9 @@ class Career:
             try:
                 from . import progression
                 self.data = progression.load()
+                # newborn: цель Novice — persona["job"] или job жителя в brain/world/roster.json по имени
+                persona = getattr(self.mind, "persona", None) or {}
+                self.target = persona.get("job") or progression.target_job(persona.get("name"))
             except (OSError, ValueError, KeyError) as e:
                 log.warning("прогрессия недоступна: %s", e)
                 self.data = {}
@@ -50,7 +55,8 @@ class Career:
         if now - self.last_summary >= SUMMARY_EVERY:
             self.last_summary = now
             try:
-                self.mind.mem.set("career", {"text": progression.summary(state, self.data, now), "ts": now})
+                text = progression.summary(state, self.data, now, target=self.target)    # newborn: target
+                self.mind.mem.set("career", {"text": text, "ts": now})
             except (KeyError, TypeError, ValueError) as e:
                 log.warning("сводка прогрессии: %s", e)
         if not self.cfg.get("auto_job_change") or now < self.st.get("next_try", 0):
@@ -64,7 +70,8 @@ class Career:
         if not ok:
             return
         try:
-            action = progression.stage_action(state, self.data, done=tuple(self.st.get("done", [])))
+            action = progression.stage_action(state, self.data, done=tuple(self.st.get("done", [])),
+                                               target=self.target)
         except (KeyError, TypeError, ValueError) as e:
             log.warning("этап прогрессии: %s", e)
             return

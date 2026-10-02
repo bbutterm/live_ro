@@ -9,13 +9,15 @@
 
 | файл | что это |
 |---|---|
-| `brain/world/progression.json` | сценарии Swordman → Knight и Acolyte → Priest (ручной, со ссылками `файл:строка`), классы, правила целей |
+| `brain/world/progression.json` | сценарии Swordman → Knight, Acolyte → Priest и Novice → шесть первых профессий (ручной, со ссылками `файл:строка`), стартовая точка, классы, правила целей |
 | `brain/world/jobs/catalog.json` | сгенерированный справочник: снаряжение в магазинах Пронтеры и Изюда, источники предметов квеста |
 | `scripts/gen_progression.py` | генератор каталога (rAthena: item_db, mob_db, NPC — через разбор `gen_atlas.py`) |
 | `brain/live_brain/progression.py` | чистые функции: план, готовность, этап, ответы в меню, снаряжение, сводка |
 | `brain/tests/test_progression.py` | тесты: данные, сверка со скриптами и полями, план, снаряжение |
 | `bots/plugins/jobChange/jobChange.pl` | исполнитель одного этапа квеста в OpenKore (шаги присылает мозг) |
 | `bots/tests/job_change.t` | тест плагина на заглушках |
+| `brain/tests/test_newborn.py` | первые профессии: скрипты 1-1, маршруты по данным OpenKore против сервера, выбор пути по цели жителя (раздел 9) |
+| `scripts/okroute.py` | поиск пешего маршрута по полям и `portals.txt` OpenKore (им записаны `route.hops`) |
 
 ```sh
 python3 scripts/gen_progression.py upstream/rathena > brain/world/jobs/catalog.json   # ~40 с, нужен PyYAML
@@ -261,3 +263,85 @@ Cecilia ответы одинаковые («Yes.» / «No.»), там вклю�
   и с prerequisites. **Готово:** на job 40 свободных очков 0.
 - **AUT-128 · P2 — Перезапись точки сохранения.** После паломничества и других квестов с `savepoint`
   вернуть сохранение в город. **Готово:** после смерти житель появляется в городе.
+
+## 9. Novice → первая профессия (newborn)
+
+**Статус.** Выведено из скриптов rAthena и проверено тестами разбора (`brain/tests/test_newborn.py`, общие
+`ScriptRefsTest`/`FieldsTest` и `bots/tests/job_change.t`). В игре ни один этап не проходился.
+
+### Что грузит renewal
+
+`npc/re/scripts_main.conf:39` импортирует `npc/re/scripts_jobs.conf`, а он в `:7-12` грузит
+`npc/re/jobs/1-1/{acolyte,archer,mage,merchant,swordman,thief}.txt`. Старых pre-renewal квестов
+(`npc/jobs/1-1`) в дереве нет. **Испытаний, предметов и платы в renewal нет**: тестов на знания, полосы
+препятствий Thief, сбора грибов и зелий Mage/Archer, взноса Merchant. Везде одно условие —
+`F_CanChangeJob` (`npc/other/Global_Functions.txt:626-628`): `!basicskillcheck() || NV_BASIC > 8`, а
+`basic_skill_check: yes` (`conf/battle/player.conf:47`). NV_BASIC 9 — это все 9 очков навыков Novice, они
+есть только на job 10. Профиль Novice в `bots/combat/classes.json` уже учит `NV_BASIC 9`. Поэтому требования
+в JSON такие: `job_lv 10`, `skill_points 0`. Журнал квестов скрипты не трогают, и успех проверяется по
+профессии (`success.job`, имя OpenKore).
+
+| путь | NPC (карта x,y) | ответы: select «текст» | смена / награда | маршрут |
+|---|---|---|---|---|
+| swordman | Swordman#swd, izlude_in 74,172 (`swordman.txt:15`) | 2 «I want to be a Swordman.» (`:65`), 1 «Yes, I do.» (`:107`) | `:119` / N_Falchion 13415 (`:120`) | **blocked** — izlude |
+| acolyte | Cleric#aco, prt_church 184,41 (`acolyte.txt:16`) | 1 «Change your job to acolyte.» (`:65`) | `:89` / N_Mace 1545 | ok, 2 перехода |
+| merchant | Merchant#mer, alberta_in 53,43 (`merchant.txt:15`) | 1 «I want to be a merchant.» (`:59`) | `:93` / N_Battle_Axe 1381 | ok, 10 переходов (через Пайон) |
+| archer | Archer Guildsman#archer, payon_in02 64,71 (`archer.txt:15`) | 1 «I want to be an Archer.» (`:65`) | `:95` / N_Composite_Bow 1742 и колчаны | ok, 7 переходов |
+| thief | Thief Guide#thief 39,129 → Thief Guildsman#thief 42,133, moc_prydb1 (`thief.txt:15`, `:157`) | Guide: 1 «I want to be a Thief.» (`:92`), 1 «Yes.» (`:106`), 1 «Yes, I do.» (`:130`) → `q_job_thief 1` (`:153`); Guildsman без меню | `:167` / N_Main_Gauche 13041 | **blocked** — нет пешего пути в Морокко |
+| mage | Mage Guildsman#mage, geffen_in 164,124 (`mage.txt:15`) | 1 «I want to be a Mage» (`:67`), 1 «I want to be a Mage.» (`:81`) | `:106` / N_Rod 1639 | ok, 6 переходов |
+
+У Mage два меню, пункты которых отличаются только точкой. Ответ выбирается по точному тексту
+(`choose_answer`), поэтому путаницы нет: это проверяет тест разбора на реальных строках `select(...)`.
+
+### Маршруты (`paths.*.route`)
+
+Плагин делает `move x y map`, маршрут строит OpenKore по своим полям (`fields/*.fld2.gz`) и
+`tables/portals.txt`. Найдены расхождения этих данных с renewal-сервером, поэтому для каждого пути записан
+маршрут от точки старта (prontera 156,180), найденный `scripts/okroute.py`. Тест `MapsTest.test_routes`
+проверяет каждый переход: он есть в `portals.txt` и как warp сервера (`npc/re/warps`, в пределах 3 клеток);
+размер карты в OpenKore совпадает с `db/re/map_cache.dat`; клетки между переходами связны по полю OpenKore
+(с клеткой прибытия по серверу). OpenKore может выбрать другой маршрут: проверено только, что хотя бы один
+существует. Опасность оценена только по атласу: монстры на полях маршрутов до 29 ур., агрессивные есть только на
+prt_fild04 (путь Mage, до 18 ур., 0,7 % монстров). Самый
+короткий путь в Алберту идёт через moc_fild03 (агрессивные до 47 ур.), поэтому у Merchant есть промежуточный
+`move` в payon 22,143. Длинные переходы получили `time_limit` 1800 с вместо 900 с по умолчанию: плагин берёт
+`time_limit` у любого шага.
+
+- **Swordman: blocked.** В renewal izlude перестроен: у сервера `izlude` 268x300, у OpenKore поле 268x268, а
+  переходы в `portals.txt` старые (`izlude 52 140 → izlude_in`, `prt_fild08 371 212 → izlude 30 78`; у сервера
+  `npc/re/warps/cities/izlude.txt:27` izlude 52,172 и `:22` → izlude 24,98). Поле поправить можно строкой
+  `field_izlude izlude_a` в `servers.txt` (`src/Field.pm:856`, `izlude_a.fld2` совпадает с сервером с точностью
+  до 184 клеток). Переходы — только патчем `tables/portals.txt` (`server/patches/openkore`), это не сделано.
+- **Thief: blocked.** Пешего пути prontera → morocc по простым переходам `portals.txt` нет. Есть только
+  телепорт Kafra (`portals.txt`: `prontera 146 89 morocc 156 47` с диалогом и платой), а его сверка с
+  renewal-скриптом `npc/re/kafras` не делалась. От morocc до гильдии путь есть (`route.hops` от morocc 156,47),
+  но он идёт через подземелье moc_pryd01 (монстры 24–30 ур.).
+- Arkady и Vera уже Swordsman/Acolyte, им blocked не мешает.
+
+### Выбор пути по жителю
+
+`classes.Novice.next_by_target` связывает цель с путём: Swordsman → swordman и т. д. Цель задаётся полем `job`
+персоны, а без него — записью жителя в `brain/world/roster.json` по имени персоны (`job`, иначе `job`
+шаблона). Функции `progression.target_job(name)`, `path_for(state, data, target)`, а у `plan`, `readiness`,
+`current_stage`, `stage_action`, `summary` есть параметр `target`. `career.py` один раз вычисляет `target` при
+загрузке данных и передаёт его дальше. `blocked(state, data, path)` даёт причину, по которой этап не
+запускается: учебный полигон или `route.status: blocked`. В этом случае `stage_action` возвращает None, а
+цель (`plan.next`, сводка в промпте) честно об этом сообщает.
+
+Id этапа — `first_job`, а не `apply`: `career` хранит пройденные этапы без пути (`done`), и `apply` Novice
+пропустил бы потом `apply` у Knight/Priest.
+
+### Не проверено / осталось
+
+- Ни один этап в игре не проходился; `auto_job_change` по-прежнему false.
+- Archer получает колчаны (`archer.txt:97-99`), а не стрелы: тело их не открывает, боя луком без стрел нет.
+- После смены профессии combatProfile выбирает профиль по jobID. Профили Merchant/Archer/Thief/Mage есть в
+  `bots/combat/classes.json`, в игре не проверялись.
+- `next_equipment` для Novice предлагает Knife из izlude_in — магазин на заблокированной карте.
+- **NB-1 · P1 — Патч izlude для OpenKore** (`server/patches/openkore`: переходы izlude в `portals.txt`,
+  `field_izlude izlude_a`). **Готово:** `okroute.py` находит путь prontera → izlude_in 73,172, а тест
+  `MapsTest` снимает blocked у swordman.
+- **NB-2 · P2 — Путь в Морокко.** Пеший маршрут или сверенный телепорт Kafra (renewal-диалог, цена).
+  **Готово:** thief route ok.
+- **NB-3 · P2 — Прогон Novice → Acolyte в лаборатории** (самый короткий маршрут). **Готово:** профессия
+  сменилась, событие `job_change_result ok` совпало с jobID.
