@@ -957,6 +957,116 @@ CHRONICLE_LINES = {"card_found", "trophy_rare", "trophy_first"}
 
 **Готово.** Тесты зелёные; раздел в SOCIETY.md; статус ORG-074 «код, в игре не проверено».
 
+### Т-20 · ORG-086 · Рассказчик мира (режиссёр без LLM)
+
+**Цель.** У мира есть ритм: долгая тишина сменяется поводом (экспедиция, правдивый слух о богатом месте, вечерний
+сбор, вызов на соперничество, просьба помочь после чьей-то гибели, общий поход на мини-босса), а тяжёлый день —
+«днём осторожности». Режиссёр ничего не приказывает телу: только мягкие множители мотивов и допуска риска, свой
+правдивый слух и запись решения. Игроки его не видят (летопись, серия недели, новости промпта), владелец — видит
+(дашборд, `decisions.jsonl`).
+
+**Файлы.** `brain/live_brain/director.py` (новый, модуль реестра), `brain/live_brain/modules.py` (одна строка),
+`brain/live_brain/needs.py` (множитель в `weighted`, допуск в `risk_tolerance`, строки `# director:`),
+`brain/live_brain/world_bus.py` (вид `director` — закулисье: `BACKSTAGE`, `read_period(..., backstage=False)`,
+`recent()`, текст), `brain/live_brain/dashboard.py` (лента дня с `backstage=True`, источник «режиссёр»),
+`brain/world/goals.json` (раздел `director`), `brain/tests/test_director.py`, `docs/WORLD_EVENTS.md`.
+`mind.py` не трогается.
+
+**Интерфейсы.**
+```python
+class Director:
+    ATTR = FEATURE = CONFIG = "director"; ENABLED = True; REQUIRES = ("world",); ARGS = "world"; TICK_ORDER = 230
+    def __init__(self, mind, world=None, clock=None, rng=None)
+    def online(self, now) -> set          # я (свежее тело) + жители со свежим presence (crowd); без crowd — ctx.peers
+    def is_director(self, now) -> bool    # минимальное имя среди онлайн (как лидер в party.py)
+    def tension(self, now) -> dict        # {score, deaths, bans, danger, quiet_hours} по шине за window_hours
+    def tick(self)                        # раз в check_minutes: режиссёр решает; все — читают текущий инцидент
+    def current(self, now=None) -> dict | None   # действующий инцидент (последняя запись director, until > now)
+    def boost(self, need) -> float        # множитель мотива 0.7..1.5 с поправкой на характер (участие добровольное)
+    def risk_factor(self) -> float        # допуск риска карт: «день осторожности» — 0.8, иначе 1.0
+```
+- Напряжение = 1·`death_report` + 1·`map_banned` + 0.5·слух `danger` за `window_hours` (12). ≥ `danger_threshold`
+  (3) → `caution` (на `caution_hours`): safety ×1.3, rest ×1.2, curiosity ×0.8, допуск риска ×0.8.
+- Тишина: за `quiet_hours` (3) в шине нет событий важности ≥ 2 (кроме закулисья и снимков), днём, мозг режиссёра
+  работает не меньше `quiet_hours` → один повод из доступных: `help` (гибель жителя за 3 ч; care ×1.5, social ×1.2),
+  `gathering` (за 2 ч до вечернего круга или во время; social ×1.4 до конца окна), `rich_rumor` (только правда:
+  своя карта по `maps.stats` ≥ 60 мин без смертей, очки ≥ `rumors.RICH_SCORE` → `rumors.share`; или подтверждённый
+  кем-то `rumor_checked` rich за 48 ч → пересказ `[info:rich:<карта>:1:<автор>]`), `expedition` (explore включён;
+  curiosity ×1.4), `contest` (≥ 2 онлайн; progress ×1.3), `boss_call` (только если `boss.enabled`; лидер группы
+  охотнее предлагает поход). Порядок: `help` → `gathering` → давно не бывший вид.
+- Поправка на характер: множитель m → 1 + (m − 1)·w, w — от черты (caution: 1 − 0.5·смелость; gathering/help:
+  0.5 + 0.5·общительность/щедрость; expedition: любопытство; contest: (смелость + усердие)/2).
+- Лимиты: один действующий инцидент; не чаще `gap_hours` (3); не больше `max_per_day` (2) поводов в сутки мира
+  (caution — сверх лимита, но не чаще раза в `caution_hours`). Счёт — по шине (любой автор), поэтому второй
+  «режиссёр» на миг смены не удвоит события.
+- Запись: шина `director` (важность 1, `{incident, label, until, needs, risk, params, why, tension}`) — в
+  `read_period` по умолчанию НЕ попадает (летопись, серия), в дашборде — да; решение и «пропуск» —
+  `write_decision({"type": "director", ...})`; житель, узнавший инцидент, пишет `director_heard` в решения.
+- Выключатель: `BRAIN_DISABLE=director`, `"director": {"enabled": false}`; нет шины — модуль молчит.
+
+**Тесты.** Режиссёр — минимальное имя онлайн (presence), уснувший — не режиссёр; тишина → повод, записан в шину и
+не виден летописи, виден дашборду; лимиты (gap, max_per_day, один действующий); смерти/исключения → caution,
+допуск риска ×0.8, мотив safety выше у осторожного сильнее; слух rich только по фактам (своя карта / подтверждённый
+слух), без фактов — не выбирается; help после гибели; gathering перед окном круга; follower читает инцидент и
+применяет множитель, после `until` — 1.0; ночью поводов нет; выключатель и работа без шины.
+
+**Готово.** Тесты зелёные; раздел в WORLD_EVENTS.md; статус ORG-086 «код, в игре не проверено».
+
+### Т-21 · ORG-079 · Мини-босс группой: Vocal и Eclipse
+
+**Цель.** Группа жителей (≥ 2) иногда сама решает сходить на мини-босса Пронтеры, если по атласу и состоянию тел
+это по силам; победа — событие мира (шина, летопись, трофей), неудача — повод для осторожности (бан босса на 2 ч).
+По умолчанию ВЫКЛЮЧЕНО: мини-босс опасен, в игре не проверено.
+
+**Данные (upstream rAthena).** `npc/re/mobs/fields/prontera.txt:63, 88` — Vocal (1088) на `prt_fild04` и
+`prt_fild07`, `:41` — Eclipse (1093) на `prt_fild02`, по одному, респаун `1800000,1200000` → 30–50 мин.
+`db/re/mob_db.yml`: Vocal — ур. 18, HP 3317, атака 71–82, `Ai: 21`, в renewal класс Normal (агрессивный, Detector);
+Eclipse — ур. 31, HP 625, `Class: Boss`. В атласе (`brain/world/atlas.json`) те же цифры.
+
+**OpenKore (upstream).** Целиться в монстра по имени нечем: команда `a <номер>` (`src/Commands.pm` cmdAttack) берёт
+номер из `monstersList`, а мозг монстров не видит (в `state` моста их нет). `attackAuto 2` (профили) и
+`mon_control.txt` (Vocal/Eclipse не перечислены → `attack_auto 1` по умолчанию, `src/Misc.pm` mon_control) — тело
+и так бьёт их, встретив; оба агрессивны. Поэтому поход = довести группу до карты (действие `explore`, lockMap),
+охотиться там до респауна и ждать факта `kill` с именем босса (`target_died` → событие моста `kill {monster}`).
+
+**Файлы.** `brain/live_brain/boss.py` (новый, модуль реестра), `brain/live_brain/modules.py` (строка),
+`brain/live_brain/explore.py` (лидер похода не зовёт `[explore:trip:]`, строка `# boss:`),
+`brain/live_brain/collection.py` (`boss_trophy`, `# boss:`), `brain/live_brain/world_bus.py` (тексты),
+`brain/live_brain/chronicle.py` (`CHRONICLE_LINES` модуля), `brain/world/goals.json` (раздел `boss`, `enabled: false`),
+`brain/tests/test_boss.py`, `docs/WORLD_EVENTS.md`.
+
+**Интерфейсы.**
+```python
+class Boss:
+    ATTR = FEATURE = CONFIG = "boss"; ENABLED = False; REQUIRES = ("world", "party", "crew", "explorer")
+    ARGS = "world"; TICK_ORDER = 115; TAGS, TAG_ORDER = [(TAG, "on_tag")], 45; EVENTS = {"kill": "on_kill"}
+    def target_info(self, target) -> dict      # уровень/HP босса по атласу
+    def ready(self) -> (bool, why)             # мои HP ≥ min_hp, зелья ≥ min_potions или хилер, уровень ≥ ур.босса − level_gap
+    def assess(self, target, team) -> (bool, why)   # группа ≥ 2, Σ уровней ≥ 2× уровень, HP всех ≥ 80, хилер или ≥ 10 зелий
+                                                    # у каждого, риск карты для слабейшего (без самого босса) < max_risk
+    def willing(self, eager=False) -> bool     # согласие по смелости (+ бан после поражения, director caution)
+    async def tick(self)                       # лидер: предложить / решить; все: итог похода
+    async def on_tag(self, sender, text)       # [boss:ask|yes|no|go|won|done:...]
+    async def on_kill(self, event)             # kill с именем босса на карте похода → победа
+```
+- Протокол (шёпот ≤ 78): лидер `[boss:ask:Vocal:prt_fild07]` участникам в городе → `[boss:yes:<ур>:<hp>:<зелья>:<хил>]`
+  или `[boss:no:<причина>]` → через `answer_seconds` лидер оценивает команду (`assess`) → `[boss:go:Vocal:prt_fild07]`
+  согласившимся и `explorer.start` (стоянка — `search_minutes`, покрывает респаун) → победа `[boss:won:Vocal]`
+  участника лидеру / `[boss:done:won]` лидера группе.
+- Отступление — средствами экспедиции: тревога survival/danger/escape, смерть, HP < abort_hp → возврат в город.
+- Итог по фактам: `kill` с именем босса → `boss_killed` (память, летопись, воспоминание 4), трофей
+  `collection.boss_trophy`, шина `boss_victory` (важность 5, одна запись на победу группы), фраза в чат группы.
+  Смерть в походе → `boss_failed` (шина 3) и бан босса `fail_ban_hours`; не нашли/отступили → `boss_missed`.
+- Лимиты: не больше `max_per_day` походов, пауза `gap_hours`, днём, только в городе, без плана встречи.
+- Выключатель: `"boss": {"enabled": false}` (по умолчанию), `BRAIN_DISABLE=boss`; нужны party, crew, explore.
+
+**Тесты.** Оценка Vocal/Eclipse по атласу; одиночка не идёт; слабая группа (Σ уровней, HP, зелья) — «обошли»;
+согласие по смелости; протокол ask→yes→go стартует экспедицию у лидера и участника, лидер не шлёт
+`[explore:trip:]`; kill босса → летопись, трофей, шина одна запись на двоих; смерть → бан и `boss_failed`;
+выход без победы → `boss_missed`; лимит в сутки; по умолчанию выключено.
+
+**Готово.** Тесты зелёные; раздел в WORLD_EVENTS.md; статус ORG-079 «код, выкл., в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности
