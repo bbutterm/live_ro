@@ -31,6 +31,9 @@ class Memory:
             self.db.execute("ALTER TABLE llm_calls ADD COLUMN provider TEXT NOT NULL DEFAULT 'openrouter'")
         if "cost" not in cols:       # стоимость по usage.cost (OpenRouter), USD
             self.db.execute("ALTER TABLE llm_calls ADD COLUMN cost REAL")
+        # Рутинные события (бой, лут) старше 14 дней не нужны: итоги дня уже в дневнике.
+        self.db.execute("DELETE FROM events WHERE kind IN ('attack', 'kill', 'loot') AND ts < ?",
+                        (time.time() - 14 * 86400,))
         self.db.commit()
 
     def close(self):

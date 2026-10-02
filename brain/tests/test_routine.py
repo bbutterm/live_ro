@@ -90,7 +90,8 @@ class RoutineTest(unittest.TestCase):
     def test_session_tired_town_sit_then_hunt_again(self):
         self.run_for(101 * 60, step=5, on_tick=self.walk_to_town)
         self.assertEqual(self.r.st["mode"], "town")
-        kinds = [d["event"] for d in self.mind.decisions if d["type"] == "routine"]
+        # фейковый бот «охотится» неподвижно — правило застревания тоже срабатывает, здесь оно не важно
+        kinds = [d["event"] for d in self.mind.decisions if d["type"] == "routine" and d["event"] != "routine_stuck"]
         self.assertEqual(kinds[:2], ["routine_town", "routine_arrived"])
         self.assertIn({"action": "sit"}, self.mind.sent)
         self.assertEqual(self.mind.state["lock_map"], "prontera")
@@ -165,6 +166,40 @@ class RoutineTest(unittest.TestCase):
         self.run_for(61)
         self.assertEqual((self.mind.state["lock_map"], self.mind.state["lock_x"]), ("prt_fild08", None))
         self.assertEqual(asyncio.run(self.r.force("hunt")), "уже охотится")
+
+
+    def test_stuck_unstuck_once_and_not_while_fighting(self):
+        self.run_for(2)
+        self.run_for(301, step=5)                                     # стоит на месте, без боя
+        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [{"action": "unstuck"}])
+        self.mind.sent.clear()
+        self.run_for(301, step=5, on_tick=lambda: self.r.on_combat(self.clock.t))   # дерётся на месте
+        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [])
+
+    def test_death_streak_rests_and_picks_easier_map(self):
+        self.run_for(2)
+        self.r.prefer("prt_fild07")
+        for i in range(3):
+            self.mem.db.execute("INSERT INTO events (ts, kind, data) VALUES (?, 'died', '{}')", (self.clock.t - i * 60,))
+        asyncio.run(self.r.on_death(self.clock.t))
+        self.assertEqual(self.r.st["mode"], "town")
+        self.assertEqual(self.r.st["prefer_map"], "prt_fild08")
+        self.assertTrue(any("Погиб 3 раза" in d["text"] for d in self.mind.decisions if d["type"] == "routine"))
+
+    def test_diary_written_at_day_end(self):
+        self.run_for(2)
+        for _ in range(5):
+            self.mem.db.execute("INSERT INTO events (ts, kind, data) VALUES (?, 'kill', '{}')", (self.clock.t,))
+        self.mem.db.execute("INSERT INTO events (ts, kind, data) VALUES (?, 'level_up', ?)",
+                            (self.clock.t, json.dumps({"level": 42})))
+        self.mem.db.execute("INSERT INTO events (ts, kind, data) VALUES (?, 'meeting_confirmed', ?)",
+                            (self.clock.t, json.dumps({"partner": "Vera"})))
+        self.run_for(17 * HOUR, step=5, on_tick=self.walk_to_town)     # через полночь
+        text = [m["text"] for m in self.mem.top_memories(50) if m["text"].startswith("Дневник 2026-10-02")]
+        self.assertEqual(len(text), 1, text)
+        self.assertIn("победил 5 монстров", text[0])
+        self.assertIn("достиг 42 уровня", text[0])
+        self.assertIn("встречался с Vera", text[0])
 
 
 if __name__ == "__main__":

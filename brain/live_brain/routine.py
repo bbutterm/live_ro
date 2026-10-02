@@ -28,6 +28,10 @@ log = logging.getLogger("routine")
 
 RESEND = 60
 MAX_TICK_GAP = 5          # не засчитывать охоту за время, когда мозг не работал
+STUCK_SEC = 300           # на охоте без движения и без боя дольше — «застрял»
+UNSTUCK_GAP = 120         # не чаще раза в 2 минуты
+DEATH_WINDOW = 1800       # 3 смерти за 30 минут — отдых и карта полегче
+DEATH_LIMIT = 3
 
 
 def load_world(path):
@@ -51,6 +55,9 @@ class Routine:
         self.clock = clock
         self.last_tick = None
         self.last_sent = 0.0
+        self.anchor = None          # (map, x, y, время) — где стоял в последний раз
+        self.last_combat = 0.0
+        self.last_unstuck = 0.0
         self.st = mind.mem.get("routine") or {}
 
     # ---------- данные ----------
@@ -103,6 +110,8 @@ class Routine:
     # ---------- тик ----------
 
     def new_day(self, now, keep_mode=None):
+        if self.st.get("day"):
+            self.diary(self.st)
         self.st = {"day": self.today(now), "budget": self.minutes("hunt_hours_per_day") * 60,
                    "hunted": 0.0, "mode": keep_mode or "hunt", "mode_since": now,
                    "session_end": 0.0, "rest_until": 0.0, "arrived": False,
@@ -131,12 +140,74 @@ class Routine:
             if (0 < gap <= MAX_TICK_GAP and not state.get("dead")
                     and state.get("map") in self.mind.persona["hunt_maps"]):
                 self.st["hunted"] += gap
+                await self.check_stuck(now, state)
             if self.st["hunted"] >= self.st["session_end"] or self.st["hunted"] >= self.st["budget"]:
                 await self.to_town(now)
         else:
             await self.in_town(now, state)
         await self.enforce(now, state)
         self.save()
+
+    # ---------- самостоятельность: застревание, смерти, дневник ----------
+
+    def on_combat(self, now=None):
+        self.last_combat = now or self.clock()
+
+    async def check_stuck(self, now, state):
+        pos = (state.get("map"), state.get("x"), state.get("y"))
+        if pos[1] is None:
+            return
+        if (not self.anchor or self.anchor[0] != pos[0]
+                or max(abs(self.anchor[1] - pos[1]), abs(self.anchor[2] - pos[2])) > 2):
+            self.anchor = (pos[0], pos[1], pos[2], now)
+            return
+        still = now - self.anchor[3]
+        if (still >= STUCK_SEC and now - self.last_combat >= STUCK_SEC
+                and now - self.last_unstuck >= UNSTUCK_GAP):
+            self.last_unstuck = now
+            self.anchor = (pos[0], pos[1], pos[2], now)
+            self.note("routine_stuck", f"Застрял на {pos[0]} ({pos[1]},{pos[2]}) — {int(still / 60)} мин "
+                                       "без движения и боя, пробую выбраться.", 1)
+            await self.send({"action": "unstuck"}, "распорядок: застрял")
+
+    async def on_death(self, now=None):
+        now = now or self.clock()
+        deaths = self.mind.mem.count_events("died", now - DEATH_WINDOW)
+        if deaths < DEATH_LIMIT or not self.st or self.st.get("mode") != "hunt":
+            return
+        maps = self.mind.persona["hunt_maps"]
+        bad = self.hunt_map()
+        self.st["prefer_map"] = maps[0] if bad != maps[0] else (maps[1] if len(maps) > 1 else maps[0])
+        self.note("routine_deaths", f"Погиб {deaths} раза за полчаса на {bad} — отдохну и пойду на "
+                                    f"{self.st['prefer_map']}.", 3)
+        await self.to_town(now)
+        self.save()
+
+    def diary(self, day_state):
+        """Итог прошедшего дня — одно воспоминание без LLM."""
+        start = datetime.strptime(day_state["day"], "%Y-%m-%d").replace(tzinfo=self.tz).timestamp()
+        end = start + 86400
+        mem = self.mind.mem
+        count = lambda kind: mem.db.execute(
+            "SELECT COUNT(*) FROM events WHERE kind = ? AND ts >= ? AND ts < ?", (kind, start, end)).fetchone()[0]
+        levels = [json.loads(r[0]).get("level") for r in mem.db.execute(
+            "SELECT data FROM events WHERE kind = 'level_up' AND ts >= ? AND ts < ?", (start, end))]
+        met = sorted({json.loads(r[0]).get("partner") for r in mem.db.execute(
+            "SELECT data FROM events WHERE kind = 'meeting_confirmed' AND ts >= ? AND ts < ?", (start, end))} - {None})
+        hunted = int(day_state.get("hunted", 0) / 60)
+        parts = [f"охотился {hunted // 60} ч {hunted % 60} мин", f"победил {count('kill')} монстров"]
+        deaths = count("died")
+        if deaths:
+            parts.append(f"погиб {deaths} раз")
+        if levels:
+            parts.append(f"достиг {max(l for l in levels if l is not None) if any(levels) else '?'} уровня")
+        if met:
+            parts.append("встречался с " + ", ".join(met))
+        text = f"Дневник {day_state['day']}: " + ", ".join(parts) + "."
+        mem.remember(text, 3)
+        mem.add_event("diary", {"day": day_state["day"], "text": text})
+        self.mind.write_decision({"type": "routine", "event": "diary", "text": text})
+        log.info("%s", text)
 
     async def to_town(self, now):
         done = self.st["hunted"] >= self.st["budget"]

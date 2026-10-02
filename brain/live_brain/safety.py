@@ -14,7 +14,7 @@ import time
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
            "party_create", "party_invite", "party_accept", "party_leave", "follow", "unfollow")
 # Только исполнители плана (plans.py) и распорядка (routine.py) — модель их не получает.
-PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand")
+PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand", "unstuck")
 PEER_ONLY = ("party_invite", "follow")
 WINDOW = 600
 
@@ -52,8 +52,8 @@ class SafetyPolicy:
             return {"action": kind}, None                     # вернуть к охоте / встать можно всегда
         if state.get("dead"):
             return None, "персонаж мёртв"
-        if kind == "sit":
-            return {"action": "sit"}, None
+        if kind in ("sit", "unstuck"):
+            return {"action": kind}, None
         if kind == "hunt":
             if action.get("map") not in self.hunt_maps:
                 return None, "карта охоты не из списка hunt_maps"

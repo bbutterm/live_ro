@@ -101,6 +101,7 @@ class Mind:
             if self.state.get("name"):
                 self.ctx.name = self.state["name"]
             self.remember_players(self.state.get("players") or [])
+            self.notice_peers(self.state.get("players") or [])
             self.mem.set("last_state", self.state)
             self.fresh_state = True
         elif kind == "event":
@@ -136,6 +137,22 @@ class Mind:
         if changed:
             self.mem.set("known_players", dict(list(known.items())[-200:]))
 
+    def notice_peers(self, players, now=None):
+        """Житель появился рядом (не виделись 10+ минут) — воспоминание и повод заговорить."""
+        now = now or time.time()
+        for p in players:
+            name = p.get("name") if isinstance(p, dict) else None
+            if name not in self.ctx.peers:
+                continue
+            key = f"seen:{name}"
+            if now - self.ctx.last.get(key, 0) >= 600:
+                where = self.state.get("map")
+                self.mem.remember(f"Видел {name} рядом на {where}.", 1)
+                self.mem.add_event("peer_nearby", {"name": name, "map": where})
+                if self.s.llm_enabled and self.pending is None:
+                    self.trigger(f"{name} (житель) рядом со мной на {where}", {"from": name}, kind="chat")
+            self.ctx.last[key] = now
+
     def who(self, name):
         info = self.mem.get("known_players", {}).get(name)
         return describe(info) if info else "неизвестно (не встречал рядом)"
@@ -145,7 +162,12 @@ class Mind:
         if isinstance(event.get("text"), str):
             event["text"] = event["text"][:200]        # реплика игрока не раздувает память и промпт
         kind = event.get("kind")
-        self.mem.add_event(kind, {k: v for k, v in event.items() if k != "kind"})
+        if kind != "attack":                            # начало боя частое: только отметка времени
+            self.mem.add_event(kind, {k: v for k, v in event.items() if k != "kind"})
+        if self.routine and kind in ("attack", "kill"):
+            self.routine.on_combat()
+        if self.routine and kind == "died":
+            await self.routine.on_death()
         if kind in ("chat_private", "chat_public") and event.get("from"):
             self.mem.touch_relation(str(event["from"]))
             if kind == "chat_private" and event["from"] in self.ctx.peers:

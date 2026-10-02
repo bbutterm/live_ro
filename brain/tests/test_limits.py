@@ -100,6 +100,13 @@ class IdentityDeliveryTest(BrainHarness):
         self.assertIn("не угадывай", prompt[0]["content"])
         deliveries = [r for r in self.decisions() if r["type"] == "delivery"]
         self.assertEqual([(d["ok"], d["code"]) for d in deliveries], [(True, 0), (False, 1)])
+        import sqlite3
+        db = sqlite3.connect(self.root / "state" / "bot01" / "memory.sqlite")
+        texts = [r[0] for r in db.execute("SELECT text FROM memories")]
+        kinds = [r[0] for r in db.execute("SELECT kind FROM events")]
+        db.close()
+        self.assertIn("Видел Vera рядом на prt_fild08.", texts)       # житель в поле зрения
+        self.assertIn("peer_nearby", kinds)
 
 
 class PartyFollowTest(unittest.TestCase):

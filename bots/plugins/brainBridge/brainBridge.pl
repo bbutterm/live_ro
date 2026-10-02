@@ -24,6 +24,7 @@
 #   meet_point {map,x,y}  -> conf lockMap/lockMap_x/lockMap_y/randX 2/randY 2 (только исполнитель плана)
 #   clear_point {}        -> conf lockMap_x/_y/_randX/_randY none (вернуться к охоте)
 #   hunt {map} / sit / stand -> распорядок: охота на карте без точки / сесть / встать
+#   unstuck {}            -> ai clear; move <случайная проходимая клетка в радиусе 10>
 package brainBridge;
 
 use strict;
@@ -290,6 +291,16 @@ sub actionToCommand {
 		return (0, 'неверная карта') unless $map =~ /^[a-z0-9_]{3,16}$/;
 		return (1, ["conf lockMap $map", 'conf lockMap_x none', 'conf lockMap_y none',
 		            'conf lockMap_randX none', 'conf lockMap_randY none', 'stand']);
+	} elsif ($kind eq 'unstuck') {
+		# Застрял: сбросить очередь AI и шагнуть в случайную проходимую клетку в радиусе 10.
+		my $pos = $char && $char->{pos_to};
+		return (0, 'позиция неизвестна') unless $pos && $field;
+		for (1 .. 30) {
+			my ($x, $y) = ($pos->{x} + int(rand(21)) - 10, $pos->{y} + int(rand(21)) - 10);
+			next if $x < 1 || $y < 1 || ($x == $pos->{x} && $y == $pos->{y});
+			return (1, ['ai clear', "move $x $y"]) if $field->isWalkable($x, $y);
+		}
+		return (0, 'нет проходимой клетки рядом');
 	} elsif ($kind eq 'sit') {
 		return (1, 'sit');
 	} elsif ($kind eq 'stand') {

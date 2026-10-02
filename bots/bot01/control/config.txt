@@ -742,28 +742,30 @@ useSelf_item Novice Potion, Red Potion, Orange Potion, Yellow Potion, White Poti
 
 ######## Autostorage/autosell ########
 
-buyAuto {
-	npc
+# live_ro: экономика — докупать красные зелья у торговца Пронтеры (rAthena: prt_in,126,76 Tool Dealer).
+buyAuto Red Potion {
+	npc prt_in 126 76
 	npc_steps b
 	isMarket 0
 	standpoint
-	distance 3
+	distance 5
 	price
-	minAmount 2
-	maxAmount 3
+	minAmount 10
+	maxAmount 40
 	batchSize
 	onlyIdentified
-	zeny
+	zeny > 3000
 	minDistance
 	maxDistance
 	dcOnEmpty 0
 	# [checkSelfCondition]
 }
 
-sellAuto 0
-sellAuto_npc
+# live_ro: продавать лут, когда рюкзак заполнен на itemsMaxWeight_sellOrStore (48%).
+sellAuto 1
+sellAuto_npc prt_in 126 76
 sellAuto_standpoint
-sellAuto_distance 3
+sellAuto_distance 5
 sellAuto_maxDistance
 sellAuto_npc_steps s
 

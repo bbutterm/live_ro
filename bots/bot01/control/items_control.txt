@@ -38,7 +38,8 @@
 
 
 # All items not mentioned in this file will be automatically stored in storage.
-all 0 1 0
+# live_ro: по умолчанию продавать лут; зелья и крылья ниже — оставлять (минимум, не продавать).
+all 0 0 1
 
 
 ##### HEAL/SUPPORT ITEMS #####
