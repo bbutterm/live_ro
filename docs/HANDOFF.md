@@ -594,7 +594,7 @@ for b in bot01 bot02; do python3 -c "import sqlite3,time;d=sqlite3.connect('$LAB
 ### Откат
 - Выключить платные вызовы: `BRAIN_LLM=off`, `BRAIN_GATE=rules`, затем `scripts/lab stop brain all && scripts/lab start brain all`.
 - Убрать второго бота: `scripts/lab stop live bot02`, `LAB_BOTS=bot01`. Аккаунт остаётся в БД (удалять только по решению владельца).
-- Код: `git checkout --detach d24e12841f2d286b46c69c710b3e22cec391d9db`, `scripts/lab stop all` (кроме серверов: `stop live all`), `scripts/lab start bot01`.
+- Код: `scripts/lab stop live all` (серверы не трогает; **не** `stop all`), затем `git checkout --detach d24e12841f2d286b46c69c710b3e22cec391d9db` и `scripts/lab start bot01`.
 
 ### Что прислать
 Вывод этапов A–E (без ключей и паролей) в `docs/qa/HERMES-<sha7>.md`; на каком этапе остановились, если остановились.
