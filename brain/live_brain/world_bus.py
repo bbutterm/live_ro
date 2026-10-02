@@ -56,6 +56,10 @@ PUBLISH = {
     "tradition_stage": ("tradition", 3),      # tradition: смена ступени вечернего круга (ORG-058)
     "card_found": ("card_found", 3),          # collect: ORG-074 новая карта (первая в жизни — 5)
     "trophy_rare": ("trophy_rare", 3),        # collect: первая добыча редкости
+    "dream_new": ("dream_new", 2),            # dreams: ORG-081 мечта жителя
+    "dream_stage": ("dream_stage", 3),        # dreams:
+    "dream_done": ("dream_done", 5),          # dreams: мечта сбылась
+    "dream_changed": ("dream_changed", 3),    # dreams: оставил мечту
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 
@@ -284,6 +288,10 @@ TEXTS = {
     "rival_overtook": lambda d: f"обогнал(а) {d.get('rival')} {d.get('label')} ({d.get('mine')} против {d.get('theirs')})",  # rivalry:
     "card_found": lambda d: f"нашёл(шла) карту {d.get('name')}" + (" — первая карта!" if d.get("first") else ""),  # collect:
     "trophy_rare": lambda d: f"добыл(а) редкость: {d.get('name')}",                                       # collect:
+    "dream_new": lambda d: f"мечтает: {d.get('dream')}",                                                  # dreams:
+    "dream_stage": lambda d: f"мечта «{d.get('dream')}»: этап {d.get('n')}/{d.get('of')}",                # dreams:
+    "dream_done": lambda d: f"мечта сбылась: {d.get('dream')}",                                           # dreams:
+    "dream_changed": lambda d: f"оставил(а) мечту «{d.get('dream')}»: {d.get('why')}",                    # dreams:
     "tradition": lambda d: d.get("text") or f"вечерний круг: {d.get('label')}",   # tradition: ORG-058
     "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
                                      f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)

@@ -87,6 +87,13 @@
     "min_level": 1
   },
 
+  "dream": {
+    "_comment": "dreams: ORG-081 жизненный путь (live_brain/dream.py, docs/LIFE.md): мечта на месяцы из черт характера, этапы по фактам питают цели недели (aims) и мотивы. stale_days без нового этапа — мечта оставлена; region_hops — окрестности города для мечты explorer; save — цель копилки (ORG-073) по виду мечты, у rich — вся сумма.",
+    "enabled": true,
+    "stale_days": 45,
+    "region_hops": 2,
+    "save": {"job2": 30000, "explorer": 10000, "pet": 5000, "cards": 0, "guild": 0}
+  },
   "episode": {
     "_comment": "Серия недели для владельца (live_brain/episode.py, ORG-091, scripts/lab episode): только чтение памяти и шины. llm=true — окраска одним вызовом в неделю (нужен BRAIN_LLM и общий бюджет); по умолчанию выкл.",
     "enabled": true,
