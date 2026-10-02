@@ -26,6 +26,7 @@ from .plans import TAG, PlanExecutor, PlanStore
 from .postmortem import Postmortem
 from .routine import Routine
 from .safety import SafetyPolicy
+from .social import TAG as SOCIAL_TAG, Social   # social: общение без LLM
 
 log = logging.getLogger("mind")
 
@@ -117,6 +118,9 @@ class Mind:
         party_cfg = (world or {}).get("party", {})
         self.party = (Party(self, party_cfg) if world and party_cfg.get("enabled", True) and self.ctx.peers
                       and feat("party") else None)
+        # social: городской распорядок, разговоры жителей, реакции (social.py)
+        self.social = (Social(self, world) if world and (world.get("social") or {}).get("enabled", True)
+                       and self.ctx.peers and feat("social") else None)
 
     # ---------- входящие сообщения плагина ----------
 
@@ -237,7 +241,17 @@ class Mind:
         if (self.party and kind == "chat_private" and event.get("from") in self.ctx.peers
                 and PARTY_TAG.search(str(event.get("text", "")))):
             await self.party.on_tag(str(event["from"]), str(event["text"]))    # сигнал группы
+            if self.social and "[party:dead:" in str(event["text"]):           # social: сочувствие
+                await self.social.on_peer_dead(str(event["from"]))
             return
+        if (self.social and kind == "chat_private" and event.get("from") in self.ctx.peers
+                and SOCIAL_TAG.search(str(event.get("text", "")))):            # social: реплика жителя
+            await self.social.on_tag(str(event["from"]), str(event["text"]))
+            return
+        if self.social and kind == "support":                                  # social: благодарность
+            await self.social.on_support(event)
+        if self.social and kind == "level_up":                                 # social: рассказать жителям
+            await self.social.on_level_up(event)
         if self.party and kind == "support":
             self.party.on_support(event)
             return
@@ -356,7 +370,8 @@ class Mind:
         self.write_decision({"type": "decision", "source": source, "reason": reason,
                              "actions": sent, "rejected": rejected, **(extra or {})})
         label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM", "plan": "план",
-                 "operator": "оператор", "economy": "экономика", "routine": "распорядок", "party": "группа"}.get(source, source)
+                 "operator": "оператор", "economy": "экономика", "routine": "распорядок", "party": "группа",
+                 "social": "общение"}.get(source, source)
         log.info("%s (%s): действия %s%s", label, reason,
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
@@ -440,6 +455,8 @@ class Mind:
                 await self.economy.tick()
             if self.party:
                 await self.party.tick()
+            if self.social:                                    # social: тик общения
+                await self.social.tick()
             await self.read_inbox()
             now = time.time()
             self.peer_smalltalk(now)

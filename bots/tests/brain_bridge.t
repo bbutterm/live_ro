@@ -100,4 +100,17 @@ my ($ok3, $c3) = brainBridge::actionToCommand({action => 'unstuck', radius => 99
 my ($x3) = $c3->[1] =~ /^move (\d+)/;
 ok(abs($x3 - 100) <= 30, 'радиус ограничен 30');
 
+# ---- эмоции: только номера из allowlist, команда OpenKore «e <команда>» ----
+my ($ok4, $c4) = brainBridge::actionToCommand({action => 'emote', id => 12});
+ok($ok4, 'эмоция 12 принята');
+is($c4, 'e wav', 'приветствие — e wav');
+($ok4, $c4) = brainBridge::actionToCommand({action => 'emote', id => 3});
+is($c4, 'e lv', 'сердце — e lv');
+($ok4, $c4) = brainBridge::actionToCommand({action => 'emote', id => 6});
+ok(!$ok4, 'ругательная эмоция 6 не из списка');
+($ok4, $c4) = brainBridge::actionToCommand({action => 'emote', id => '12; quit'});
+ok(!$ok4, 'мусор вместо номера отклонён');
+($ok4, $c4) = brainBridge::actionToCommand({action => 'emote'});
+ok(!$ok4, 'без номера отклонено');
+
 done_testing();
