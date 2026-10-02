@@ -91,6 +91,7 @@ class Economy:
         self.buying = mem.get("econ_buying")         # покупаю: id, peer, item, amount, price, status, since, base
         self.mailing = None                          # письмо в пути: id, to, kind (gift|week), item, amount
         self.taking = None                           # забираю письмо: mail_id, from, since
+        self.mail_pending = []                       # review: письма, пришедшие, пока был занят (плагин сообщает один раз)
         self.last_offer = mem.get("econ_last_offer", 0)
 
     # ---------- данные ----------
@@ -192,6 +193,9 @@ class Economy:
             self.note("mail_failed", f"Нет итога письма {m['to']} за {MAIL_TIMEOUT} с.", 1, peer=m["to"])
         if self.taking and now - self.taking["since"] >= MAIL_TIMEOUT:
             self.taking = None
+        if (self.mail_pending and not (self.taking or self.mailing or self.giving or self.busy_trade())
+                and not state.get("dead")):                 # review: отложенное письмо — забрать, когда свободен
+            await self.on_mail_received(self.mail_pending.pop(0))
         await self.check_market(now, state)
         if self.req:
             await self.check_request(now, state)
@@ -293,6 +297,8 @@ class Economy:
             return "иду на встречу"
         if self.giving or state.get("give") or self.mailing or self.busy_trade():
             return "уже передаю"
+        if (why := self.body_elsewhere()):                  # review: квест профессии или сон
+            return why
         if (state.get("vend") or {}).get("open"):
             return "стою с лавкой"
         if self.gifts_today(now) >= self.per_day:
@@ -384,6 +390,24 @@ class Economy:
 
     def busy_trade(self):
         return bool(self.offer or self.buying)
+
+    def body_busy(self):                                    # review: для арбитра (lifecycle) — сделка держит тело
+        """Тело занято передачей или сделкой с жителем: продавец идёт к покупателю, покупатель ждёт на месте."""
+        s = self.state
+        return bool(self.giving or s.get("give") or s.get("buy")
+                    or (self.offer and self.offer.get("status") == "selling")
+                    or (self.buying and self.buying.get("status") == "waiting"))
+
+    def mail_busy(self):                                    # review: письмо в работе — relog его оборвёт
+        return bool(self.mailing or self.taking)
+
+    def body_elsewhere(self):                               # review: квест профессии или сон — не до сделок
+        if ((self.state.get("job_change") or {}).get("running")):
+            return "занят квестом профессии"
+        r = getattr(self.mind, "routine", None)
+        if r and getattr(r, "sleeping", False):
+            return "ложусь спать"
+        return None
 
     def sender_near(self, name, state=None):
         state = state or self.state
@@ -521,6 +545,8 @@ class Economy:
             return "иду на встречу"
         if self.busy_trade() or self.giving or self.mailing or state.get("give"):
             return "занят другой сделкой"
+        if (why := self.body_elsewhere()):                  # review: квест профессии или сон
+            return why
         if (state.get("vend") or {}).get("open"):
             return "стою с лавкой"
         if self.trades_today(now) >= self.market["trades_per_day"]:
@@ -647,11 +673,15 @@ class Economy:
 
     async def on_mail_received(self, event):
         sender = event.get("from")
-        if sender not in self.mind.ctx.peers or self.taking or self.busy_trade() or self.giving:
+        if sender not in self.mind.ctx.peers:
             return
         try:
             mail_id = int(event.get("mail_id"))
         except (TypeError, ValueError):
+            return
+        if self.taking or self.busy_trade() or self.giving:  # review: не терять — забрать позже (tick)
+            if event.get("attach") and all(int(e.get("mail_id") or 0) != mail_id for e in self.mail_pending):
+                self.mail_pending = (self.mail_pending + [dict(event)])[-10:]
             return
         if not event.get("attach"):
             self.note("mail_got", f"Письмо от {sender}: {event.get('title')}.", 1, peer=sender, zeny=0)

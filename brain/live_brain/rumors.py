@@ -74,9 +74,9 @@ def parse(text):
 
 
 class Rumors:
-    def __init__(self, mind, clock=time.time):
+    def __init__(self, mind, clock=None):
         self.mind = mind
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # review: время при вызове — реплей подменяет time.time
         self.next_tick = 0.0
 
     # ---------- хранение ----------

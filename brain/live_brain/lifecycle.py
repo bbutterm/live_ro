@@ -104,7 +104,7 @@ class Lifecycle:
         if m.plans.store.active() or (s.get("job_change") or {}).get("running"):
             owners.add("plan")                       # встреча или этап квеста профессии
         econ = getattr(m, "economy", None)
-        if (econ and econ.giving) or s.get("give"):
+        if (econ and econ.body_busy()) or s.get("give") or s.get("buy"):   # review: и торговля (offer_sell/offer_buy)
             owners.add("economy")
         party = getattr(m, "party", None)
         if party and (party.waiting_since is not None or party.help_until > now):

@@ -14,7 +14,8 @@ import os
 
 MAX_BYTES = 10 * 1024 * 1024
 SPAM_PER_MIN = 12
-MOVES = ("hunt", "meet_point", "follow", "unstuck", "service", "give", "job_change")
+MOVES = ("hunt", "meet_point", "follow", "unstuck", "service", "give", "job_change",
+         "offer_sell")   # review: продавец идёт к покупателю (economy.pl startGive)
 
 
 class Recorder:
