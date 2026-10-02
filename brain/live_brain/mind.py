@@ -18,6 +18,7 @@ import time
 from . import llm
 from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
+from .party import TAG as PARTY_TAG, Party
 from .plans import TAG, PlanExecutor, PlanStore
 from .routine import Routine
 from .safety import SafetyPolicy
@@ -90,6 +91,8 @@ class Mind:
         self.plans = PlanExecutor(self, PlanStore(memory.db))
         self.routine = Routine(self, world) if world else None
         self.economy = Economy(self, world["economy"]) if world and world.get("economy") else None
+        party_cfg = (world or {}).get("party", {})
+        self.party = Party(self, party_cfg) if world and party_cfg.get("enabled", True) and self.ctx.peers else None
 
     # ---------- входящие сообщения плагина ----------
 
@@ -171,6 +174,8 @@ class Mind:
             self.routine.on_combat()
         if self.routine and kind == "died":
             await self.routine.on_death()
+        if self.routine and kind == "escape":
+            await self.routine.on_escape()
         if kind in ("chat_private", "chat_public") and event.get("from"):
             self.mem.touch_relation(str(event["from"]))
             if kind == "chat_private" and event["from"] in self.ctx.peers:
@@ -183,6 +188,15 @@ class Mind:
                 and ECON_TAG.search(str(event.get("text", "")))):
             await self.economy.on_tag(str(event["from"]), str(event["text"]))  # просьба/ответ жителя
             return
+        if (self.party and kind == "chat_private" and event.get("from") in self.ctx.peers
+                and PARTY_TAG.search(str(event.get("text", "")))):
+            await self.party.on_tag(str(event["from"]), str(event["text"]))    # сигнал группы
+            return
+        if self.party and kind == "support":
+            self.party.on_support(event)
+            return
+        if self.party and kind == "danger":
+            await self.party.on_danger(event)
         if kind == "give_result":
             if self.economy:
                 self.economy.on_give_result(event)
@@ -287,7 +301,7 @@ class Mind:
         self.write_decision({"type": "decision", "source": source, "reason": reason,
                              "actions": sent, "rejected": rejected, **(extra or {})})
         label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM", "plan": "план",
-                 "operator": "оператор", "economy": "экономика", "routine": "распорядок"}.get(source, source)
+                 "operator": "оператор", "economy": "экономика", "routine": "распорядок", "party": "группа"}.get(source, source)
         log.info("%s (%s): действия %s%s", label, reason,
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
@@ -323,6 +337,8 @@ class Mind:
                 await self.routine.tick()
             if self.economy:
                 await self.economy.tick()
+            if self.party:
+                await self.party.tick()
             await self.read_inbox()
             now = time.time()
             self.peer_smalltalk(now)
@@ -465,7 +481,9 @@ class Mind:
             '{"action": "party_leave"} — выйти из группы; '
             '{"action": "follow", "to": "житель"} — идти за жителем (охотиться рядом с ним); '
             '{"action": "unfollow"} — перестать идти за ним. '
-            "Группа и следование — только с другими жителями; лечение в группе тело делает само. "
+            "Группа и следование — только с другими жителями; группу LR_<лидер> жители собирают сами, "
+            "участник охотится и отдыхает вместе с лидером, лечение в группе тело делает само "
+            "(что группа есть и кто кого вылечил — смотри поле «группа» и события heal_confirmed). "
             "Встречи — настоящие: тело дойдёт до точки и проверит, что житель рядом. "
             '{"action": "propose_meeting", "to": "житель"} — предложить встречу у твоей текущей позиции; '
             '{"action": "accept_meeting", "id": "<id плана>"} / {"action": "decline_meeting", "id": "<id>", "why": "..."} '
@@ -498,6 +516,9 @@ class Mind:
             "распорядок": self.routine.summary() if self.routine else None,
             "глобальные_цели": self.routine.goals() if self.routine else None,
             "хозяйство": self.economy.summary() if self.economy else None,
+            "группа": ({"имя": self.party.name, "лидер": self.party.leader,
+                        "подтверждена_сервером": bool(self.party.st.get("confirmed")),
+                        "состав": self.state.get("party_members")} if self.party else None),
             "другие_жители": {p: {"кто": self.who(p), "отношение": self.mem.relation(p)}
                               for p in sorted(self.ctx.peers)},
         }

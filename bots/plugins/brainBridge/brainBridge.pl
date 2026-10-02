@@ -31,6 +31,11 @@
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
+# Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
+# partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
+# иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
+# Поддержка (AUT-061): пакет умения сервера (packet_skilluse) Heal/Blessing/Increase AGI со мной как
+# источником или целью -> событие support {skill, from, to, amount}; amount у Heal — сколько HP вылечено.
 # Смерть: если персонаж мёртв, а AI не в auto дольше 3 с (оператор поставил ai manual), плагин
 # сам включает ai auto — иначе OpenKore не делает респаун (AI::CoreLogic processDead только в auto).
 # В state от плагина economy: items (зелья/крылья по ID), vend {can, open}, give (идёт передача).
@@ -45,7 +50,7 @@ use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use JSON::PP;
 use Time::HiRes qw(time);
 use Plugins;
-use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm);
+use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID);
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -72,8 +77,11 @@ my $hooks = Plugins::addHooks(
 	['packet_privMsg',     \&onPrivMsg],
 	['packet_pre/private_message_sent', \&onPMResult],
 	['packet_selfChat',    \&onSelfChat],
-	['party_invite',       sub { event('party_invite', party => "$_[1]{partyName}") }],
+	['party_invite',       \&onPartyInvite],
+	['packet_skilluse',    \&onSkillUse],
 );
+
+my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
 
 sub onUnload {
 	Plugins::delHooks($hooks);
@@ -156,6 +164,8 @@ sub sendState {
 		ai        => (AI::state() == AI::AUTO() ? 'auto' : 'manual'),
 		%{identity($char)},
 		party     => ($char->{party} && $char->{party}{joined} ? "$char->{party}{name}" : undef),
+		party_members => partyMembers(),
+		party_leader  => (isPartyLeader() ? JSON::PP::true : JSON::PP::false),
 		follow    => ($config{follow} ? $config{followTarget} : undef),
 		combat    => (%combatProfile::current ? {%combatProfile::current} : undef),
 		activity  => (AI::action() || 'idle'),
@@ -174,6 +184,61 @@ sub identity {
 		sex => (defined $actor->{sex} ? $sex_lut{$actor->{sex}} : undef),
 		lv  => ($actor->{lv} ? $actor->{lv} + 0 : undef),
 	};
+}
+
+sub residents {
+	my $list = $config{residents} // $config{dealAuto_names} // '';
+	return grep { length } split /\s*,\s*/, $list;
+}
+
+sub partyMembers {
+	return [] unless $char && $char->{party} && $char->{party}{joined} && $char->{party}{users};
+	my @out;
+	for my $id (sort keys %{$char->{party}{users}}) {
+		my $u = $char->{party}{users}{$id};
+		next unless defined $u->{name} && $u->{name} ne $char->{name};
+		(my $map = $u->{map} // '') =~ s/\.(gat|rsw)$//;
+		push @out, {name => "$u->{name}", online => ($u->{online} ? JSON::PP::true : JSON::PP::false),
+		            hp_pct => pct($u->{hp}, $u->{hp_max}), map => (length $map ? $map : undef),
+		            x => ($u->{pos} ? $u->{pos}{x} : undef), y => ($u->{pos} ? $u->{pos}{y} : undef),
+		            leader => ($u->{admin} ? JSON::PP::true : JSON::PP::false)};
+	}
+	return \@out;
+}
+
+sub isPartyLeader {
+	return 0 unless $char && $char->{party} && $char->{party}{users} && $accountID;
+	my $me = $char->{party}{users}{$accountID};
+	return $me && $me->{admin} ? 1 : 0;
+}
+
+sub onPartyInvite {
+	my (undef, $args) = @_;
+	my $party = "$args->{partyName}";
+	my ($owner) = $party =~ /^LR_(.+)$/;
+	if (defined $owner && grep { $_ eq $owner } residents()) {
+		message "[brainBridge] приглашение в группу жителя $party — принимаю\n", 'system';
+		Commands::run('party join 1');
+		event('party_joined_auto', party => $party);
+	} else {
+		event('party_invite', party => $party);
+	}
+}
+
+sub nameOf {
+	my ($id) = @_;
+	return undef unless defined $id;
+	return $char->{name} if $accountID && $id eq $accountID;
+	my $p = $playersList ? $playersList->getByID($id) : undef;
+	return $p ? "$p->{name}" : undef;
+}
+
+sub onSkillUse {
+	my (undef, $args) = @_;
+	my $skill = $SUPPORT{$args->{skillID} // -1} or return;
+	return unless $accountID && (($args->{sourceID} // '') eq $accountID || ($args->{targetID} // '') eq $accountID);
+	event('support', skill => $skill, from => nameOf($args->{sourceID}), to => nameOf($args->{targetID}),
+	      amount => ($args->{amount} // 0) + 0);
 }
 
 sub nearbyPlayers {

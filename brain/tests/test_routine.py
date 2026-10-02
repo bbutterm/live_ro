@@ -246,6 +246,13 @@ class RoutineTest(unittest.TestCase):
         self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [{"action": "unstuck"}])
 
 
+    def test_escape_wing_goes_to_recover(self):
+        self.run_for(2)
+        asyncio.run(self.r.on_escape(self.clock.t))
+        self.assertEqual(self.r.st["mode"], "town")
+        self.assertTrue(self.r.st["recover"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

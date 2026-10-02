@@ -353,6 +353,8 @@ gracefulStop_timeout 40
 
 # live_ro: сделки — только с жителями. 3 = принять и подтвердить после второй стороны (передачи
 # от жителей принимаются сами); от остальных игроков сделки отклоняются по dealAuto_names.
+# live_ro: жители (через запятую) — их группу LR_<житель> плагин brainBridge принимает сразу.
+residents Arkady
 dealAuto 3
 dealAuto_names Arkady
 dealMaxItems 10

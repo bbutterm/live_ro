@@ -155,17 +155,26 @@ class Routine:
             self.save()
             return                                    # план встречи важнее распорядка
 
+        party = getattr(self.mind, "party", None)
+        lead = party.leader_wants(now) if party else None     # участник группы: режим задаёт лидер
         if self.st["mode"] == "hunt":
             if (0 < gap <= MAX_TICK_GAP and not state.get("dead")
                     and state.get("map") in self.mind.persona["hunt_maps"]):
                 self.st["hunted"] += gap
                 await self.check_stuck(now, state)
-            if self.st["hunted"] >= self.st["session_end"] or self.st["hunted"] >= self.st["budget"]:
-                await self.to_town(now)
-            elif self.no_heal_low_hp(now, state):
+            if self.no_heal_low_hp(now, state):
                 self.note("routine_low_hp", f"HP {state.get('hp_pct')}%, а лечиться нечем — ухожу в город "
                                             "восстановиться.", 2)
                 await self.to_town(now, rest_minutes=self.cfg.get("after_death_rest_minutes", 10), recover=True)
+                if party:
+                    await party.need_recover()
+            elif lead:
+                await self.follow_lead(now, state, lead)
+            elif self.st["hunted"] >= self.st["session_end"] or self.st["hunted"] >= self.st["budget"]:
+                await self.to_town(now)
+        elif lead:
+            await self.in_town(now, state, own_schedule=False)
+            await self.follow_lead(now, state, lead)
         else:
             await self.in_town(now, state)
         await self.enforce(now, state)
@@ -235,6 +244,16 @@ class Routine:
         await self.to_town(now, recover=True)
         self.save()
 
+    async def on_escape(self, now=None):
+        """Тело улетело крылом от смерти (плагин survival) — не возвращаться в тот же бой: город, восстановление."""
+        now = now or self.clock()
+        if not self.st:
+            self.new_day(now)
+        if self.st.get("mode") == "hunt":
+            self.note("routine_escape", "Еле ушёл крылом от смерти — отдохну в городе и восстановлюсь.", 3)
+            await self.to_town(now, rest_minutes=self.cfg.get("after_death_rest_minutes", 10), recover=True)
+        self.save()
+
     def diary(self, day_state):
         """Итог прошедшего дня — одно воспоминание без LLM."""
         start = datetime.strptime(day_state["day"], "%Y-%m-%d").replace(tzinfo=self.tz).timestamp()
@@ -276,7 +295,31 @@ class Routine:
         self.note("routine_town", text, 2)
         self.last_sent = 0
 
-    async def in_town(self, now, state):
+    async def follow_lead(self, now, state, lead):
+        """AUT-059: участник группы живёт в темпе лидера; безопасность (HP) — всё равно первой."""
+        mode, lmap = lead
+        if mode == "town" and self.st["mode"] == "hunt":
+            self.note("routine_party_town", "Лидер группы отдыхает — иду к нему в город.", 1)
+            await self.to_town(now)
+        elif mode == "hunt":
+            if lmap in self.mind.persona["hunt_maps"] and self.st.get("prefer_map") != lmap:
+                self.st["prefer_map"] = lmap
+                self.last_sent = 0
+            if self.st["mode"] == "town":
+                if not self.hp_ok(state):
+                    party = getattr(self.mind, "party", None)
+                    if party:
+                        await party.need_recover()
+                    return
+                self.st.update(mode="hunt", mode_since=now, arrived=False, recover=False,
+                               session_end=max(self.st["session_end"], self.st["hunted"] + 60))
+                if self.st["hunted"] >= self.st["budget"]:
+                    self.st["budget"] = self.st["hunted"] + 3600         # с группой можно и сверх нормы
+                self.note("routine_party_hunt", f"Лидер группы охотится на {self.hunt_map()} — иду к нему.", 1)
+                self.set_goal(f"охочусь в группе на {self.hunt_map()}")
+                self.last_sent = 0
+
+    async def in_town(self, now, state, own_schedule=True):
         at_town = (state.get("map") == self.town["map"] and state.get("x") is not None
                    and max(abs(int(state["x"]) - self.town["x"]), abs(int(state["y"]) - self.town["y"]))
                    <= self.town.get("radius", 3) + 2)
@@ -291,7 +334,7 @@ class Routine:
                 and now - self.last_vend >= RESEND):
             self.last_vend = now
             await self.send({"action": "shop_open"}, "распорядок: открыть лавку в городе")
-        if self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
+        if own_schedule and self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
             if not self.hp_ok(state):                      # AUT-086: больной не идёт драться по расписанию
                 if not self.waiting_hp_noted:
                     self.waiting_hp_noted = True

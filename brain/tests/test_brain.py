@@ -81,10 +81,16 @@ class FakePlugin:
         self.f.write((json.dumps(msg, ensure_ascii=False) + "\n").encode())
         self.f.flush()
 
+    # Сборку группы жителей (party.py) мозг ведёт сам в фоне — эти тесты о другом.
+    BACKGROUND = ("party_create", "party_invite", "party_leave")
+
     def recv(self, timeout=15):
         self.s.settimeout(timeout)
-        line = self.f.readline()
-        return json.loads(line) if line else None
+        while True:
+            line = self.f.readline()
+            msg = json.loads(line) if line else None
+            if not msg or msg.get("action") not in self.BACKGROUND:
+                return msg
 
     def close(self):
         self.s.close()
@@ -138,9 +144,11 @@ class BrainHarness(unittest.TestCase):
         proc.terminate()
         self.assertEqual(proc.wait(timeout=10), 0)
 
-    def decisions(self):
+    def decisions(self, background=False):
+        """Журнал решений; фоновая сборка группы (source/type party) — только по запросу."""
         path = self.root / "state" / "bot01" / "decisions.jsonl"
-        return [json.loads(l) for l in path.read_text().splitlines()] if path.exists() else []
+        recs = [json.loads(l) for l in path.read_text().splitlines()] if path.exists() else []
+        return recs if background else [r for r in recs if "party" not in (r.get("source"), r.get("type"))]
 
     def connect(self):
         return FakePlugin(str(self.root / "run" / "brain" / "bot01.sock"))

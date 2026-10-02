@@ -49,4 +49,38 @@ $AI::state = 1;
 Plugins::call('mainLoop_post'); sleep 3; Plugins::call('mainLoop_post');
 is_deeply(\@Commands::ran, [], 'живой в ручном режиме — воля оператора, не трогаю');
 
+# ---- группа: приглашение жителя принимается сразу в хуке (partyAuto 1 не успеет отказать) ----
+package FakePlayers; sub new { my ($c, %p) = @_; bless {%p}, $c } sub getByID { $_[0]{$_[1]} } sub getItems { [values %{$_[0]}] }
+package main;
+$Globals::config{residents} = 'Vera';
+@Commands::ran = ();
+Plugins::call('party_invite', {partyName => 'LR_Vera'});
+is_deeply(\@Commands::ran, ['party join 1'], 'группа жителя — принимаю сразу');
+@Commands::ran = ();
+Plugins::call('party_invite', {partyName => 'LR_Stranger'});
+is_deeply(\@Commands::ran, [], 'чужая группа — решает partyAuto');
+
+$Globals::accountID = 'ME';
+$Globals::char->{party} = {joined => 1, name => 'LR_Arkady', users => {
+	ME => {name => 'Arkady', admin => 1, online => 1},
+	V1 => {name => 'Vera', online => 1, hp => 50, hp_max => 200, map => 'prt_fild08.gat', pos => {x => 10, y => 12}}}};
+my $members = brainBridge::partyMembers();
+is(scalar @$members, 1, 'в составе только другие');
+is($members->[0]{name}, 'Vera', 'имя участника');
+is($members->[0]{hp_pct}, 25, 'HP участника');
+is($members->[0]{map}, 'prt_fild08', 'карта без .gat');
+ok(brainBridge::isPartyLeader(), 'я лидер');
+
+# ---- поддержка: Heal подтверждён пакетом сервера ----
+$Globals::playersList = FakePlayers->new(V1 => {name => 'Vera'});
+my @ev;
+{ no warnings 'redefine'; *brainBridge::event = sub { push @ev, [@_] }; }
+Plugins::call('packet_skilluse', {skillID => 28, sourceID => 'V1', targetID => 'ME', amount => 120});
+is_deeply($ev[0], ['support', skill => 'AL_HEAL', from => 'Vera', to => 'Arkady', amount => 120], 'Heal от Vera мне');
+@ev = ();
+Plugins::call('packet_skilluse', {skillID => 28, sourceID => 'V1', targetID => 'X9', amount => 99});
+is_deeply(\@ev, [], 'чужое лечение не про меня — нет события');
+Plugins::call('packet_skilluse', {skillID => 5, sourceID => 'ME', targetID => 'M1', damage => 50});
+is_deeply(\@ev, [], 'атакующее умение — не поддержка');
+
 done_testing();
