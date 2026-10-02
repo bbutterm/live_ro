@@ -1,0 +1,5 @@
+// Шаблон live_ro, см. inter_conf.txt.
+// Лаборатория: слушать только локальный адрес.
+bind_ip: @@BIND_IP@@
+login_port: 6900
+new_account: no

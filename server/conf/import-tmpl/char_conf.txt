@@ -1,0 +1,15 @@
+// Шаблон live_ro, см. inter_conf.txt.
+// userid/passwd — учётная запись inter-server (account_id 1 в таблице login),
+// вместо небезопасных s1/p1 из upstream. Задаётся `scripts/lab db-init`.
+userid: @@INTER_USER@@
+passwd: @@INTER_PASS@@
+
+server_name: @@SERVER_NAME@@
+login_ip: 127.0.0.1
+bind_ip: @@BIND_IP@@
+char_ip: @@PUBLIC_IP@@
+login_port: 6900
+char_port: 6121
+
+// Профиль OpenKore использует pinCode 0 (bots/bot01/tables/servers.txt).
+pincode_enabled: no

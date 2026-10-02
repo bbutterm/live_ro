@@ -1,0 +1,42 @@
+// Шаблон live_ro. Рендерится командой `scripts/lab start` в
+// <release>/upstream/rathena/conf/import/inter_conf.txt.
+// Плейсхолдеры @@ИМЯ@@ берутся из $LAB_ROOT/secrets/lab.env. Значения не коммитить.
+
+login_server_ip: @@DB_HOST@@
+login_server_port: @@DB_PORT@@
+login_server_id: @@DB_USER@@
+login_server_pw: @@DB_PASS@@
+login_server_db: @@DB_NAME@@
+
+ipban_db_ip: @@DB_HOST@@
+ipban_db_port: @@DB_PORT@@
+ipban_db_id: @@DB_USER@@
+ipban_db_pw: @@DB_PASS@@
+ipban_db_db: @@DB_NAME@@
+
+char_server_ip: @@DB_HOST@@
+char_server_port: @@DB_PORT@@
+char_server_id: @@DB_USER@@
+char_server_pw: @@DB_PASS@@
+char_server_db: @@DB_NAME@@
+
+map_server_ip: @@DB_HOST@@
+map_server_port: @@DB_PORT@@
+map_server_id: @@DB_USER@@
+map_server_pw: @@DB_PASS@@
+map_server_db: @@DB_NAME@@
+
+web_server_ip: @@DB_HOST@@
+web_server_port: @@DB_PORT@@
+web_server_id: @@DB_USER@@
+web_server_pw: @@DB_PASS@@
+web_server_db: @@DB_NAME@@
+
+log_db_ip: @@DB_HOST@@
+log_db_port: @@DB_PORT@@
+log_db_id: @@DB_USER@@
+log_db_pw: @@DB_PASS@@
+log_db_db: @@DB_NAME@@
+
+// Логи вне release-каталога, чтобы откат кода их не терял.
+inter_log_filename: @@LAB_ROOT@@/logs/rathena/inter.log

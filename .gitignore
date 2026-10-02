@@ -11,3 +11,7 @@ __pycache__/
 *.pyc
 bots/*/control/config.local.txt
 server/conf/local/
+backups/
+run/
+*.log
+lab.env

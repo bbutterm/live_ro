@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
+# Совместимость: сборка в текущем checkout (для разработки).
+# Для лаборатории используйте `scripts/lab deploy <commit>` — сборку в отдельный release.
 set -euo pipefail
-cd "$(dirname "$0")/../upstream/rathena"
-./configure --enable-packetver=20180620 --disable-lto
-make -j1 login char map
-printf 'RATHENA_BUILD_OK\n'
+exec "$(dirname "$0")/lab" build "$(cd "$(dirname "$0")/.." && pwd)"

@@ -4,24 +4,35 @@
 
 ## Структура
 - `upstream/rathena`, `upstream/openkore`: git submodules, закреплённые версии.
-- `server/`: наши настройки/NPC и патчи, без секретов.
-- `bots/bot01/`: экспорт текущего профиля, поля авторизации очищены.
+- `server/`: наши настройки и патчи, без секретов.
+  - `server/build.conf` — PACKETVER и флаги сборки;
+  - `server/conf/import-tmpl/` — шаблоны конфигов rAthena с плейсхолдерами `@@...@@`;
+  - `server/patches/` — патчи исходников upstream.
+- `bots/bot01/`: профиль бота, поля авторизации пустые.
 - `brain/`: место для AI-координатора. **Пока не реализован.**
-- `scripts/`: безопасная проверка версий и отдельная сборка.
-- `docs/`: контракт работы другой нейронки и VPS.
+- `scripts/lab`: подготовка, сборка, релизы, запуск/остановка, БД.
+- `scripts/check.py`: статическая проверка (пины, PACKETVER, секреты).
+- `lab.env.example`: список локальных секретов (сам `lab.env` — вне Git).
+- `docs/`: `SETUP.md`, `RELEASES.md`, `SUBMODULES.md`, `VPS.md`.
 
 ```sh
 git clone --recurse-submodules https://github.com/bbutterm/live_ro.git
 cd live_ro
 python3 scripts/check.py
-bash scripts/build-server.sh
+scripts/lab prepare          # затем заполнить $LAB_ROOT/secrets/lab.env
+scripts/lab deploy HEAD && scripts/lab activate <sha12>
+scripts/lab db-init          # только для пустой БД
+scripts/lab start && scripts/lab start bot01
 ```
-Сборка требует Linux, g++, make, autoconf и dev-библиотеки MariaDB/zlib.
+Подробно: `docs/SETUP.md`. Обновление и откат: `docs/RELEASES.md`.
 
 ## Важное
-Рабочая лаборатория сейчас `/opt/ro-bot-lab`. Этот репозиторий **ещё не является автоматическим деплоем** в неё. Push не перезапускает сервер и не меняет базы.
+Push не деплоит, не перезапускает сервер и не меняет базы. Обновление делается вручную
+через `scripts/lab deploy/activate`, откат — через `scripts/lab rollback`.
 
-rAthena собран с PACKETVER 20180620, без LTO. Вход OpenKore и AI-поведение ещё не подтверждены.
+rAthena ранее собирался вручную с PACKETVER 20180620, без LTO. Сборка через
+`scripts/lab`, полный запуск мира, вход OpenKore и AI-поведение **ещё не подтверждены**.
 
 Секреты, игровые базы, память персонажей, логи и бинарники не коммитить.
-См. `docs/VPS.md` и `AGENTS.md`.
+Изменения исходников upstream — только патчами или fork (`docs/SUBMODULES.md`).
+См. также `AGENTS.md`.
