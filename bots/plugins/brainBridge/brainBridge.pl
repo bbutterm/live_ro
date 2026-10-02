@@ -31,6 +31,8 @@
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
+#   emote {id}            -> e <команда> (Commands.pm cmdEmotion, tables/emotions.txt); только номера
+#                            из %EMOTES (приветствие, смех, сердце, вопрос, спасибо...), как safety.EMOTES
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -323,6 +325,10 @@ sub cleanText {
 	return substr($t, 0, 120);
 }
 
+# Безопасные эмоции: номер -> команда OpenKore «e <команда>» (тот же список в brain/live_brain/safety.py).
+our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav', 15 => 'thx', 17 => 'sry',
+               18 => 'heh', 20 => 'hmm', 21 => 'no1', 28 => 'sob', 29 => 'gg', 33 => 'ok');
+
 # Возвращает (1, команда) или (0, причина).
 sub actionToCommand {
 	my ($a) = @_;
@@ -407,6 +413,10 @@ sub actionToCommand {
 		my $v = defined &economy::vendStatus ? economy::vendStatus() : undef;
 		return (0, 'лавка не открыта') unless $v && $v->{open};
 		return (1, 'closeshop');
+	} elsif ($kind eq 'emote') {
+		my $id = $a->{id} // '';
+		return (0, 'эмоция не из списка') unless $id =~ /^\d{1,2}$/ && exists $EMOTES{$id};
+		return (1, "e $EMOTES{$id}");
 	} elsif ($kind eq 'pause') {
 		return (1, []) if ($config{brainBridge_paused} // '') ne '';      # уже на паузе
 		my $saved = join(' ', map { defined $config{$_} && $config{$_} ne '' ? $config{$_} : 0 } qw(attackAuto route_randomWalk));

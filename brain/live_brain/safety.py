@@ -9,14 +9,21 @@
 - группа и следование только с другими жителями-ботами (peers); группа создаётся
   только с именем LR_<своё имя> и только если персонаж не в группе;
 - передача (give) только жителю, предмет — ID или zeny, количество 1..MAX_GIVE; лавка
-  (shop_open/shop_close) и передача — только от исполнителей правил, не от модели.
+  (shop_open/shop_close) и передача — только от исполнителей правил, не от модели;
+- эмоция (emote) — только от исполнителей правил (social.py), номер из EMOTES, не больше
+  EMOTE_LIMIT за 10 минут.
 """
 import time
 
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
            "party_create", "party_invite", "party_accept", "party_leave", "follow", "unfollow")
-# Только исполнители плана (plans.py), распорядка (routine.py) и экономики (economy.py) — модель их не получает.
-PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close")
+# Только исполнители плана (plans.py), распорядка (routine.py), экономики (economy.py) и общения (social.py) — модель их не получает.
+PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close",
+                "emote")
+# Безопасные эмоции (номер -> команда OpenKore «e <команда>», tables/emotions.txt); тот же список в brainBridge.pl.
+EMOTES = {1: "?", 2: "ho", 3: "lv", 5: "ic", 9: "...", 12: "wav", 15: "thx", 17: "sry", 18: "heh",
+          20: "hmm", 21: "no1", 28: "sob", 29: "gg", 33: "ok"}
+EMOTE_LIMIT = 6
 MAX_GIVE = 100000
 PEER_ONLY = ("party_invite", "follow")
 WINDOW = 600
@@ -37,6 +44,7 @@ class SafetyPolicy:
         self.whispered = []          # [(время, кому)]
         self.paused_at = None
         self.texts = {}              # (кому, текст) -> время: не повторять одно и то же (AUT-095)
+        self.emoted = []             # время эмоций: не больше EMOTE_LIMIT за WINDOW
 
     def _recent(self, items, now):
         return [x for x in items if now - (x[0] if isinstance(x, tuple) else x) < WINDOW]
@@ -58,6 +66,15 @@ class SafetyPolicy:
             return None, "персонаж мёртв"
         if kind in ("sit", "shop_open"):
             return {"action": kind}, None
+        if kind == "emote":
+            eid = action.get("id")
+            if isinstance(eid, bool) or not isinstance(eid, int) or eid not in EMOTES:
+                return None, "эмоция не из списка EMOTES"
+            self.emoted = self._recent(self.emoted, now)
+            if len(self.emoted) >= EMOTE_LIMIT:
+                return None, f"лимит эмоций {EMOTE_LIMIT}/10 мин"
+            self.emoted.append(now)
+            return {"action": "emote", "id": eid}, None
         if kind == "unstuck":
             try:
                 radius = max(5, min(30, int(action.get("radius", 10))))
