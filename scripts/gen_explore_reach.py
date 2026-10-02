@@ -29,12 +29,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from okroute import Data  # noqa: E402
+from okroute import Data, read_table  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_TOL = 3
 DST_TOL = 8
 DEFAULT_TOWNS = ["prontera:156:185"]
+DEFAULT_PROFILE = ROOT / "bots" / "bot01"     # таблицы renewal (bots/common/tables/portals.txt через !include)
 
 
 def server_portals(data, atlas):
@@ -42,8 +43,8 @@ def server_portals(data, atlas):
     out = collections.defaultdict(list)
     for m, lst in data.portals.items():
         exits = (atlas.get(m) or {}).get("exits") or []
-        for px, py, tm, tx, ty in lst:
-            if tm not in atlas:
+        for px, py, tm, tx, ty, cost, steps, *_ in lst:
+            if tm not in atlas or cost or steps:             # NPC-переходы (Kafra, стражи) экспедиции не берут
                 continue
             ok = any(e["to"] == tm and not e.get("script")
                      and abs(e["x"] - px) <= SRC_TOL and abs(e["y"] - py) <= SRC_TOL
@@ -111,11 +112,13 @@ def reach(data, atlas, town, tx, ty, max_hops):
     return out
 
 
-def generate(openkore, atlas_path, towns, max_hops):
-    data = Data(openkore)
+def generate(openkore, atlas_path, towns, max_hops, profile=None):
+    """profile — профиль бота (bots/bot01): его tables (portals.txt renewal, field_*) раньше upstream, как у OpenKore."""
+    profile = DEFAULT_PROFILE if profile is None else profile
+    data = Data(openkore, profile or None)
     atlas_raw = Path(atlas_path).read_bytes()
     atlas = json.loads(atlas_raw.decode("utf-8"))["maps"]
-    portals_raw = (Path(openkore) / "tables" / "portals.txt").read_bytes()
+    portals_raw = "\n".join(read_table(data.portals_file)).encode("utf-8")   # с !include — как читает OpenKore
     doc = {
         "_comment": "Сгенерировано scripts/gen_explore_reach.py (ORG-054): карты, куда OpenKore дойдёт пешком из "
                     "города по portals.txt, подтверждённым варпами сервера (atlas.json), и откуда вернётся. "
@@ -137,8 +140,9 @@ def main():
     ap.add_argument("--atlas", default=str(ROOT / "brain" / "world" / "atlas.json"))
     ap.add_argument("--town", action="append", help="город:x:y (точка отдыха распорядка)")
     ap.add_argument("--hops", type=int, default=5)
+    ap.add_argument("--profile", default=str(DEFAULT_PROFILE), help="профиль бота; пусто — только upstream tables")
     a = ap.parse_args()
-    doc = generate(a.openkore, a.atlas, a.town or DEFAULT_TOWNS, a.hops)
+    doc = generate(a.openkore, a.atlas, a.town or DEFAULT_TOWNS, a.hops, a.profile)
     print(json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=1))
 
 

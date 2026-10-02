@@ -72,7 +72,8 @@ DEFAULTS = {
 
 
 def denied(hmap, cfg):
-    """Карта запрещена для экспедиций: полигон новичков, перестроенный izlude, гильдии (cfg deny/deny_prefix)."""
+    """Карта запрещена для экспедиций: полигон новичков, izlude (порталы renewal в bots/common/tables есть, но в игре
+    не проверены — снять из deny после проверки), гильдии (cfg deny/deny_prefix)."""
     return hmap in cfg.get("deny", ()) or any(hmap.startswith(p) for p in cfg.get("deny_prefix", ()))
 
 

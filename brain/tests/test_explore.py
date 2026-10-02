@@ -153,7 +153,7 @@ class TargetTest(Base):
     def test_unreachable_and_denied(self):
         rec, why = self.ex.check_target("izlude", 41, need_unknown=False)
         self.assertIsNone(rec)
-        self.assertIn("OpenKore", why, "перестроенный izlude: portals.txt не совпадает с сервером")
+        self.assertIn("запрещена", why, "izlude: порталы renewal есть (bots/common/tables), но в игре не проверен — deny")
         self.assertTrue(denied("iz_int01", DEFAULTS) and denied("int_land02", DEFAULTS) and denied("izlude", DEFAULTS))
         self.assertFalse(denied("prt_fild06", DEFAULTS))
         rec, why = self.ex.check_target("geffen", 41, need_unknown=False)
@@ -344,7 +344,7 @@ class ReachTest(unittest.TestCase):
         a = atlas.default()
         maps = reach["towns"]["prontera"]["maps"]
         self.assertTrue(ROADS <= set(maps))
-        self.assertNotIn("izlude", maps, "portals.txt устарел для izlude (renewal)")
+        self.assertIn("izlude", maps, "таблицы профиля (renewal, scripts/gen_portals.py) ведут в izlude")
         for m, r in maps.items():
             self.assertIn(m, a.maps)
             self.assertEqual(r["path"][0], "prontera")
