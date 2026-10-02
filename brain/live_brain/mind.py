@@ -16,6 +16,7 @@ import os
 import time
 
 from . import llm
+from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
 from .plans import TAG, PlanExecutor, PlanStore
 from .routine import Routine
@@ -87,6 +88,7 @@ class Mind:
         self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
         self.plans = PlanExecutor(self, PlanStore(memory.db))
         self.routine = Routine(self, world) if world else None
+        self.economy = Economy(self, world["economy"]) if world and world.get("economy") else None
 
     # ---------- входящие сообщения плагина ----------
 
@@ -176,6 +178,14 @@ class Mind:
                 and TAG.search(str(event.get("text", "")))):
             await self.plans.on_tag(str(event["from"]), str(event["text"]))   # протокол встречи, не болтовня
             return
+        if (self.economy and kind == "chat_private" and event.get("from") in self.ctx.peers
+                and ECON_TAG.search(str(event.get("text", "")))):
+            await self.economy.on_tag(str(event["from"]), str(event["text"]))  # просьба/ответ жителя
+            return
+        if kind == "give_result":
+            if self.economy:
+                self.economy.on_give_result(event)
+            return
         result = self.gate.evaluate(event, self.state, self.ctx)
         self.mem.set("gate_last", self.ctx.last)
         for text, importance in result.memory:
@@ -238,6 +248,8 @@ class Mind:
             log.info("исполнено в игре: %s", result["command"])
         else:
             log.warning("тело отклонило действие %s: %s", action, result["error"])
+            if self.economy and action:
+                self.economy.on_rejected(action, result["error"])
 
     # ---------- исполнение (всегда через safety) ----------
 
@@ -265,10 +277,14 @@ class Mind:
             sent.append(a)
             if a.get("action") == "whisper" and a.get("to") in self.ctx.peers:
                 self.ctx.last[f"talk:{a['to']}"] = time.time()
+        if self.economy:
+            for r in rejected:
+                if isinstance(r["action"], dict):
+                    self.economy.on_rejected(r["action"], r["why"])
         self.write_decision({"type": "decision", "source": source, "reason": reason,
                              "actions": sent, "rejected": rejected, **(extra or {})})
         label = {"rule": "правило", "jev": "JEV быстро", "llm": "решение LLM", "plan": "план",
-                 "operator": "оператор"}.get(source, source)
+                 "operator": "оператор", "economy": "экономика", "routine": "распорядок"}.get(source, source)
         log.info("%s (%s): действия %s%s", label, reason,
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
@@ -296,6 +312,8 @@ class Mind:
             await self.plans.tick()
             if self.routine:
                 await self.routine.tick()
+            if self.economy:
+                await self.economy.tick()
             await self.read_inbox()
             now = time.time()
             self.peer_smalltalk(now)
@@ -332,6 +350,8 @@ class Mind:
                 why = await self.plans.cancel("operator")
             elif cmd.get("cmd") in ("rest", "hunt") and self.routine:
                 why = await self.routine.force(cmd["cmd"])
+            elif cmd.get("cmd") == "ask" and self.economy:
+                why = await self.economy.ask(str(cmd.get("item", "")), cmd.get("amount"), force=True)
             else:
                 why = "неизвестная команда"
             self.write_decision({"type": "operator", "cmd": cmd, "result": why or "ok"})
@@ -437,6 +457,8 @@ class Mind:
             "Не обещай встречу словами без этих действий; что встреча состоялась, узнаешь из поля «план». "
             "Распорядок дня (охота 4-5 часов, остальное время отдых и общение в городе) соблюдает тело: "
             "не уговаривай себя охотиться, когда отдыхаешь; set_hunt_map выбирает карту на охоту. "
+            "Хозяйство тело ведёт само: продаёт лут торговцу, докупает зелья, карты и руду относит "
+            "на склад Kafra, а в городе жители делятся друг с другом зельями и зени (поле «хозяйство»). "
             "Реплики короткие (до 100 символов), на языке собеседника, в твоём стиле. "
             "Не отвечай каждому сообщению, не спамь в общий чат без повода. "
             "Другие жители — такие же обитатели мира, с ними можно разговаривать в личке, "
@@ -458,6 +480,7 @@ class Mind:
             "план": self.plans.summary(),
             "распорядок": self.routine.summary() if self.routine else None,
             "глобальные_цели": self.routine.goals() if self.routine else None,
+            "хозяйство": self.economy.summary() if self.economy else None,
             "другие_жители": {p: {"кто": self.who(p), "отношение": self.mem.relation(p)}
                               for p in sorted(self.ctx.peers)},
         }

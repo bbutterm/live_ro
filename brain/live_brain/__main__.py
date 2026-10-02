@@ -111,6 +111,11 @@ def report(args, memory, state_dir):
         print(f"   распорядок: {mode}; охота сегодня {int(rt.get('hunted', 0) / 60)} из {int(rt.get('budget', 0) / 60)} мин")
     print(f"   за сутки: побед {count('kill')}, смертей {count('died')}, уровней {count('level_up')}, "
           f"встреч {count('meeting_confirmed')}, застреваний {count('routine_stuck')}")
+    items = st.get("items") or {}
+    print(f"   хозяйство: красных зелий {items.get('501', '?')}, отдал жителям {count('gift_given')}, "
+          f"получил {count('gift_received')}, просьб {count('gift_asked')}, неудач {count('gift_failed')}"
+          + (f"; лавка {'открыта' if (st.get('vend') or {}).get('open') else 'закрыта'}"
+             if (st.get("vend") or {}).get("can") else ""))
     if plan:
         print(f"   последний план: встреча с {plan[0]} — {plan[1]} {plan[2] or ''} {plan[3] or ''}".rstrip())
     print("   вызовы моделей за сутки: " + (", ".join(f"{p} {n} (${c:.4f})" for p, n, c in calls) or "нет")

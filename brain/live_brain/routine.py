@@ -15,7 +15,9 @@
     town -> hunt: перерыв прошёл и норма не выбрана; новый день — новая норма.
 Сверка с игрой каждый тик: если настройка OpenKore не соответствует режиму (например, после
 перезапуска бота), команда отправляется заново — не чаще раза в RESEND секунд.
-Во время активного плана встречи распорядок не вмешивается.
+Во время активного плана встречи распорядок не вмешивается (только закрывает лавку: с ней не ходят).
+Лавка (vend_in_town, только Merchant с навыком и тележкой): открыть по прибытии в город,
+закрыть перед охотой — с открытой лавкой персонаж не двигается.
 """
 import json
 import logging
@@ -58,6 +60,7 @@ class Routine:
         self.anchor = None          # (map, x, y, время) — где стоял в последний раз
         self.last_combat = 0.0
         self.last_unstuck = 0.0
+        self.last_vend = 0.0
         self.st = mind.mem.get("routine") or {}
 
     # ---------- данные ----------
@@ -133,6 +136,9 @@ class Routine:
         gap = (now - self.last_tick) if self.last_tick else 0
         self.last_tick = now
         if self.mind.plans.store.active():
+            if (state.get("vend") or {}).get("open") and now - self.last_vend >= RESEND:
+                self.last_vend = now
+                await self.send({"action": "shop_close"}, "распорядок: закрыть лавку — иду на встречу")
             self.save()
             return                                    # план встречи важнее распорядка
 
@@ -225,11 +231,17 @@ class Routine:
         at_town = (state.get("map") == self.town["map"] and state.get("x") is not None
                    and max(abs(int(state["x"]) - self.town["x"]), abs(int(state["y"]) - self.town["y"]))
                    <= self.town.get("radius", 3) + 2)
+        vend = state.get("vend") or {}
+        vending = self.cfg.get("vend_in_town") and vend.get("can")   # лавку открывают стоя (навык)
         if at_town and not self.st["arrived"]:
             self.st["arrived"] = True
             self.note("routine_arrived", f"Я в городе {self.town['map']}, отдыхаю.", 1)
-            if self.cfg.get("sit_in_town", True):
+            if self.cfg.get("sit_in_town", True) and not vending:
                 await self.send({"action": "sit"}, "распорядок: сесть отдохнуть в городе")
+        if (self.st["arrived"] and self.cfg.get("vend_in_town") and vend.get("can") and not vend.get("open")
+                and now - self.last_vend >= RESEND):
+            self.last_vend = now
+            await self.send({"action": "shop_open"}, "распорядок: открыть лавку в городе")
         if self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
             left = self.st["budget"] - self.st["hunted"]
             self.st.update(mode="hunt", mode_since=now, arrived=False,
@@ -240,6 +252,10 @@ class Routine:
     async def enforce(self, now, state):
         """Сверка настройки OpenKore с режимом; при расхождении — команда, не чаще RESEND с."""
         if now - self.last_sent < RESEND:
+            return
+        if self.st["mode"] == "hunt" and (state.get("vend") or {}).get("open"):
+            self.last_sent = now
+            await self.send({"action": "shop_close"}, "распорядок: закрыть лавку перед охотой")
             return
         if self.st["mode"] == "hunt":
             ok = state.get("lock_map") == self.hunt_map() and state.get("lock_x") is None

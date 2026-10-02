@@ -15,6 +15,17 @@
     "break_minutes": [30, 90],
     "town": {"map": "prontera", "x": 156, "y": 185, "radius": 3},
     "town_smalltalk_seconds": 600,
-    "sit_in_town": true
+    "sit_in_town": true,
+    "vend_in_town": true
+  },
+
+  "economy": {
+    "_comment": "Взаимопомощь в городе (brain/live_brain/economy.py). share — чем делятся: просят, когда меньше need_below; просят ask; отдающему остаётся не меньше keep. Продажа лута, закупка и склад — в bots/<bot>/control/config.txt.",
+    "share": {
+      "501": {"name": "Red Potion", "need_below": 5, "ask": 15, "keep": 20}
+    },
+    "zeny": {"need_below": 500, "ask": 2000, "keep": 15000},
+    "ask_gap_minutes": 20,
+    "gifts_per_day": 6
   }
 }

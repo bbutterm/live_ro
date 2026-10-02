@@ -25,6 +25,10 @@
 #   clear_point {}        -> conf lockMap_x/_y/_randX/_randY none (вернуться к охоте)
 #   hunt {map} / sit / stand -> распорядок: охота на карте без точки / сесть / встать
 #   unstuck {}            -> ai clear; move <случайная проходимая клетка в радиусе 10>
+#   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
+#                            (итог — событие give_result; только жителю из dealAuto_names)
+#   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
+# В state от плагина economy: items (зелья/крылья по ID), vend {can, open}, give (идёт передача).
 package brainBridge;
 
 use strict;
@@ -145,6 +149,8 @@ sub sendState {
 		combat    => (%combatProfile::current ? {%combatProfile::current} : undef),
 		activity  => (AI::action() || 'idle'),
 		players   => nearbyPlayers(),
+		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
+		                                 give => economy::giveStatus()) : ()),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 	});
 }
@@ -307,6 +313,19 @@ sub actionToCommand {
 		return (1, 'stand');
 	} elsif ($kind eq 'clear_point') {
 		return (1, ['conf lockMap_x none', 'conf lockMap_y none', 'conf lockMap_randX none', 'conf lockMap_randY none']);
+	} elsif ($kind eq 'give') {
+		return (0, 'плагин economy не загружен') unless defined &economy::startGive;
+		my ($ok, $desc) = economy::startGive($a);
+		return $ok ? (1, {note => $desc}) : (0, $desc);
+	} elsif ($kind eq 'shop_open') {
+		my $v = defined &economy::vendStatus ? economy::vendStatus() : undef;
+		return (0, 'нет навыка лавки или тележки') unless $v && $v->{can};
+		return (0, 'лавка уже открыта') if $v->{open};
+		return (1, 'openshop');
+	} elsif ($kind eq 'shop_close') {
+		my $v = defined &economy::vendStatus ? economy::vendStatus() : undef;
+		return (0, 'лавка не открыта') unless $v && $v->{open};
+		return (1, 'closeshop');
 	} elsif ($kind eq 'pause') {
 		return (1, 'ai manual');
 	} elsif ($kind eq 'resume') {
@@ -323,9 +342,11 @@ sub handleLine {
 		return;
 	}
 	return unless ($msg->{type} || '') eq 'action';
-	my ($ok, $res) = actionToCommand($msg);
-	if ($ok && !inGame()) { ($ok, $res) = (0, 'бот не в игре'); }
-	if ($ok) {
+	my ($ok, $res) = inGame() ? actionToCommand($msg) : (0, 'бот не в игре');
+	if ($ok && ref $res eq 'HASH') {
+		$res = $res->{note};                            # действие исполняет другой плагин (economy)
+		message "[brainBridge] решение мозга -> $res\n", 'system';
+	} elsif ($ok) {
 		my @cmds = ref $res ? @$res : ($res);
 		$res = join('; ', @cmds);
 		message "[brainBridge] решение мозга -> $res\n", 'system';

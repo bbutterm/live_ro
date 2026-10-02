@@ -920,3 +920,70 @@ scripts/lab down && scripts/lab status
 
 ### Что прислать
 Вывод шагов 0–4 в `docs/qa/HERMES-<sha7>.md`.
+
+## Задание №11: склад и взаимопомощь жителей
+
+**Ветка:** `claude/brain-routine` (включает №7–10). **Commit:** из сообщения разработчика.
+Можно совместить с №10. Без пассивного наблюдения дольше указанного. login/char/map не перезапускать.
+БД не трогать.
+
+### Что изменилось
+- Плагин `economy` (добавлен в `loadPlugins_list` обоих профилей): карты и руда — на склад Kafra
+  `prontera 146,89` (`storageAuto 1`, `minStorageZeny 100`), а не на продажу.
+- Сделки: `dealAuto 3`, `dealAuto_names` = другой житель (bot01 → Vera, bot02 → Arkady); чужим — отказ.
+- Мозг: в городе житель просит у жителя рядом Red Potion (< 5) или зени (< 500); второй отдаёт сделкой,
+  если у него остаётся запас. Команда проверки: `scripts/lab gift BOT ITEM N`.
+- В state тела: `items` (зелья/крылья по ID), `vend`, `give`; `report` показывает строку «хозяйство».
+
+### Шаг 0 — код (3 мин)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine tests.test_economy)  # OK, 62
+perl -Ibots/tests/stubs bots/tests/economy.t | tail -1    # 1..30
+scripts/lab down; scripts/lab up && sleep 90
+grep -h 'economy' $LAB_ROOT/logs/bot0*/console.log | head -4; scripts/lab report
+```
+Ожидание: плагин загружен (нет `Unable to load plugin economy`), в `report` строка «хозяйство: красных зелий N».
+
+### Шаг 1 — оба в город (до 5 мин)
+```sh
+scripts/lab routine bot01 rest; scripts/lab routine bot02 rest
+# подождать, пока report покажет обоих на prontera у 156,185 (до 5 мин)
+scripts/lab report | grep -E '^== '
+```
+
+### Шаг 2 — передача (2 мин)
+```sh
+scripts/lab gift bot02 501 3; sleep 60
+grep -h '"type": "economy"' $LAB_ROOT/state/bot0*/decisions.jsonl | tail -4
+grep -hE 'economy|Deal|deal' $LAB_ROOT/logs/bot0*/console.log | tail -12
+scripts/lab report | grep -E '^== |хозяйство'
+```
+Ожидание: Vera `gift_asked`; Arkady `[economy] передал Vera: предмет 501 x 3`, `Deal Complete`, `gift_given`;
+Vera `gift_received` («по данным игры»). Если у Arkady меньше 23 Red Potion — отказ «самому мало»
+(это тоже правильный исход; тогда повторить `scripts/lab gift bot01 501 3` в обратную сторону или
+`gift bot02 z 100` для зени: у отдающего должно остаться ≥ 15000).
+
+### Шаг 3 — склад (по возможности, без ожидания)
+```sh
+grep -hE 'Auto-storaging|storage|Kafra|Stored' $LAB_ROOT/logs/bot0*/console.log | tail -6
+```
+Ожидание: только если в рюкзаке есть карта/руда и вес ≥ 48% — поход к Kafra 146,89. Не было — «не наблюдалось».
+
+### Шаг 4 — вернуть жизнь
+```sh
+scripts/lab routine bot01 hunt; scripts/lab routine bot02 hunt
+```
+
+### Риски
+- Сделка: rAthena требует ≤ 2 клеток; тело подходит само, таймаут 40 с. Неудача пишется как `gift_failed` с причиной.
+- Склад: при зени < 100 OpenKore на склад не идёт — карты остаются в рюкзаке (не продаются).
+- `gift` — проверочная команда; правила отдающего (запас, лимит в сутки) действуют.
+
+### Откат
+`scripts/lab down`, `git checkout --detach f978d341c8394c77b23108a9a77823870c914c42`, `scripts/lab up`.
+
+### Что прислать
+Вывод шагов 0–3 в `docs/qa/HERMES-<sha7>.md`.

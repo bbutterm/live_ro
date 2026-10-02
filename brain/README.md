@@ -41,7 +41,8 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 
 ## Игровые действия
 `say`, `whisper`, `set_hunt_map`, `pause`, `resume`, `party_create` (имя группы всегда `LR_<имя>`),
-`party_invite`, `party_accept`, `party_leave`, `follow`, `unfollow`. Группа и следование — только
+`party_invite`, `party_accept`, `party_leave`, `follow`, `unfollow`. Только у правил (модель не получает):
+точка встречи, охота, сесть/встать, `unstuck`, `give`, `shop_open`/`shop_close`. Группа и следование — только
 с жителями. Приглашение в группу жителя принимает правило. Лечение партнёра (Vera, `AL_HEAL`)
 делает OpenKore по `partySkill` в профиле, без LLM.
 
@@ -55,6 +56,30 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 - Модель видит распорядок и цели с прогрессом; `set_hunt_map` выбирает карту (в городе — на следующую сессию).
 - Встреча важнее распорядка: пока план встречи активен, распорядок не переключает режим.
 - Оператор: `scripts/lab routine BOT rest|hunt|show`.
+
+## Хозяйство: продажа, склад, взаимопомощь, лавка
+Тело (OpenKore + плагин `bots/plugins/economy`), без LLM:
+- **Продажа лута** торговцу Tool Dealer `prt_in 126,76` при рюкзаке ≥ 48% (`sellAuto`); по умолчанию
+  продаётся всё неэкипированное (`items_control.txt: all 0 0 1`), кроме зелий и крыльев.
+- **Закупка**: Red Potion до 40 шт., когда их < 10 и зени > 3000 (`buyAuto`).
+- **Склад Kafra** `prontera 146,89` (плата 40z, нужно Basic Skill 6): карты (тип 6) и руда
+  (`economy_storeIds`: Oridecon, Elunium и необработанные) не продаются, а идут на склад вместе с продажей.
+  Своя строка в `items_control.txt` важнее этого правила.
+- **Сделки** только с жителями: `dealAuto 3` + `dealAuto_names`; чужим — явный отказ.
+
+Мозг (`economy.py`, правила `goals.json → economy`):
+- в городе, если житель рядом (≤ 8 клеток), а у меня Red Potion < 5 или зени < 500 — прошу шёпотом
+  с меткой `[need:<id>:<предмет>:<сколько>]`, не чаще раза в 20 минут;
+- житель отдаёт, если после передачи у него остаётся не меньше `keep` и за сутки отдал < 6 раз:
+  `[need:<id>:ok]` и действие `give` — тело подходит на 2 клетки, предлагает сделку, кладёт, подтверждает;
+- доказательства: «отдал» — `give_result ok` (сервер завершил сделку), «получил» — выросло количество
+  в моём состоянии из игры. Память и отношение +1 у обоих.
+- **Лавка** (`vend_in_town`): только Merchant-ветка с навыком `MC_VENDING` и тележкой — открывает в городе
+  (товары и цены из `bots/<bot>/control/shop.txt`, вещи должны лежать в тележке), закрывает перед охотой
+  и перед встречей. У Arkady и Vera лавки нет (не торговцы) — функция спит.
+- Оператор: `scripts/lab gift BOT ITEM N` — попросить сейчас (проверка обмена).
+
+Чего нет: торговли с людьми через переговоры, цен «по рынку», закупки у других игроков.
 
 ## Исполняемые планы: встреча
 `plans.py` превращает разговор в действие. Модель выбирает цель (`propose_meeting`, `accept_meeting`,
@@ -121,7 +146,8 @@ tail -n 20 $LAB_ROOT/state/bot01/decisions.jsonl
 
 ## Тесты
 ```sh
-cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine
+cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine tests.test_economy
+perl -Ibots/tests/stubs bots/tests/combat_profile.t && perl -Ibots/tests/stubs bots/tests/economy.t   # из корня
 ```
 Сквозной тест без сети: фейковый OpenRouter, настоящий процесс мозга, фейковый плагин.
 Проверяет решение, исполнение, память после перезапуска, работу без ключа, `--check` и то,

@@ -53,6 +53,8 @@ usage() {
   plan BOT show         последние планы BOT из памяти (только чтение)
   routine BOT rest|hunt досрочно отправить BOT отдыхать в город / на охоту (проверка распорядка)
   routine BOT show      распорядок BOT из памяти (только чтение)
+  gift BOT ITEM N       BOT сейчас просит у жителя рядом N предметов ITEM (ID, например 501, или z — зени);
+                        для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
 Боты: LAB_BOTS в env-файле (по умолчанию "bot01").
   db-backup             дамп основной и лог-БД в backups/
 Только режим release:
@@ -367,7 +369,7 @@ cmd_doctor() {
     v="${b^^}_CONTROL_DIR"
     if is_set "$v"; then note "$b использует готовый control: ${!v} (профиль и плагины из Git НЕ применяются)"; fi
   done
-  for p in lowHpGuard gracefulStop brainBridge; do
+  for p in lowHpGuard gracefulStop brainBridge combatProfile economy; do
     if [[ -f "$pr/bots/plugins/$p/$p.pl" ]]; then ok "плагин $p"; else bad "нет плагина $p"; fi
   done
   echo "== мозг"
@@ -791,6 +793,18 @@ cmd_plan() {
   esac
 }
 
+# Просьба жителю рядом (проверка обмена): мозг пропускает проверку нехватки и интервала.
+cmd_gift() {
+  local bot="${1:-}" item="${2:-}" n="${3:-}"
+  [[ "$bot" =~ ^bot[0-9]+$ && "$item" =~ ^([0-9]{1,6}|z)$ && "$n" =~ ^[0-9]{1,7}$ ]] \
+    || die "scripts/lab gift botNN ITEM|z N   (например: gift bot02 501 10)"
+  load_env
+  [[ -n "$(running_pid "brain-$bot")" ]] || die "мозг $bot не запущен: scripts/lab start brain $bot"
+  ( umask 077; python3 -c 'import json,sys; print(json.dumps({"cmd": "ask", "item": sys.argv[1], "amount": int(sys.argv[2])}))' \
+      "$item" "$n" >> "$LAB_ROOT/run/brain/$bot.inbox" )
+  info "команда передана мозгу $bot: попросить $n x $item (итог: scripts/lab report, decisions.jsonl \"economy\")"
+}
+
 # Новый игровой аккаунт для бота. Пишет в БД игры, поэтому требует бэкап не старше 24 ч.
 cmd_db_add_account() {
   local bot="${1:-}"; [[ "$bot" =~ ^bot[0-9]+$ ]] || die "укажите бота: scripts/lab db-add-account bot02"
@@ -938,6 +952,7 @@ main() {
     brain-check-jev) cmd_brain_check --check-jev "${1:-}" ;;
     db-add-account) cmd_db_add_account "$@" ;;
     plan) cmd_plan "$@" ;;
+    gift) cmd_gift "$@" ;;
     up) cmd_up ;;
     down) cmd_down ;;
     report) cmd_report ;;

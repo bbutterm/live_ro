@@ -7,14 +7,17 @@
   в whisper_gap секунд одному игроку и не больше whisper_limit за 10 минут;
 - пауза, поставленная мозгом, не дольше max_pause секунд (потом resume по правилу);
 - группа и следование только с другими жителями-ботами (peers); группа создаётся
-  только с именем LR_<своё имя> и только если персонаж не в группе.
+  только с именем LR_<своё имя> и только если персонаж не в группе;
+- передача (give) только жителю, предмет — ID или zeny, количество 1..MAX_GIVE; лавка
+  (shop_open/shop_close) и передача — только от исполнителей правил, не от модели.
 """
 import time
 
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
            "party_create", "party_invite", "party_accept", "party_leave", "follow", "unfollow")
-# Только исполнители плана (plans.py) и распорядка (routine.py) — модель их не получает.
-PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand", "unstuck")
+# Только исполнители плана (plans.py), распорядка (routine.py) и экономики (economy.py) — модель их не получает.
+PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand", "unstuck", "give", "shop_open", "shop_close")
+MAX_GIVE = 100000
 PEER_ONLY = ("party_invite", "follow")
 WINDOW = 600
 
@@ -48,12 +51,22 @@ class SafetyPolicy:
         if not isinstance(action, dict) or action.get("action") not in allowed:
             return None, "неизвестное действие"
         kind = action["action"]
-        if kind in ("clear_point", "stand"):
+        if kind in ("clear_point", "stand", "shop_close"):
             return {"action": kind}, None                     # вернуть к охоте / встать можно всегда
         if state.get("dead"):
             return None, "персонаж мёртв"
-        if kind in ("sit", "unstuck"):
+        if kind in ("sit", "unstuck", "shop_open"):
             return {"action": kind}, None
+        if kind == "give":
+            to, item = action.get("to"), action.get("item")
+            if to not in self.peers:
+                return None, "передавать можно только жителям"
+            if not (item == "zeny" or (isinstance(item, int) and 0 < item < 1000000)):
+                return None, "неверный предмет"
+            amount = action.get("amount")
+            if not isinstance(amount, int) or not 0 < amount <= MAX_GIVE:
+                return None, "неверное количество"
+            return {"action": "give", "to": to, "item": item, "amount": amount}, None
         if kind == "hunt":
             if action.get("map") not in self.hunt_maps:
                 return None, "карта охоты не из списка hunt_maps"
