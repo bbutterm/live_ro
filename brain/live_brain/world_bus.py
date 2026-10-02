@@ -52,7 +52,9 @@ PUBLISH = {
     "guild_founded": ("guild_founded", 4),    # guild: ORG-052, по пакету сервера
     "guild_joined": ("guild_joined", 3),      # guild:
     "explore_found": ("place_found", 3),      # explore: житель открыл новое место (ORG-054)
+    "rival_overtook": ("rival_overtook", 2),  # rivalry: ORG-060 обогнал соперника
 }
+QUIET = {"rival_score"}                       # rivalry: снимки состояния — не в летопись и не в дашборд
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS world_events (
@@ -132,6 +134,22 @@ class WorldBus:
             out.append({"id": i, "ts": ts, "bot": bot, "kind": kind, "data": d, "importance": imp})
         return out
 
+    def replace(self, kind, data=None, importance=1, now=None):           # rivalry: «затирание» (ORG-060/089)
+        """Последний снимок жителя: у бота одна запись этого вида (старые удаляются)."""
+        self.db.execute("DELETE FROM world_events WHERE bot = ? AND kind = ?", (self.bot, kind))
+        return self.publish(kind, data, importance, now=now)
+
+    def latest(self, kind, since=0.0):                                      # rivalry:
+        """Последние снимки вида kind других жителей: {bot: {"ts", "data"}} (свои — без)."""
+        out = {}
+        for ts, bot, data in self.db.execute("SELECT ts, bot, data FROM world_events WHERE kind = ? AND ts >= ? "
+                                             "AND bot != ? ORDER BY id", (kind, since, self.bot)):
+            try:
+                out[bot] = {"ts": ts, "data": json.loads(data)}
+            except ValueError:
+                continue
+        return out
+
     def last_id(self):
         return self.db.execute("SELECT COALESCE(MAX(id), 0) FROM world_events").fetchone()[0]
 
@@ -155,6 +173,8 @@ def read_period(path, start, end):
         db.close()
     out = []
     for ts, bot, kind, data, imp in rows:
+        if kind in QUIET:                                                   # rivalry: снимки — не события
+            continue
         try:
             out.append({"ts": ts, "bot": bot, "kind": kind, "data": json.loads(data), "importance": imp})
         except ValueError:
@@ -242,6 +262,7 @@ TEXTS = {
     "guild_founded": lambda d: f"основал гильдию {d.get('name')}",          # guild:
     "guild_joined": lambda d: f"вступил в гильдию {d.get('name')}",         # guild:
     "place_found": lambda d: f"открыл(а) {d.get('map')}",                    # explore: ORG-054
+    "rival_overtook": lambda d: f"обогнал(а) {d.get('rival')} {d.get('label')} ({d.get('mine')} против {d.get('theirs')})",  # rivalry:
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
     "death_report": lambda d: f"погиб на {d.get('map')}" + (f" (бил {d.get('cause')})" if d.get("cause") else ""),
     "job_changed": lambda d: f"сменил профессию: {d.get('from')} → {d.get('to')}",

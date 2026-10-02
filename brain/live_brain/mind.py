@@ -41,6 +41,7 @@ from .social import TAG as SOCIAL_TAG, Social   # social: общение без 
 from .society import Society                    # society: эмоции, чат-комнаты, ссоры (ORG-022/026/027)
 from . import world_bus                                 # events: шина событий мира (ORG-045)
 from .explore import TAG as EXPLORE_TAG, Explorer       # explore: экспедиции (ORG-054)
+from .rivalry import Rivalry                            # rivalry: соперничество (ORG-060)
 
 log = logging.getLogger("mind")
 
@@ -164,6 +165,8 @@ class Mind:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
             world_bus_db = world_bus.WorldBus(bus_path, persona["name"])              # events:
         self.world = world_bus.Feed(self, world_bus_db) if world_bus_db else None     # events:
+        self.rivalry = (Rivalry(self, world) if self.ctx.peers and feat("rivalry")    # rivalry: ORG-060
+                        and ((world or {}).get("rivalry") or {}).get("enabled", True) else None)  # rivalry:
 
     # ---------- входящие сообщения плагина ----------
 
@@ -605,6 +608,8 @@ class Mind:
             await self.guild.tick()                            # guild:
         if self.world:                                         # events:
             self.world.tick()                                  # events: публикация в шину мира и новости жителей
+        if self.rivalry:                                       # rivalry: ORG-060
+            await self.rivalry.tick()                          # rivalry:
         await self.read_inbox()
         now = time.time()
         self.peer_smalltalk(now)
@@ -809,6 +814,7 @@ class Mind:
             "занятие": self.activities.summary() if self.activities else None,
             "экспедиция": self.explorer.summary() if self.explorer else None,         # explore:
             "цели_недели": self.aims.summary() if self.aims else None,                  # events:
+            "соперник": self.rivalry.summary() if self.rivalry else None,              # rivalry: ORG-060
             "слухи_не_факты": self.rumors.summary(),                                     # events:
             "новости_мира": self.world.summary() if self.world else None,               # events:
             "опасные_монстры": self.postmortem.risky_monsters(),

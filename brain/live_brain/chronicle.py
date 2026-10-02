@@ -19,6 +19,7 @@ from . import world_bus
 from .economy import CHRONICLE_LINES, metrics_from_rows
 from .society import CHRONICLE_LINES as SOCIETY_LINES   # society: ссоры, примирения, вывески
 from .guild import CHRONICLE_LINES as GUILD_LINES       # guild: основание и вступление (ORG-052)
+from .rivalry import CHRONICLE_LINES as RIVAL_LINES     # rivalry: обгоны соперника (ORG-060)
 
 LINES = {
     "level_up": lambda d: f"достиг {d.get('level')} уровня",
@@ -40,6 +41,7 @@ LINES = {
     **CHRONICLE_LINES,                                    # ORG-037: сделки и письма жителей
     **SOCIETY_LINES,                                      # society: ORG-026/027
     **GUILD_LINES,                                        # guild: ORG-052
+    **RIVAL_LINES,                                        # rivalry: ORG-060
 }
 
 
