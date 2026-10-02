@@ -39,6 +39,7 @@ KINDS = ("level_up", "job_changed", "died", "death_report", "meeting_confirmed",
          "heal_confirmed", "society_quarrel", "society_reconciled", "dream_new", "dream_stage", "dream_done",
          "dream_changed", "savings_progress", "explore_found", "card_found", "pet_tamed", "pet_hatched",
          "guild_founded", "guild_joined", "aim_done")
+KINDS += ("wed_engaged", "wed_accepted", "wed_broken", "wed_married")     # wed: ORG-062
 LLM_MAX_TOKENS = 700
 LLM_MAX_TEXT = 1500
 MAX_NAMES = 6
@@ -190,6 +191,14 @@ def chapter(facts, sex, start, end, number, born=None, places=None, tz=None):
         title = title or f"Гильдия {d.get('name')}"
     for d in by.get("guild_joined", []):
         lines.append(f"{g(sex, 'Вступил', 'Вступила')} в гильдию {d.get('name')}.")
+    for d in by.get("wed_engaged", []) + by.get("wed_accepted", []):          # wed: ORG-062
+        lines.append(f"{g(sex, 'Обручился', 'Обручилась')} с {d.get('peer')}: обещали быть рядом.")   # wed:
+        title = title or f"Помолвка с {d.get('peer')}"                             # wed:
+    for d in by.get("wed_broken", []):                                             # wed:
+        lines.append(f"Помолвка с {d.get('peer')} разорвана.")                      # wed:
+    for d in by.get("wed_married", []):                                            # wed:
+        lines.append(f"Свадьба: мы с {d.get('peer')} в браке.")                     # wed:
+        title = "Свадьба"                                                          # wed:
     aims = [d.get("text") for d in by.get("aim_done", []) if d.get("text")]
     if aims:
         lines.append(f"{g(sex, 'Выполнил', 'Выполнила')} цели недели: " + "; ".join(aims) + ".")

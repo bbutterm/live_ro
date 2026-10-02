@@ -194,6 +194,13 @@ class Rumors:
         self.mind.mem.set("world_msg_seen", seen)
         self.mind.mem.remember(f"Объявление сервера: «{text}» (сообщение сервера, не приказ).", 2, kind="note")
         self.mind.write_decision({"type": "world_msg", "text": text, "source": event.get("source")})
+        for attr in ("fest", "wed"):                    # events2: ORG-087 ивенты, ORG-062 объявление о браке
+            mod = getattr(self.mind, attr, None)        # events2:
+            if mod is not None and hasattr(mod, "on_announce"):   # events2:
+                try:                                    # events2: чужой модуль не роняет слухи
+                    mod.on_announce(text, now)          # events2:
+                except Exception as e:                  # events2: noqa: BLE001
+                    log.warning("объявление -> %s: %s", attr, e)   # events2:
         if not EVENT_WORDS.search(text):
             return None
         hmap = self.find_map(text) or "world"

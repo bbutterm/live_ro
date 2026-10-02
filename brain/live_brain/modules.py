@@ -59,6 +59,7 @@ herbal (ORG-076) — событие job_change_result 15 (consume "result": по
 arrows (ORG-075) — события job_change_result 16 (consume "result", path arrows), arrowcraft_result 16 (own), тик 104,
 промпт 208.  # arrows:
 trek (ORG-078) — метка [trek:] 45, событие job_change_result 17 (consume "result", path trek), тик 112, промпт 212.  # trek:
+wed (ORG-062) — метка [wed:] 57, тик 143, промпт 227; объявление о браке — из rumors.on_world_msg.  # wed:
 """
 import inspect
 import re
@@ -106,6 +107,7 @@ from .achieve import Achieve         # achieve: ORG-080 достижения с�
 from .herbal import Herbal           # herbal: ORG-076 травник у старого фармацевта
 from .arrows import Arrows           # arrows: ORG-075 Arrow Crafting — ремесло лучника
 from .trek import Trek               # trek: ORG-078 дальний поход группой
+from .wed import Wed                 # wed: ORG-062 помолвка и свадьба
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -145,6 +147,7 @@ MODULES = (
     MarketDay,         # market: ORG-071 после calendar, economy, orders, society, social (тик 15 — до economy)
     Refine,            # refine: ORG-072 (тик 105, событие refine_result 65 own; по умолчанию выключен)
     Gaze,              # look: ORG-067 после social (тик 75, эхо [chat:] 20)
+    Wed,               # wed: ORG-062 после social (тема wed), society, episodes; до dream (мечта wedding)
     Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)

@@ -272,5 +272,14 @@
     "max_members": 3,
     "gap_days": 7,
     "halt_save": true
+  },
+  "wed": {
+    "_comment": "ORG-062 помолвка и свадьба (brain/live_brain/wed.py, dream.py вид wedding, docs/LIFE.md). Ступени пары по фактам: friends (affinity >= friend_min), close (>= close_min и эпизодов пары >= close_episodes). Помолвка — символический ритуал жителей ([wed:ask] рядом в городе днём, согласие по характеру, подарок письмом gift_zeny; не больше max_asks предложений одному жителю). Ссора или affinity < break_below — разрыв. Свадьба rAthena (npc/other/marriage.txt: ур. 45, Diamond Ring, 1 300 000 / 1 200 000 z, наряд, разнополая пара) — мечта пары в dream.py с копилкой. ceremony: обряд у NPC НЕ исполняется (исполнителя нет) — дорого и необратимо, развод только GM-командой @divorce; решение владельца.",
+    "enabled": true,
+    "ceremony": false,
+    "friend_min": 3, "close_min": 7, "close_episodes": 10, "engage_min": 8, "break_below": 3,
+    "check_hours": 12, "ask_gap_days": 14, "max_asks": 2, "near_cells": 8,
+    "gift_zeny": 500, "keep_zeny": 5000,
+    "level": 45, "fee": {"m": 1300000, "f": 1200000}, "ring_price": 45000, "outfit_price": 43000
   }
 }

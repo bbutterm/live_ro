@@ -68,6 +68,9 @@ PUBLISH = {
     "spar_won": ("spar_won", 3),              # spar: ORG-061 победа в спарринге (пишет только победитель)
     "spar_draw": ("spar_draw", 2),            # spar: ничья (пишет только вызвавший)
     "achievement_done": ("achievement", 3),   # achieve: ORG-080 новое достижение сервера
+    "wed_engaged": ("wed_engaged", 4),        # wed: ORG-062 помолвка (пишет только предложивший)
+    "wed_broken": ("wed_broken", 3),          # wed: разрыв помолвки
+    "wed_married": ("wed_married", 5),        # wed: брак подтверждён игрой
 }
 QUIET = {"rival_score", "presence"}           # rivalry: crowd: снимки состояния — не в летопись и не в дашборд
 BACKSTAGE = {"director"}                      # director: решения режиссёра (ORG-086) — в дашборд, не в летопись/серию
