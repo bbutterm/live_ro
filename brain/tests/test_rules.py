@@ -51,8 +51,8 @@ class GateTest(unittest.TestCase):
         self.assertEqual(make_fast_gate(Settings.from_env(full)).name, "jev")
 
     def test_peer_conversation_limited(self):
-        ctx = GateContext(name="Arkady", hunt_maps=[], peers={"Mirela"}, peer_replies_per_hour=2)
-        ev = {"kind": "chat_private", "from": "Mirela", "text": "как дела?"}
+        ctx = GateContext(name="Arkady", hunt_maps=[], peers={"Vera"}, peer_replies_per_hour=2)
+        ev = {"kind": "chat_private", "from": "Vera", "text": "как дела?"}
         llm_asks = [self.gate.evaluate(ev, STATE, ctx).llm is not None for _ in range(3)]
         self.assertEqual(llm_asks, [True, True, False])
         human = {"kind": "chat_private", "from": "Tester", "text": "как дела?"}
@@ -181,8 +181,8 @@ class JevTest(BrainHarness):
     def test_peer_smalltalk_whispers_other_resident(self):
         env = self.env_file()
         env.write_text(env.read_text().replace("BRAIN_PEER_SMALLTALK=0", "BRAIN_PEER_SMALLTALK=3600"))
-        decision = {"thought": "Давно не видел Mirela.", "actions": [
-            {"action": "whisper", "to": "Mirela", "text": "Mirela, ты где? На поле тихо."}]}
+        decision = {"thought": "Давно не видел Vera.", "actions": [
+            {"action": "whisper", "to": "Vera", "text": "Vera, ты где? На поле тихо."}]}
         import tests.test_brain as tb
         old, tb.DECISION = tb.DECISION, decision
         try:
@@ -194,9 +194,9 @@ class JevTest(BrainHarness):
             self.stop(proc)
         finally:
             tb.DECISION = old
-        self.assertEqual((action["action"], action["to"]), ("whisper", "Mirela"))
+        self.assertEqual((action["action"], action["to"]), ("whisper", "Vera"))
         reason = [r for r in self.decisions() if r["type"] == "decision"][0]["reason"]
-        self.assertIn("давно не общался с Mirela", reason)
+        self.assertIn("давно не общался с Vera", reason)
 
     def test_check_jev(self):
         import subprocess, sys

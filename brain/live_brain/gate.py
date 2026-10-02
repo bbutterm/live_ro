@@ -157,6 +157,9 @@ class JevGate:
 
     def call(self, messages):
         """Блокирующий вызов (в executor). Возвращает (решение, usage, latency)."""
+        if self.provider.api_base == "https://api.typesafe.ai/v1/systemone":
+            from .typesafe import decide
+            return decide(self.provider, messages)
         text, usage, latency = llm.chat(self.provider, messages, max_tokens=self.provider.max_tokens)
         d = llm.parse_json_object(text)
         quick = d.get("quick")

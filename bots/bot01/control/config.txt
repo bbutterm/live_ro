@@ -416,7 +416,7 @@ buyerShopTitleOversize 0
 
 sleepTime 10000
 
-ignoreAll 1
+ignoreAll 0
 itemHistory 0
 autoTalkCont 0
 noAutoSkill 0
