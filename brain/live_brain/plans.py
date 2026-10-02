@@ -178,7 +178,7 @@ class PlanExecutor:
         if self.store.active():
             return "уже есть активный план"
         me = self.my_pos()
-        if not me or me[0] not in self.mind.persona["hunt_maps"]:
+        if not me or me[0] not in self.mind.point_maps:
             return "не на разрешённой карте или позиция неизвестна"
         if self.state.get("dead"):
             return "персонаж мёртв"
@@ -268,7 +268,7 @@ class PlanExecutor:
         why = None
         if busy:
             why = "у меня уже другой план"
-        elif pmap not in self.mind.persona["hunt_maps"]:
+        elif pmap not in self.mind.point_maps:
             why = "мне туда нельзя"
         elif self.state.get("dead"):
             why = "я мёртв"

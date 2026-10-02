@@ -23,6 +23,7 @@
 #   follow {to} / unfollow {} -> follow <to> / follow stop
 #   meet_point {map,x,y}  -> conf lockMap/lockMap_x/lockMap_y/randX 2/randY 2 (только исполнитель плана)
 #   clear_point {}        -> conf lockMap_x/_y/_randX/_randY none (вернуться к охоте)
+#   hunt {map} / sit / stand -> распорядок: охота на карте без точки / сесть / встать
 package brainBridge;
 
 use strict;
@@ -282,6 +283,16 @@ sub actionToCommand {
 		}
 		return (1, ["conf lockMap $map", "conf lockMap_x $x", "conf lockMap_y $y",
 		            'conf lockMap_randX 2', 'conf lockMap_randY 2']);
+	} elsif ($kind eq 'hunt') {
+		# Распорядок: охотиться на карте (без точки), встать, если сидел.
+		my $map = $a->{map} || '';
+		return (0, 'неверная карта') unless $map =~ /^[a-z0-9_]{3,16}$/;
+		return (1, ["conf lockMap $map", 'conf lockMap_x none', 'conf lockMap_y none',
+		            'conf lockMap_randX none', 'conf lockMap_randY none', 'stand']);
+	} elsif ($kind eq 'sit') {
+		return (1, 'sit');
+	} elsif ($kind eq 'stand') {
+		return (1, 'stand');
 	} elsif ($kind eq 'clear_point') {
 		return (1, ['conf lockMap_x none', 'conf lockMap_y none', 'conf lockMap_randX none', 'conf lockMap_randY none']);
 	} elsif ($kind eq 'pause') {

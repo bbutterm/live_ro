@@ -16,6 +16,7 @@ from . import llm
 from .bridge import Bridge
 from .config import Settings, load_env, load_persona
 from .gate import RuleGate, make_fast_gate
+from .routine import load_world
 from .memory import Memory
 from .mind import Mind
 
@@ -32,8 +33,10 @@ def parse_args(argv):
     p.add_argument("--check", action="store_true", help="один тестовый запрос к основной модели и выход")
     p.add_argument("--check-jev", action="store_true", help="один тестовый запрос к JEV и выход")
     p.add_argument("--plans", action="store_true", help="показать последние планы из памяти и выйти")
+    p.add_argument("--world", help="глобальные цели и распорядок (по умолчанию brain/world/goals.json)")
     a = p.parse_args(argv)
     a.persona = a.persona or str(here / "personas" / f"{a.bot}.json")
+    a.world = a.world or str(here / "world" / "goals.json")
     return a
 
 
@@ -103,7 +106,8 @@ async def main_async(args, settings, persona, memory, state_dir):
     peers = peer_names(args.persona)
     mind = Mind(settings, persona, memory, bridge.send_action, state_dir / "decisions.jsonl",
                 RuleGate(), fast=fast, peers=peers,
-                inbox_path=os.path.join(args.lab_root, "run", "brain", f"{args.bot}.inbox"))
+                inbox_path=os.path.join(args.lab_root, "run", "brain", f"{args.bot}.inbox"),
+                world=load_world(args.world) if os.path.exists(args.world) else None)
     await bridge.start()
     memory.add_event("brain_started", {"model": settings.model, "llm": settings.llm_enabled})
     log.info("мозг %s запущен: gate %s, жители %s, модель %s, LLM %s, лимит %d/сутки, план раз в %d с; "

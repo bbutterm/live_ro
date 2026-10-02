@@ -1,0 +1,20 @@
+{
+  "_comment": "Глобальные цели и распорядок жителей. Редактируется в Git. Персональные отличия — поле routine/goals в brain/personas/<bot>.json. Время — по timezone_offset_hours.",
+  "timezone_offset_hours": 3,
+
+  "goals": [
+    {"id": "level", "text": "Становиться сильнее: качаться и поднимать базовый уровень", "metric": "lv", "target": 60},
+    {"id": "job", "text": "Поднимать уровень профессии, чтобы освоить новые навыки", "metric": "job_lv", "target": 50},
+    {"id": "friends", "text": "Поддерживать отношения с другими жителями: встречаться, общаться, помогать"},
+    {"id": "survive", "text": "Не умирать по глупости: отдыхать, когда устал, не лезть к сильным монстрам"}
+  ],
+
+  "routine": {
+    "hunt_hours_per_day": [4, 5],
+    "session_minutes": [60, 100],
+    "break_minutes": [30, 90],
+    "town": {"map": "prontera", "x": 156, "y": 185, "radius": 3},
+    "town_smalltalk_seconds": 600,
+    "sit_in_town": true
+  }
+}

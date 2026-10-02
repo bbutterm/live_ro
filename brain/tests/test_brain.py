@@ -159,7 +159,8 @@ class BrainTest(BrainHarness):
                      "map": "prt_fild08"})
 
         actions = [plugin.recv(), plugin.recv()]
-        self.assertEqual([a["action"] for a in actions], ["say", "set_hunt_map"])
+        # Смена карты идёт через распорядок: модель выбирает карту, тело получает команду hunt.
+        self.assertEqual([a["action"] for a in actions], ["say", "hunt"])
         self.assertEqual(actions[1]["map"], "prt_fild07")
         for a in actions:
             plugin.send({"type": "ack", "id": a["id"], "ok": True, "command": f"cmd-{a['action']}"})
@@ -173,11 +174,13 @@ class BrainTest(BrainHarness):
 
         recs = self.decisions()
         decision = [r for r in recs if r["type"] == "decision" and r["source"] == "llm"][0]
-        self.assertEqual(len(decision["actions"]), 2)
+        self.assertEqual([a["action"] for a in decision["actions"]], ["say"])
         self.assertEqual(decision["source"], "llm")
-        self.assertEqual([r["action"].get("map") for r in decision["rejected"]], ["gef_dun02"])
+        routine = [r for r in recs if r["type"] == "routine_decision"]
+        self.assertEqual([(r["action"]["map"], r["result"]) for r in routine],
+                         [("prt_fild07", "ok"), ("gef_dun02", "карта не из списка hunt_maps")])
         acks = [r for r in recs if r["type"] == "ack"]
-        self.assertEqual(sorted(a["command"] for a in acks), ["cmd-say", "cmd-set_hunt_map"])
+        self.assertEqual(sorted(a["command"] for a in acks), ["cmd-hunt", "cmd-say"])
 
         db = sqlite3.connect(self.root / "state" / "bot01" / "memory.sqlite")
         self.assertIn("Tester поздоровался", " ".join(r[0] for r in db.execute("SELECT text FROM memories")))

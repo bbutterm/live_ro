@@ -13,16 +13,17 @@ import time
 
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
            "party_create", "party_invite", "party_accept", "party_leave", "follow", "unfollow")
-# Только исполнитель плана (plans.py) — модель их не получает.
-PLAN_ACTIONS = ("meet_point", "clear_point")
+# Только исполнители плана (plans.py) и распорядка (routine.py) — модель их не получает.
+PLAN_ACTIONS = ("meet_point", "clear_point", "hunt", "sit", "stand")
 PEER_ONLY = ("party_invite", "follow")
 WINDOW = 600
 
 
 class SafetyPolicy:
     def __init__(self, hunt_maps, safe_hp=30, say_limit=3, whisper_limit=10, whisper_gap=10,
-                 max_pause=600, peers=()):
+                 max_pause=600, peers=(), extra_point_maps=()):
         self.hunt_maps = list(hunt_maps)
+        self.point_maps = set(hunt_maps) | set(extra_point_maps)     # охота + город отдыха
         self.peers = set(peers)
         self.safe_hp = safe_hp
         self.say_limit = say_limit
@@ -47,13 +48,19 @@ class SafetyPolicy:
         if not isinstance(action, dict) or action.get("action") not in allowed:
             return None, "неизвестное действие"
         kind = action["action"]
-        if kind == "clear_point":
-            return {"action": "clear_point"}, None          # вернуть к охоте можно всегда
+        if kind in ("clear_point", "stand"):
+            return {"action": kind}, None                     # вернуть к охоте / встать можно всегда
         if state.get("dead"):
             return None, "персонаж мёртв"
-        if kind == "meet_point":
+        if kind == "sit":
+            return {"action": "sit"}, None
+        if kind == "hunt":
             if action.get("map") not in self.hunt_maps:
-                return None, "точка встречи не на разрешённой карте"
+                return None, "карта охоты не из списка hunt_maps"
+            return {"action": "hunt", "map": action["map"]}, None
+        if kind == "meet_point":
+            if action.get("map") not in self.point_maps:
+                return None, "точка не на разрешённой карте"
             try:
                 x, y = int(action.get("x")), int(action.get("y"))
             except (TypeError, ValueError):

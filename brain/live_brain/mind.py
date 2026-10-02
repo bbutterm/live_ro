@@ -18,6 +18,7 @@ import time
 from . import llm
 from .gate import GateContext, JevGate
 from .plans import TAG, PlanExecutor, PlanStore
+from .routine import Routine
 from .safety import SafetyPolicy
 
 log = logging.getLogger("mind")
@@ -56,7 +57,7 @@ def fit_json(data, limit):
 
 class Mind:
     def __init__(self, settings, persona, memory, bridge_send, decisions_path, gate,
-                 fast=None, peers=(), inbox_path=None):
+                 fast=None, peers=(), inbox_path=None, world=None):
         self.s = settings
         self.persona = persona
         self.mem = memory
@@ -69,7 +70,10 @@ class Mind:
                                last=memory.get("gate_last", {}),
                                peers=set(peers) - {persona["name"]},
                                peer_replies_per_hour=settings.peer_replies_per_hour)
-        self.safety = SafetyPolicy(persona["hunt_maps"], safe_hp=settings.safe_hp, peers=self.ctx.peers)
+        town = ((world or {}).get("routine") or {}).get("town", {}).get("map")
+        self.point_maps = set(persona["hunt_maps"]) | ({town} if town else set())
+        self.safety = SafetyPolicy(persona["hunt_maps"], safe_hp=settings.safe_hp, peers=self.ctx.peers,
+                                   extra_point_maps=[town] if town else [])
         self.state = memory.get("last_state", {})
         self.lock = asyncio.Lock()
         self.pending = None            # (повод, контекст, вид) — ждёт свободного LLM
@@ -82,6 +86,7 @@ class Mind:
         self.fresh_state = False       # было ли состояние от тела после запуска мозга
         self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
         self.plans = PlanExecutor(self, PlanStore(memory.db))
+        self.routine = Routine(self, world) if world else None
 
     # ---------- входящие сообщения плагина ----------
 
@@ -267,6 +272,8 @@ class Mind:
                 continue
             await self.safety_tick()
             await self.plans.tick()
+            if self.routine:
+                await self.routine.tick()
             await self.read_inbox()
             now = time.time()
             self.peer_smalltalk(now)
@@ -321,6 +328,8 @@ class Mind:
     def peer_smalltalk(self, now):
         """Повод заговорить с другим жителем, если давно не общались (только при LLM)."""
         every = self.s.peer_smalltalk_every
+        if every and self.routine and self.routine.in_town_mode:
+            every = min(every, self.routine.cfg.get("town_smalltalk_seconds", every))   # в городе общаются чаще
         if not (self.s.llm_enabled and every and self.ctx.peers) or self.pending is not None:
             return
         for peer in sorted(self.ctx.peers):
@@ -402,6 +411,8 @@ class Mind:
             '{"action": "accept_meeting", "id": "<id плана>"} / {"action": "decline_meeting", "id": "<id>", "why": "..."} '
             '— ответить на предложение; {"action": "cancel_plan"} — отменить свой план. '
             "Не обещай встречу словами без этих действий; что встреча состоялась, узнаешь из поля «план». "
+            "Распорядок дня (охота 4-5 часов, остальное время отдых и общение в городе) соблюдает тело: "
+            "не уговаривай себя охотиться, когда отдыхаешь; set_hunt_map выбирает карту на охоту. "
             "Реплики короткие (до 100 символов), на языке собеседника, в твоём стиле. "
             "Не отвечай каждому сообщению, не спамь в общий чат без повода. "
             "Другие жители — такие же обитатели мира, с ними можно разговаривать в личке, "
@@ -421,6 +432,8 @@ class Mind:
             "воспоминания": self.mem.top_memories(12),
             "рядом_игроки": self.state.get("players", []),
             "план": self.plans.summary(),
+            "распорядок": self.routine.summary() if self.routine else None,
+            "глобальные_цели": self.routine.goals() if self.routine else None,
             "другие_жители": {p: {"кто": self.who(p), "отношение": self.mem.relation(p)}
                               for p in sorted(self.ctx.peers)},
         }
@@ -450,7 +463,10 @@ class Mind:
         actions = [a if isinstance(a, dict) else {"action": "invalid", "raw": a} for a in actions]
         game_actions = []
         for a in actions:
-            if a.get("action") in PLAN_LLM_ACTIONS:
+            if a.get("action") == "set_hunt_map" and self.routine:
+                why = self.routine.prefer(str(a.get("map", "")))
+                self.write_decision({"type": "routine_decision", "source": "llm", "action": a, "result": why or "ok"})
+            elif a.get("action") in PLAN_LLM_ACTIONS:
                 why = await self.plan_action(a, "llm")
                 self.write_decision({"type": "plan_decision", "source": "llm", "action": a, "result": why or "ok"})
             else:
