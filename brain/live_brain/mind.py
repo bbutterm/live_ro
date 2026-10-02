@@ -38,6 +38,7 @@ from .safety import SafetyPolicy
 from .social import TAG as SOCIAL_TAG, Social   # social: общение без LLM
 from .society import Society                    # society: эмоции, чат-комнаты, ссоры (ORG-022/026/027)
 from . import world_bus                                 # events: шина событий мира (ORG-045)
+from . import topics                                    # talk: темы разговора из жизни мира (ORG-066)
 
 log = logging.getLogger("mind")
 
@@ -154,6 +155,8 @@ class Mind:
         if world_bus_db is None and bus_path and feat("world_bus"):                   # events:
             world_bus_db = world_bus.WorldBus(bus_path, persona["name"])              # events:
         self.world = world_bus.Feed(self, world_bus_db) if world_bus_db else None     # events:
+        if self.social:                                                               # talk: ORG-066 реестр тем
+            topics.install(self.social, self, world)                                  # talk:
 
     # ---------- входящие сообщения плагина ----------
 

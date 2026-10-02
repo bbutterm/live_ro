@@ -30,6 +30,10 @@
 Ссора (society.py, ORG-027): с жителем «в ссоре» не заговаривают первым и не идут к нему на прогулке;
     ответ ему — холодная короткая реплика (тема cold, шаг 4 — без продолжения), кроме сочувствия.
 Ночь (night_hours по timezone_offset_hours мира): не гуляют, сидят, говорят в night_factor раз реже.
+Реестр тем (ORG-066): register_topic(name, provider, reply) — модули добавляют темы разговора (topics.py:
+    питомец, слух, цель недели, новости мира; weather.py — погода; episodes.py — «помнишь?»). Тема шага 3 —
+    случайно среди фактов дня и тем реестра, по которым есть факты и фразы (гибель и уровень — первыми);
+    на тему собеседника из реестра ответ — фразой <тема>_re (тот же тег темы, шаг +1), а не своим монологом.
 Все реплики идут через SafetyPolicy как обычный чат (лимиты лички, без повторов за час);
 эмоции и переходы — служебные действия (protocol=True), модель их не получает.
 """
@@ -110,6 +114,7 @@ class Social:
         self.last_tick = None
         self.last_emote = 0.0
         self.last_save = 0.0
+        self.topics = {}                  # реестр тем (ORG-066): имя -> поставщик фактов, ключ ответа, флаги
 
     # ---------- данные ----------
 
@@ -229,13 +234,69 @@ class Social:
             topics.append("tired")
         return topics
 
+    # ---------- реестр тем (ORG-066) ----------
+
+    def register_topic(self, name, provider, reply=None, said=None, chance=1.0, opener=False, fallback=False):
+        """Тема разговора: provider(peer, now) -> факты (dict) или None — темы нет.
+
+        reply — ключ фраз ответа собеседника (по умолчанию <name>_re); said(peer, facts, now) — после реплики
+        (отметить «уже рассказал»); chance — шанс предложить тему, если она доступна; opener — может заменить
+        приветствие на шаге 1 (с тем же шансом); fallback — только когда других тем нет (погода).
+        Ключ "_key" в фактах — другой ключ фраз (weather_rain, remember_heal); ключи с "_" в фразы не идут.
+        """
+        if not re.fullmatch(r"[a-z]{3,12}", name):
+            raise ValueError(f"тема {name!r}: нужно [a-z]{{3,12}} (метка [chat:<тема>:<шаг>])")
+        self.topics[name] = {"provider": provider, "reply": reply or f"{name}_re", "said": said,
+                             "chance": chance, "opener": opener, "fallback": fallback}
+
+    def provide(self, name, peer, now):
+        """Факты одной темы реестра; ошибка поставщика — в лог, темы нет."""
+        t = self.topics.get(name)
+        if not t:
+            return None
+        try:
+            f = t["provider"](peer, now)
+        except Exception as e:                       # noqa: BLE001 — чужой модуль не роняет разговор
+            log.warning("тема %s: поставщик упал: %s", name, e)
+            return None
+        return dict(f) if isinstance(f, dict) and f else None
+
+    def topic_facts(self, peer, now):
+        """{тема: факты} от всех поставщиков реестра (у кого фактов нет — пропуск)."""
+        out = {}
+        for name in self.topics:
+            f = self.provide(name, peer, now)
+            if f is not None:
+                out[name] = f
+        return out
+
+    def can_say(self, key, facts):
+        return any(fields(p) <= set(facts) for p in self.phrases.get(key) or [])
+
+    def registry_topics(self, peer, now, base=None, opener=False):
+        """Темы реестра, о которых сейчас есть что сказать (факты есть, фраза с ними подставляется)."""
+        out = []
+        for name, t in self.topics.items():
+            if t["fallback"] or (opener and not t["opener"]):
+                continue
+            if t["chance"] < 1 and self.rng.random() >= t["chance"]:
+                continue
+            f = self.provide(name, peer, now)
+            if f is None:
+                continue
+            if self.can_say(f.get("_key", name), dict(base or {}, **f)):
+                out.append(name)
+        return out
+
     def choose_topic(self, peer, facts, now):
-        """Тема по свежим фактам; о чём уже говорил сегодня этому жителю — не повторять."""
+        """Тема по свежим фактам и реестру; о чём уже говорил сегодня этому жителю — не повторять."""
         day = self.today(now)
         told = self.st["told"].get(peer) or {}
         if told.get("day") != day:
             told = {"day": day, "topics": []}
         fresh = [t for t in self.available(facts) if t not in told["topics"] and self.phrases.get(t)]
+        if not (fresh and fresh[0] in ("death", "level")):          # ORG-066: темы из жизни мира
+            fresh += [t for t in self.registry_topics(peer, now, facts) if t not in told["topics"] and t not in fresh]
         topic = fresh[0] if fresh and fresh[0] in ("death", "level") else (self.rng.choice(fresh) if fresh else "weather")
         told["topics"] = told["topics"] + [topic]
         self.st["told"][peer] = told
@@ -398,12 +459,33 @@ class Social:
                                   f"{ {k: v for k, v in f.items() if k not in ('name', 'me')} }",
                                   {"from": peer}, kind="chat")
             else:
-                await self.say(peer, "hello", 1)
+                openers = self.registry_topics(peer, now, opener=True)     # ORG-055: «помнишь?» вместо привета
+                await self.say(peer, self.rng.choice(openers) if openers else "hello", 1)
             self.save()
             return
 
-    async def say(self, peer, topic, step, now=None):
-        """Шёпот жителю: фраза темы + метка. Обычный чат — лимиты safety действуют."""
+    def compose(self, peer, topic, key, now):
+        """Текст реплики темы: факты дня + факты темы реестра; key — ключ фраз ответа (<тема>_re) или None.
+
+        Возвращает (текст, факты темы) или (None, None). Фраза темы реестра — из "_key" фактов (если есть такие
+        фразы), иначе из ключа темы; без фактов тема реестра не говорится (кроме ответа <тема>_re).
+        """
+        facts = self.facts(peer, now)
+        extra = self.provide(topic, peer, now) if topic in self.topics else None
+        if topic in self.topics and extra is None and key is None:
+            return None, None
+        facts.update(extra or {})
+        keys = [key] if key else ([extra["_key"]] if extra and extra.get("_key") else []) + [topic]
+        for k in keys:
+            text = self.phrase(k, facts)
+            if text is not None:
+                return text, extra
+        return None, None
+
+    async def say(self, peer, topic, step, now=None, key=None):
+        """Шёпот жителю: фраза темы + метка. Обычный чат — лимиты safety действуют.
+
+        key — ключ фраз ответа на тему собеседника (ORG-066: <тема>_re), метка остаётся темой собеседника."""
         now = now or self.clock()
         if self.quarrel(peer) and step == 1:              # society: в ссоре — первым не пишу (и весточек нет)
             return False
@@ -415,11 +497,10 @@ class Social:
             self.mind.mem.add_event("social_said", {"peer": peer, "topic": "cold", "fact": False})
             self.save()
             return True
-        facts = self.facts(peer, now)
-        text = self.phrase(topic, facts)
+        text, extra = self.compose(peer, topic, key, now)
         if text is None and topic not in ("hello", "bye", "weather"):
-            topic = "weather"
-            text = self.phrase(topic, facts)
+            topic, key = "weather", None
+            text, extra = self.compose(peer, topic, None, now)
         if text is None:
             return False
         tag = f"[chat:{topic}:{step}]"
@@ -427,6 +508,14 @@ class Social:
         await self.mind.execute([{"action": "whisper", "to": peer, "text": f"{text} {tag}"}],
                                 source="social", reason=f"общение: {topic} жителю {peer}")
         self.mind.mem.add_event("social_said", {"peer": peer, "topic": topic, "fact": topic in FACT_TOPICS})
+        self.mind.write_decision({"type": "social", "event": "said", "to": peer, "topic": topic, "step": step,
+                                  "key": key or (extra or {}).get("_key") or topic})
+        said = (self.topics.get(topic) or {}).get("said")
+        if said and extra is not None and key is None:
+            try:
+                said(peer, extra, now)                      # ORG-066: «уже рассказал» — тема не повторится
+            except Exception as e:                          # noqa: BLE001
+                log.warning("тема %s: отметка упала: %s", topic, e)
         await self.emote(topic, now)
         self.save()
         return True
@@ -446,10 +535,12 @@ class Social:
     async def flush(self, now):
         due = [q for q in self.queue if q[0] <= now]
         self.queue = [q for q in self.queue if q[0] > now]
-        for _, peer, topic, step in due:
+        for q in due:
+            _, peer, topic, step = q[:4]
+            key = q[4] if len(q) > 4 else None             # ORG-066: ответ по теме собеседника (<тема>_re)
             if topic is None:
                 topic = self.choose_topic(peer, self.facts(peer, now), now)
-            await self.say(peer, topic, step, now)
+            await self.say(peer, topic, step, now, key=key)
 
     async def on_tag(self, sender, text):
         """Реплика жителя с меткой [chat:<тема>:<шаг>] — ответить по правилу (не больше 2 обменов)."""
@@ -479,8 +570,11 @@ class Social:
                               {"from": sender, "text": TAG.sub('', text).strip()[:100]}, kind="chat")
             self.save()
             return
+        key = None
         if topic in REPLY:
             reply = REPLY[topic]
+        elif step % 2 and topic in self.topics and self.phrases.get(self.topics[topic]["reply"]):
+            reply, key = topic, self.topics[topic]["reply"]  # ORG-066: на тему собеседника (шаг 1/3) — ответ по ней
         elif nxt >= LAST_STEP:
             reply = "bye"
         elif topic == "hello" and nxt == 2:
@@ -488,7 +582,7 @@ class Social:
         else:
             reply = None                         # тема по фактам — выбирается в момент ответа
         lo, hi = self.cfg["reply_delay_seconds"]
-        self.queue.append((now + self.rng.uniform(lo, hi), sender, reply, nxt))
+        self.queue.append((now + self.rng.uniform(lo, hi), sender, reply, nxt, key))
         self.save()
 
     # ---------- реакции на события ----------
