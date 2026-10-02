@@ -90,13 +90,20 @@ class MapStats:
             allowed = self.safe_for_level(allowed, level, needs.risk_tolerance() if needs else None)
         rng = rng or random
         unexplored = [m for m in allowed if self.score(m) is None]
+        crowd = getattr(self.mind, "crowd", None)               # crowd: ORG-089 людные карты чуть хуже
+        if unexplored and crowd:                                # crowd: сначала менее людные
+            unexplored.sort(key=crowd.map_penalty)              # crowd:
         if unexplored:                                          # любопытный пробует новое не по порядку списка
             pick = rng.choice(unexplored) if needs and rng.random() < needs.t["curiosity"] else unexplored[0]
             return pick, "мало опыта на карте — попробую"
         noise = needs.noise() if needs else 0.0
         scored = {m: self.score(m) * (1 + noise * rng.uniform(-1, 1)) for m in allowed}
+        plain = max(allowed, key=lambda m: scored[m])
+        if crowd:                                               # crowd: s − |s|·штраф (оценка бывает < 0)
+            scored = {m: s - abs(s) * crowd.map_penalty(m) for m, s in scored.items()}   # crowd:
         best = max(allowed, key=lambda m: scored[m])
-        return best, f"лучшая по опыту и добыче: {self.score(best):.0f} очков/час"
+        busy = f" (на {plain} людно)" if best != plain else ""  # crowd:
+        return best, f"лучшая по опыту и добыче: {self.score(best):.0f} очков/час{busy}"
 
     def safe_for_level(self, maps, level, max_risk=None):
         """Атлас мира (atlas.py): не идти туда, где монстры заведомо сильнее уровня. Нет атласа — без фильтра.

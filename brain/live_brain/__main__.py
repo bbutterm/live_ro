@@ -170,10 +170,12 @@ def organic_metrics(memory, since, now=None):
     rows = memory.db.execute("SELECT kind, data FROM events WHERE ts >= ? AND kind IN "
                              "('activity', 'social_walk', 'social_said')", (since,)).fetchall()
     acts, points, said, fact_said, sleep_h = set(), set(), 0, 0, 0.0
+    starts = 0                                                          # crowd: ORG-089 начатых занятий
     for kind, data in rows:
         d = json.loads(data)
         if kind == "activity":
             acts.add(d.get("name"))
+            starts += 1 if d.get("name") else 0                         # crowd:
         elif kind == "social_walk":
             points.add(d.get("point"))
         elif kind == "social_said":
@@ -191,7 +193,8 @@ def organic_metrics(memory, since, now=None):
     return {"занятий": len(acts - {None}), "мест в городе": len(points - {None}),
             "реплик без LLM": said, "из них о событиях": fact_said, "сон, ч": sleep_h,
             "вызовов моделей": calls, "дневников": diaries,
-            "открытых мест": found}                                                                     # explore: ORG-054
+            "открытых мест": found,                                                                     # explore: ORG-054
+            "разнообразие занятий": round(len(acts - {None}) / starts, 2) if starts else 0.0}           # crowd: ORG-089
 
 
 def sleep_seconds(memory, since, now, sleeping_now):
