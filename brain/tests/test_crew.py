@@ -168,6 +168,28 @@ class CrewTest(unittest.TestCase):
         self.tick(c)
         self.assertEqual(len([a for a in self.sent if a["action"] == "follow"]), 1, f"не чаще {WALK_GAP} с")
 
+    def test_walk_ends_when_leader_leaves_map(self):
+        """review2: лидер ушёл с карты (экспедиция, без меня) — прогулка за ним кончается сразу, а не через
+        WALK_MIN минут follow в поле за чужой экспедицией."""
+        c = self.make("Vera", "Arkady", [{"name": "Arkady", "online": True, "map": "prontera", "x": 155, "y": 152}])
+        self.tick(c)
+        self.assertTrue(c.walking())
+        self.mind.state["follow"] = "Arkady"
+        self.mind.party.member("Arkady").update(map="prt_fild01", x=200, y=200)
+        self.tick(c, 30)
+        self.assertEqual(self.sent[-1]["action"], "unfollow", "лидер на другой карте — не идти следом")
+        self.assertFalse(c.walking())
+
+    def test_walk_ends_when_expedition_starts(self):
+        """review2: участник пошёл в экспедицию лидера посреди прогулки — follow снять (иначе lockMap не работает)."""
+        c = self.make("Vera", "Arkady", [{"name": "Arkady", "online": True, "map": "prontera", "x": 155, "y": 152}])
+        self.tick(c)
+        self.mind.state["follow"] = "Arkady"
+        self.mind.explorer = SimpleNamespace(busy=lambda: True)
+        self.tick(c, 5)
+        self.assertEqual(self.sent[-1]["action"], "unfollow")
+        self.assertFalse(c.walking())
+
 
 if __name__ == "__main__":
     unittest.main()

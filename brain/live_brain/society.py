@@ -390,6 +390,9 @@ class Society:
             return "ночь"
         if self.mind.plans.store.active():
             return "иду на встречу"
+        explorer = getattr(self.mind, "explorer", None)      # review2: экспедиция уже начата (тело ещё в городе)
+        if explorer and explorer.busy():                     # review2: — комната остановила бы его (pc_cant_act)
+            return "экспедиция"
         may_move = getattr(self.mind, "may_move", None)
         if may_move and not may_move("routine")[0]:
             return "телом занята другая задача"

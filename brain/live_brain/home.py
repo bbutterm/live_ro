@@ -24,6 +24,8 @@ import logging
 import time
 from pathlib import Path
 
+from .lifecycle import quest_busy                 # review2: один плагин jobChange на дом и карьеру
+
 log = logging.getLogger("home")
 
 WORLD = Path(__file__).resolve().parents[1] / "world"
@@ -132,8 +134,11 @@ class Home:
             return "не отдых в городе"
         if self.mind.plans.store.active():
             return "план встречи"
-        if (state.get("job_change") or {}).get("running"):
+        if quest_busy(self.mind, state, now):                     # review2: и этап карьеры, отправленный в этом такте
             return "идёт этап квеста"
+        explorer = getattr(self.mind, "explorer", None)        # review2: экспедиция ведёт тело (ещё в городе) —
+        if explorer and explorer.busy():                       # review2: Kafra после возвращения
+            return "экспедиция"
         may_move = getattr(self.mind, "may_move", None)
         if may_move and not may_move("plan")[0]:
             return "телом владеет другая задача"
