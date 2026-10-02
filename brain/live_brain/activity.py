@@ -15,6 +15,13 @@
 Факт завершения (proof) за proof_minutes — иначе занятие «не удалось» (activity_failed), а не «сделано»:
     moved — позиция сменилась; peer_near — житель рядом; supply_better — вес меньше или зелий больше;
     on_hunt_map — на карте охоты; in_town — на карте города; map_changed — карта охоты другая.
+Цепочки предусловий (ORG-018, GOAP-лайт; activities.json chains): если занятие с лучшей оценкой недоступно из-за
+    requires (light — рюкзак не тяжёлый, potions_min, zeny_min, hp_ok, peer_visible…), а занятия текущего режима
+    с provides этого условия есть — короткая цепочка (вместе с целью не больше chains.max_steps): исправители по
+    порядку, шаг готов, когда его условие выполнено по данным игры (не позже step_minutes), затем цель. Условия
+    из chains.unfixable (ночь, группа) занятием не исправить. Одна попытка на цель за ttl_minutes (запрет повторов),
+    одно занятие в цепочке не повторяется. Журнал: activity chain_start / chain_step / chain_step_done / chain_done /
+    chain_failed / chain_impossible.
 Не вмешивается: сон, восстановление, план встречи, арбитр не даёт двигать тело, участник группы
 (режим задаёт лидер — занятия, меняющие режим, недоступны: requires.no_leader).
 """
@@ -82,14 +89,23 @@ class Activities:
                 ok = not (party and party.leader_wants())
             elif key == "other_maps":
                 ok = len([m for m in self.mind.persona["hunt_maps"] if m not in r.bans()]) > 1
+            elif key == "light":                            # home: ORG-018 рюкзак не тяжёлый (вес < heavy_pct)
+                ok = (state.get("weight_pct") or 0) < self.cfg.get("heavy_pct", 50)   # home:
+            elif key == "potions_min":                      # home: зелий не меньше want (счётчиков нет — не мешает)
+                ok = state.get("items") is None or self.potions(state) >= want        # home:
+            elif key == "zeny_min":                         # home: денег не меньше want
+                ok = (state.get("zeny") or 0) >= want                                 # home:
+            elif key == "in_party":                         # home: житель в своей группе (по данным сервера)
+                party = getattr(self.mind, "party", None)                             # home:
+                ok = bool(party and party.confirmed())                                # home:
             elif key == "rumor_to_check":                   # events: ORG-032 есть слух, который стоит проверить
                 rumors = getattr(self.mind, "rumors", None)     # events:
                 ok = bool(rumors and rumors.to_check(state))    # events:
             else:
                 ok = False                                   # неизвестное условие — занятие недоступно
-            if bool(ok) != bool(want) and key != "supply_min":
+            if bool(ok) != bool(want) and key not in ("supply_min", "potions_min", "zeny_min"):   # home: числа
                 return False
-            if key == "supply_min" and not ok:
+            if key in ("supply_min", "potions_min", "zeny_min") and not ok:                  # home:
                 return False
         return True
 
@@ -136,6 +152,9 @@ class Activities:
         now = self.clock()
         state = self.mind.state
         await self.check_proof(now, state)
+        if self.st.get("chain"):                               # home: ORG-018 идёт цепочка — выбор подождёт
+            await self.chain_tick(now, state)                  # home:
+            return                                             # home:
         if now < self.next_decide or self.blocked(state):
             return
         r = self.mind.routine
@@ -144,6 +163,8 @@ class Activities:
         lo, hi = self.cfg["decide_minutes"]
         self.next_decide = now + self.rng.uniform(lo, hi) * 60
         scored, needs = self.scores(state)
+        if await self.try_chain(now, state, needs, scored):   # home: ORG-018 лучшее недоступно — цепочка
+            return                                             # home:
         if not scored:
             return
         top = sorted(scored.items(), key=lambda kv: -kv[1])[:3]
@@ -207,6 +228,152 @@ class Activities:
                 r.st["prefer_map"] = rec["map"]                     # events:
                 r.last_sent = 0                                     # events:
                 r.note("routine_map_choice", f"Проверю слух от {rec.get('author')}: {rec['map']} ({rec['kind']}).", 1)  # events:
+
+    # ---------- home: ORG-018 цепочки предусловий (GOAP-лайт) ----------
+
+    def chain_cfg(self):
+        return self.cfg.get("chains") or {}
+
+    def missing(self, req, state, needs):
+        """Какие предусловия занятия не выполнены (по одному, тем же requires_ok)."""
+        return {k: v for k, v in req.items() if not self.requires_ok({k: v}, state, needs)}
+
+    def on_cooldown(self, name, now):
+        a = self.catalog[name]
+        return now - self.st.get("last", {}).get(name, 0) < a.get("cooldown_minutes", 0) * 60
+
+    def plan_chain(self, target, missing, state, needs, now):
+        """Короткая цепочка исправителей для target: ([{name, fixes}], None) или (None, почему нельзя).
+        Исправитель — занятие текущего режима с provides нужного условия, не на перезарядке; одно занятие не
+        повторяется (исправляет сразу несколько условий); всего шагов вместе с target — не больше max_steps."""
+        cfg = self.chain_cfg()
+        limit = int(cfg.get("max_steps", 3)) - 1
+        unfixable = cfg.get("unfixable") or {}
+        mode = self.mode()
+        steps = []
+
+        def solve(key, want, depth):
+            if key in unfixable:
+                return unfixable[key]
+            for st in steps:                                   # уже взятое занятие даёт и это условие
+                if key in self.catalog[st["name"]].get("provides", []):
+                    st["fixes"][key] = want
+                    return None
+            fixers = [n for n, a in self.catalog.items()
+                      if key in a.get("provides", []) and mode in a["modes"] and n != target
+                      and not self.on_cooldown(n, now)]
+            fixers.sort(key=lambda n: (-sum(w * needs.get(k, 0) for k, w in self.catalog[n]["satisfies"].items()), n))
+            why = f"нет доступного занятия, которое даёт «{key}»"
+            for name in fixers:
+                if len(steps) >= limit:
+                    return f"цепочка длиннее {limit + 1} шагов"
+                sub = self.missing(self.catalog[name].get("requires") or {}, state, needs)
+                if sub and depth <= 1:
+                    why = f"{name}: не выполнено {sorted(sub)}"
+                    continue
+                mark = len(steps)
+                err = next((e for e in (solve(k, v, depth - 1) for k, v in sub.items()) if e), None)
+                if not err and len(steps) >= limit:
+                    err = f"цепочка длиннее {limit + 1} шагов"
+                if err:
+                    del steps[mark:]
+                    why = err
+                    continue
+                steps.append({"name": name, "fixes": {key: want}})
+                return None
+            return why
+
+        for key, want in missing.items():
+            err = solve(key, want, limit)
+            if err:
+                return None, err
+        return steps, None
+
+    async def try_chain(self, now, state, needs, scored):
+        """Лучшее по мотивам занятие недоступно из-за предусловия, а исправитель есть — начать цепочку."""
+        cfg = self.chain_cfg()
+        if not cfg.get("enabled", True):
+            return False
+        best = max(scored.values()) if scored else float("-inf")
+        mode = self.mode()
+        cand = []
+        for name, a in self.catalog.items():
+            if mode not in a["modes"] or name in scored or self.on_cooldown(name, now):
+                continue
+            miss = self.missing(a.get("requires") or {}, state, needs)
+            score = round(sum(w * needs.get(k, 0) for k, w in a["satisfies"].items()), 3)
+            if miss and score > best + self.cfg["switch_margin"]:
+                cand.append((score, name, miss))
+        ttl = cfg.get("ttl_minutes", 60) * 60
+        tried = self.st.setdefault("chain_last", {})
+        for score, name, miss in sorted(cand, key=lambda c: (-c[0], c[1])):
+            if now - tried.get(name, 0) < ttl:                 # запрет повторов: одна попытка на цель за TTL
+                continue
+            tried[name] = now
+            steps, why = self.plan_chain(name, miss, state, needs, now)
+            if steps is None:
+                self.save()
+                self.mind.write_decision({"type": "activity", "event": "chain_impossible", "target": name,
+                                          "missing": miss, "why": why, "score": score})
+                continue
+            self.st["chain"] = {"target": name, "steps": steps, "i": 0, "mode": mode, "since": now,
+                                "until": now + ttl, "missing": miss}
+            self.save()
+            plan = " → ".join([s["name"] for s in steps] + [name])
+            self.mind.write_decision({"type": "activity", "event": "chain_start", "target": name, "missing": miss,
+                                      "steps": steps, "score": score, "best_available": best, "plan": plan})
+            self.mind.mem.add_event("activity_chain", {"target": name, "plan": plan})
+            log.info("цепочка: %s (не хватает %s)", plan, ", ".join(miss))
+            await self.chain_tick(now, state)
+            return True
+        return False
+
+    async def chain_tick(self, now, state):
+        ch = self.st["chain"]
+        if self.mode() != ch.get("mode"):
+            return self.chain_end(now, False, "режим распорядка сменился")
+        if now >= ch.get("until", 0):
+            return self.chain_end(now, False, "не уложился в отведённое время")
+        needs = self.mind.needs.weighted()
+        steps = ch["steps"]
+        while ch["i"] < len(steps):
+            step = steps[ch["i"]]
+            if self.requires_ok(step["fixes"], state, needs):  # условие выполнено (или было) — дальше
+                ch["i"] += 1
+                self.save()
+                self.mind.write_decision({"type": "activity", "event": "chain_step_done", "target": ch["target"],
+                                          "step": step["name"], "fixes": step["fixes"]})
+                continue
+            if step.get("started"):
+                if now >= step["deadline"]:
+                    return self.chain_end(now, False, f"{step['name']} не дал {sorted(step['fixes'])}")
+                return
+            if self.blocked(state):
+                return
+            step["started"] = now
+            step["deadline"] = now + self.chain_cfg().get("step_minutes", 20) * 60
+            self.save()
+            self.mind.write_decision({"type": "activity", "event": "chain_step", "target": ch["target"],
+                                      "step": step["name"], "fixes": step["fixes"]})
+            await self.start(step["name"], now, state)
+            return
+        target = ch["target"]
+        miss = self.missing(self.catalog[target].get("requires") or {}, state, needs)
+        if miss:
+            return self.chain_end(now, False, f"после цепочки не выполнено {sorted(miss)}")
+        if self.blocked(state):
+            return
+        self.chain_end(now, True, "предусловия выполнены")
+        await self.start(target, now, state)
+
+    def chain_end(self, now, ok, why):
+        ch = self.st.pop("chain", None) or {}
+        self.save()
+        kind = "chain_done" if ok else "chain_failed"
+        self.mind.write_decision({"type": "activity", "event": kind, "target": ch.get("target"), "why": why,
+                                  "steps": [s["name"] for s in ch.get("steps", [])]})
+        self.mind.mem.add_event("activity_" + kind, {"target": ch.get("target"), "why": why})
+        log.info("цепочка к «%s»: %s — %s", ch.get("target"), "готово" if ok else "не вышло", why)
 
     # ---------- факт завершения ----------
 

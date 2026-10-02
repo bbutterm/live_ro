@@ -1,33 +1,50 @@
 {
-  "_comment": "Каталог занятий жителя (ORG-016). satisfies — какие мотивы (needs.py) удовлетворяет; requires — предусловия (activity.py: REQUIRES); proof — игровой факт завершения за proof_minutes; иначе — неудача. Выбор (ORG-017): сумма satisfies × взвешенный мотив + инерция текущего + шум характера; переключение — только если лучше текущего на switch_margin.",
+  "_comment": "Каталог занятий жителя (ORG-016). satisfies — какие мотивы (needs.py) удовлетворяет; requires — предусловия (activity.py requires_ok); provides — какие предусловия занятие выполняет (ORG-018, цепочки); proof — игровой факт завершения за proof_minutes; иначе — неудача. Выбор (ORG-017): сумма satisfies × взвешенный мотив + инерция текущего + шум характера; переключение — только если лучше текущего на switch_margin.",
   "decide_minutes": [5, 10],
   "min_hunt_minutes": 20,
   "inertia": 0.15,
   "switch_margin": 0.08,
+  "heavy_pct": 50,
+  "chains": {
+    "_comment": "ORG-018 GOAP-лайт: лучшее занятие недоступно из-за requires — сначала занятия с provides этого условия (activity.py plan_chain). max_steps — шагов вместе с целью; step_minutes — срок шага (условие должно выполниться по данным игры); ttl_minutes — срок всей цепочки и запрет повторной попытки на ту же цель. unfixable — условия, которые занятием не исправить (причина — в журнал).",
+    "enabled": true, "max_steps": 3, "step_minutes": 20, "ttl_minutes": 60,
+    "unfixable": {
+      "day": "ночь — занятием не исправить, жду утра",
+      "in_party": "группу собирают party.py/crew.py по отношениям, не каталог занятий",
+      "budget_left": "дневная норма охоты выбрана",
+      "no_leader": "режим задаёт лидер группы",
+      "other_maps": "других мест охоты нет",
+      "rumor_to_check": "слуха для проверки нет",
+      "supply_min": "запасы и так в порядке — по делам незачем"
+    }
+  },
   "activities": {
     "rest": {
       "label": "отдохнуть на месте", "modes": ["town"],
-      "satisfies": {"rest": 0.6, "safety": 0.4}, "requires": {}, "cooldown_minutes": 0, "proof": "none"
+      "satisfies": {"rest": 0.6, "safety": 0.4}, "requires": {}, "cooldown_minutes": 0, "proof": "none",
+      "provides": ["hp_ok"]
     },
     "stroll": {
       "label": "прогуляться по городу", "modes": ["town"],
       "satisfies": {"curiosity": 0.5, "social": 0.2, "rest": 0.1},
-      "requires": {"day": true}, "cooldown_minutes": 10, "proof": "moved", "proof_minutes": 5
+      "requires": {"day": true}, "cooldown_minutes": 10, "proof": "moved", "proof_minutes": 5,
+      "provides": ["peer_visible"], "_provides": "прогулка по точкам social, где бывают жители (pick_point идёт к другу)"
     },
     "socialize": {
       "label": "навестить жителя", "modes": ["town"],
       "satisfies": {"social": 1.0, "care": 0.5},
-      "requires": {"day": true, "peer_visible": true}, "cooldown_minutes": 15, "proof": "peer_near", "proof_minutes": 5
+      "requires": {"day": true, "peer_visible": true, "light": true}, "cooldown_minutes": 15, "proof": "peer_near", "proof_minutes": 5
     },
     "service": {
       "label": "сходить по делам (продать, сдать, докупить)", "modes": ["town"],
       "satisfies": {"supply": 1.0, "wealth": 0.2},
-      "requires": {"supply_min": 0.3}, "cooldown_minutes": 30, "proof": "supply_better", "proof_minutes": 15
+      "requires": {"supply_min": 0.3}, "cooldown_minutes": 30, "proof": "supply_better", "proof_minutes": 15,
+      "provides": ["light", "potions_min", "zeny_min"], "_provides": "OpenKore sellAuto/storageAuto/buyAuto: вес падает, зелья куплены, лут продан"
     },
     "hunt_early": {
       "label": "пойти на охоту раньше", "modes": ["town"],
       "satisfies": {"progress": 0.8, "wealth": 0.5},
-      "requires": {"day": true, "hp_ok": true, "budget_left": true, "no_leader": true},
+      "requires": {"day": true, "hp_ok": true, "budget_left": true, "no_leader": true, "potions_min": 5},
       "cooldown_minutes": 30, "proof": "on_hunt_map", "proof_minutes": 15
     },
     "keep_hunting": {

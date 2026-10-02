@@ -104,6 +104,9 @@ class Routine:
         self.mind = mind
         self.world = world
         self.cfg = merged_routine(world, mind.persona)
+        home = getattr(mind, "home", None)                       # home: ORG-014 отдых — в домашнем городе,
+        if home and "town" not in (mind.persona.get("routine") or {}):   # home: если персона не задала точку сама
+            self.cfg["town"] = home.rest_point(self.cfg["town"])  # home: (social.restore берёт cfg["town"])
         self.town = self.cfg["town"]
         self.tz = timezone(timedelta(hours=world.get("timezone_offset_hours", 0)))
         self.rng = rng or random.Random()
