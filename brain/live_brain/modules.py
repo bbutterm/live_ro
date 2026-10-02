@@ -42,6 +42,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
 orders (ORG-070) — метка [order:] 25, тик 25.  # orders:
 mentor (ORG-057) — метка [mentor:] 55, тик 95, промпт 215.  # mentor:
 bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # bestiary:
+market_day (ORG-071) — тик 15 (пороги дня до economy).  # market:
 """
 import inspect
 import re
@@ -80,6 +81,7 @@ from .memoir import Memoir           # dreams: ORG-082 мемуары жител
 from .mentor import Mentor           # mentor: ORG-057 наставничество новичков
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
 from .places import Places           # places: ORG-084 имена мест
+from .market import MarketDay        # market: ORG-071 рыночный день
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -116,6 +118,7 @@ MODULES = (
     Habits,            # habits: ORG-068 (activity.scores, social.pick_point читают mind.habits)
     Healer,            # healer: ORG-069 (тик 135, метка [heal:] 65, события support/чат 25)
     Orders,            # orders: ORG-070 после economy и шины (тик 25, метка [order:] 25)
+    MarketDay,         # market: ORG-071 после calendar, economy, orders, society, social (тик 15 — до economy)
     Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)

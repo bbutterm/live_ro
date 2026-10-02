@@ -33,6 +33,19 @@
     "enabled": true
   },
 
+  "market_day": {
+    "_comment": "ORG-071 рыночный день (brain/live_brain/market.py, docs/ECONOMY.md): в день недели weekdays (6 — суббота календаря) пороги рынка, лавки, заказов и вывесок мягче, жители сходятся к точке point (prontera 155,180: клетки ±2 проходимы, NPC не ближе 5, варпы не ближе 20); итог дня — market_day_summary в летописи. Выключить — enabled: false или BRAIN_DISABLE=market_day.",
+    "enabled": true,
+    "weekdays": [6],
+    "point": {"map": "prontera", "x": 155, "y": 180, "label": "к рыночной площади у фонтана"},
+    "point_weight": 6,
+    "offer_gap_factor": 0.5,
+    "trades_bonus": 4,
+    "shop_hours": 2,
+    "valuable_factor": 0.5,
+    "orders_gap_factor": 0.5,
+    "sign_chance": 0.9
+  },
   "tradition": {
     "_comment": "ORG-058 вечерний круг (brain/live_brain/tradition.py, docs/SOCIETY.md): point — точка social.points, hours — окно [с, до) по часовому поясу мира, minutes — сколько стоять в круге. Выключить — enabled: false или BRAIN_DISABLE=tradition.",
     "enabled": true,
