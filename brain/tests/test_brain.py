@@ -103,6 +103,7 @@ class BrainTest(unittest.TestCase):
 
     def env_file(self, key=FAKE_KEY, **extra):
         values = {
+            "BRAIN_LLM": "openrouter",
             "OPENROUTER_API_KEY": key,
             "OPENROUTER_MODEL": "test/model",
             "BRAIN_API_BASE": f"http://127.0.0.1:{self.http.server_port}/api/v1",
@@ -191,6 +192,24 @@ class BrainTest(unittest.TestCase):
         db = sqlite3.connect(self.root / "state" / "bot01" / "memory.sqlite")
         self.assertIn("погиб", " ".join(r[0] for r in db.execute("SELECT text FROM memories")))
         db.close()
+
+    def test_llm_off_by_default_even_with_key(self):
+        env = self.root / "live_ro.env"
+        env.write_text(f"OPENROUTER_API_KEY={FAKE_KEY}\n"
+                       f"BRAIN_API_BASE=http://127.0.0.1:{self.http.server_port}/api/v1\n"
+                       "BRAIN_DECIDE_INTERVAL=1\n")
+        out = subprocess.run(
+            [sys.executable, "-m", "live_brain", "--env", str(env), "--lab-root", str(self.root), "--check"],
+            cwd=BRAIN_DIR, capture_output=True, text=True, timeout=30)
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("CHECK SKIP", out.stdout)
+        proc = self.start_brain(env)
+        plugin = self.connect()
+        plugin.send({"type": "state", "name": "Arkady", "lv": 17, "map": "prt_fild08"})
+        time.sleep(2.5)
+        plugin.close()
+        self.stop(proc)
+        self.assertEqual(FakeOpenRouter.requests, [])
 
     def test_check_command(self):
         env = self.env_file()

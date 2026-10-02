@@ -126,7 +126,7 @@ class Mind:
 
         why_not = None
         if not self.s.llm_enabled:
-            why_not = "нет OPENROUTER_API_KEY"
+            why_not = self.s.llm_off_reason
         elif self.budget_left() <= 0:
             why_not = f"исчерпан дневной лимит {self.s.daily_limit}"
         elif now < self.backoff_until:

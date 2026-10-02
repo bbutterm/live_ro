@@ -35,8 +35,9 @@ def parse_args(argv):
 
 def check(settings, persona, memory):
     if not settings.llm_enabled:
-        print("CHECK FAIL: OPENROUTER_API_KEY не задан в env-файле")
-        return 1
+        print(f"CHECK SKIP: {settings.llm_off_reason}. Платный запрос не выполнен. "
+              "Включается BRAIN_LLM=openrouter после согласования модели и бюджета.")
+        return 2
     print(f"модель: {settings.model}; лимит {settings.daily_limit}/сутки, "
           f"использовано за 24 ч: {memory.llm_calls_since(time.time() - 86400)}")
     messages = [
@@ -69,7 +70,7 @@ async def main_async(args, settings, persona, memory, state_dir):
     memory.add_event("brain_started", {"model": settings.model, "llm": settings.llm_enabled})
     log.info("мозг %s запущен: модель %s, LLM %s, лимит %d/сутки, план раз в %d с; "
              "память: %s воспоминаний", persona["name"], settings.model,
-             "включена" if settings.llm_enabled else "ВЫКЛЮЧЕНА (нет ключа)",
+             "включена" if settings.llm_enabled else f"ВЫКЛЮЧЕНА ({settings.llm_off_reason})",
              settings.daily_limit, settings.decide_interval, len(memory.top_memories(1000)))
 
     stop = asyncio.Event()

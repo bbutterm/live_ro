@@ -24,6 +24,7 @@ def _int(env, key, default):
 
 @dataclass
 class Settings:
+    llm_provider: str
     api_key: str
     model: str
     api_base: str
@@ -36,11 +37,21 @@ class Settings:
 
     @property
     def llm_enabled(self):
-        return self.api_key not in UNSET
+        # Платные вызовы только по явному согласию: BRAIN_LLM=openrouter и ключ.
+        return self.llm_provider == "openrouter" and self.api_key not in UNSET
+
+    @property
+    def llm_off_reason(self):
+        if self.llm_provider != "openrouter":
+            return "LLM выключен (BRAIN_LLM=off)"
+        if self.api_key in UNSET:
+            return "нет OPENROUTER_API_KEY"
+        return None
 
     @classmethod
     def from_env(cls, env):
         return cls(
+            llm_provider=(env.get("BRAIN_LLM", "") or "off").lower(),
             api_key=env.get("OPENROUTER_API_KEY", ""),
             model=env.get("OPENROUTER_MODEL", "") or "deepseek/deepseek-chat",
             api_base=(env.get("BRAIN_API_BASE", "") or "https://openrouter.ai/api/v1").rstrip("/"),
