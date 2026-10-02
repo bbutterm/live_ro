@@ -84,6 +84,20 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 
 Чего нет: торговли с людьми через переговоры, цен «по рынку», закупки у других игроков.
 
+## Модули автономности (backlog AUT, состояние — docs/AUTONOMY_STATUS.md)
+| Модуль | Что делает |
+|---|---|
+| `lifecycle.py` | состояние жителя (OFFLINE…HUNTING) и арбитр движения: survival > plan > economy > party > routine |
+| `party.py` | группа LR_<лидер>, темп лидера, поводок, помощь в опасности, heal_confirmed по пакету сервера |
+| `postmortem.py` | разбор смерти по фактам, исключение опасных карт, каталог опасных монстров |
+| `maps.py` | опыт по картам (победы/смерти/опыт/зени в час), выбор карты, места и слухи |
+| `budget.py` | общий бюджет моделей на всех жителей (резерв до вызова) |
+| `economy.py` | взаимопомощь зельями и зени |
+| `routine.py` | распорядок, восстановление, лестница застревания, привычки характера |
+Тело: плагины `brainBridge` (мост), `combatProfile` (бой по классу), `economy` (склад/сделки/лавка),
+`survival` (экстренное выживание), `lowHpGuard`, `gracefulStop`.
+Оповещения владельцу: `scripts/lab alerts`. Выключить модуль: `BRAIN_DISABLE=party,economy,routine`.
+
 ## Исполняемые планы: встреча
 `plans.py` превращает разговор в действие. Модель выбирает цель (`propose_meeting`, `accept_meeting`,
 `decline_meeting`, `cancel_plan`), исполняет и проверяет — правило без LLM (тик 1 с):
@@ -150,7 +164,8 @@ tail -n 20 $LAB_ROOT/state/bot01/decisions.jsonl
 
 ## Тесты
 ```sh
-cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine tests.test_economy tests.test_inbox
+cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine tests.test_economy tests.test_inbox \
+  tests.test_party tests.test_postmortem tests.test_lifecycle tests.test_reliability tests.test_maps
 for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # из корня
 ```
 Сквозной тест без сети: фейковый OpenRouter, настоящий процесс мозга, фейковый плагин.

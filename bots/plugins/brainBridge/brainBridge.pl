@@ -153,6 +153,7 @@ sub sendState {
 		hp        => $char->{hp} + 0, hp_max => $char->{hp_max} + 0,
 		sp        => $char->{sp} + 0, sp_max => $char->{sp_max} + 0,
 		sitting   => ($char->{sitting} ? JSON::PP::true : JSON::PP::false),
+		statuses  => [grep { defined } (sort keys %{$char->{statuses} || {}})[0 .. 19]],   # AUT-004: эффекты (яд, баффы)
 		paused    => (($config{brainBridge_paused} // '') ne '' ? JSON::PP::true : JSON::PP::false),
 		weight_pct=> pct($char->{weight}, $char->{weight_max}),
 		zeny      => $char->{zeny} + 0,

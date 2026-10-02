@@ -1069,3 +1069,98 @@ scripts/lab start live bot02; sleep 45; scripts/lab status | grep -E 'bot02'
 
 ### Что прислать
 Вывод шагов 0–4 в `docs/qa/HERMES-<sha7>.md`; для каждого AUT из «Что изменилось» — «подтверждено / не наблюдалось / провал».
+
+## Задание №13: весь пакет автономности — группа, выживание, состояния, бюджет; короткая миссия пары
+
+**Ветка:** `claude/brain-routine` (включает №10–12). **Commit:** из сообщения разработчика.
+Что сделано и что нет — по каждому AUT: [`AUTONOMY_STATUS.md`](AUTONOMY_STATUS.md). Это проверка «код → игра»;
+ничего не считать закрытым по ack или репликам. Можно выполнять вместо отдельных №10–12 (их шаги вошли сюда).
+login/char/map не перезапускать, БД не трогать, SQL/GM-лечение, ручной `respawn` и телепорт админом не использовать.
+Без пассивного наблюдения дольше указанного; если шаг не наблюдается за его время — «не наблюдалось» и дальше.
+
+### Что нового (кратко)
+- Плагин `survival` (в `loadPlugins_list`): прогноз урона, экстренное зелье по ID, Butterfly Wing при HP < 15%
+  без зелий, подъём с отдыха под ударами. Эффекты (яд и т. п.) — Green Potion/Panacea.
+- Группа: приглашение `LR_<житель>` плагин принимает сразу (раньше `partyAuto 1` успевал отказать — `party: null`
+  в QA №9). Лидер Arkady; Vera охотится и отдыхает в его темпе, идёт за ним; лидер ждёт отставшую ≤ 3 мин.
+  Лечение подтверждается пакетом сервера: событие `heal_confirmed` с числом HP.
+- Состояния жителя (`status` в decisions и report), арбитр движения, переподключение, отбрасывание устаревших
+  ответов модели, лестница застревания, оповещения `scripts/lab alerts`, общий бюджет всех жителей,
+  выбор карты по опыту, разбор смерти по фактам, `BRAIN_DISABLE`.
+- Профили: `residents`, `survival_*`, `useSelf_item` эффектов, `pickupitems.txt` (не подбирать тяжёлое дешёвое).
+
+### Шаг 0 — код и проверки (5 мин)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans \
+  tests.test_routine tests.test_economy tests.test_inbox tests.test_party tests.test_postmortem tests.test_lifecycle \
+  tests.test_reliability tests.test_maps)                       # OK, 101
+for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # 1..22, 1..29, 1..33, 1..39
+scripts/lab doctor | sed -n '/карты мира/,/OpenKore/p'          # все [ok]; если [!!] prt_in — прислать и остановиться
+grep -c BRAIN_GLOBAL $LAB_ROOT/secrets/live_ro.env || echo "нет — действуют значения по умолчанию (600 вызовов, \$2 на всех)"
+scripts/lab down; scripts/lab up && sleep 120
+grep -hE 'Unable to load|survival|economy' $LAB_ROOT/logs/bot0*/console.log | head -6; scripts/lab report
+```
+Ожидание: плагины загружены (нет `Unable to load plugin`), в `report` строки «состояние», «хозяйство», «группа».
+
+### Шаг 1 — группа и подтверждённое лечение (до 10 мин) — главный пункт
+```sh
+grep -h '"type": "party"' $LAB_ROOT/state/bot0*/decisions.jsonl | tail -6
+grep -hE 'party|Party|приглашение' $LAB_ROOT/logs/bot0*/console.log | tail -8
+scripts/lab report | grep -E '^== |группа'
+# дальше — пока оба на охоте вместе (распорядок/лидер), до 10 мин:
+grep -h 'heal_confirmed' $LAB_ROOT/state/bot0*/decisions.jsonl | tail -3
+```
+Ожидание: `party_create` у Arkady, у Vera `приглашение в группу жителя LR_Arkady — принимаю`, у обоих
+`party_confirmed` («подтверждена сервером»). Vera следует режиму Arkady (`routine_party_hunt`/`routine_party_town`) и идёт
+за ним (`follow Arkady`). Лечение — `heal_confirmed` `"from": "Vera", "to": "Arkady", "amount": N` (N > 0).
+Если за 10 мин Arkady не получал урон ниже порога Heal — «лечение не наблюдалось», указать HP Arkady из report.
+
+### Шаг 2 — выживание и смерть (по факту, без провокации)
+```sh
+grep -hE '\[survival\]|You died|Sending respawn|ai auto для респауна' $LAB_ROOT/logs/bot0*/console.log | tail -8
+grep -h '"type": "postmortem"' $LAB_ROOT/state/bot0*/decisions.jsonl | tail -2
+grep -h '"event": "routine_(recover|wait_hp|escape)"' $LAB_ROOT/state/bot0*/decisions.jsonl | tail -4
+```
+Ожидание: если был опасный бой — `[survival] ... пью`; смерть — респаун без человека, `death_report` с монстрами и
+«неизвестно», `routine_recover`, на охоту только при HP ≥ 80%. Ничего не случилось — «не наблюдалось».
+
+### Шаг 3 — состояния, оповещения, команды (3 мин)
+```sh
+grep -h '"type": "status"' $LAB_ROOT/state/bot01/decisions.jsonl | tail -5
+scripts/lab alerts
+scripts/lab stop bot02; sleep 45; scripts/lab status | grep bot02          # «остановлен владельцем»
+scripts/lab start live bot02; scripts/lab routine bot02 rest                 # команда до входа в игру
+sleep 90; grep -h '"type": "operator"' $LAB_ROOT/state/bot02/decisions.jsonl | tail -1
+```
+Ожидание: переходы состояний с причинами; оповещений нет или только реальные; ровно одна команда `ok`.
+
+### Шаг 4 — короткая миссия пары (AUT-116, по возможности, до 30 мин)
+Без вмешательства, только наблюдение итогов в начале и в конце:
+`scripts/lab report` → (через 30 мин) `scripts/lab report`, плюс
+```sh
+for k in kill died heal_confirmed party_confirmed gift_given gift_received death_report map_banned; do
+  printf '%s: ' $k; grep -h "\"$k\"" $LAB_ROOT/state/bot0*/decisions.jsonl | wc -l; done
+grep -hE 'Selling|Auto-storaging|Buying' $LAB_ROOT/logs/bot0*/console.log | tail -4
+```
+Цель: пара охотится вместе, Vera лечит Arkady (сервер), при перегрузе — продажа/склад, при нехватке зелий — закупка или
+обмен, затем снова охота. Записать, какие звенья наблюдались, а какие нет; ручные вмешательства — перечислить (их не должно быть).
+
+### Риски
+- Группа: если `party_confirmed` не появляется — прислать строки `party` из console.log: возможно, сервер отвечает иначе.
+- `survival` пьёт зелья раз в секунду при опасности — расход зелий выше прежнего; зелий нет — крыло (если есть) или danger.
+- Vera следует за Arkady: её личная норма охоты подчинена лидеру, пока группа подтверждена.
+- `pickupitems.txt`: 142 тяжёлых дешёвых предмета не подбираются — доход от них уходит, зато нет перегруза.
+- Отключить новинку без отката: `BRAIN_DISABLE=party` (или `economy`) в env, `scripts/lab stop brain && scripts/lab start brain`.
+
+### Откат
+`scripts/lab down`, `git checkout --detach d2032a7f046dacf42129fb0e56ddd2f6fec88e7a` (фаза A) или
+`490156a0c96a4a08c5588bcb16c781b56967d11c` (до фазы A), `scripts/lab up`. Память жителей совместима: копия до миграции —
+`$LAB_ROOT/state/<bot>/memory.sqlite.bak-v1`.
+
+### Что прислать
+`docs/qa/HERMES-<sha7>.md`: вывод шагов 0–4 и таблица «AUT-ID — подтверждено / не наблюдалось / провал» для пунктов
+со статусом «код» в AUTONOMY_STATUS, которые затронуты наблюдениями.
+

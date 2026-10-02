@@ -190,6 +190,17 @@ class PartyTest(unittest.TestCase):
         self.a.party.on_support({"kind": "support", "skill": "AL_HEAL", "from": "Arkady", "to": "Arkady", "amount": 50})
         self.assertEqual(len(heals), 2)
 
+    def test_death_signal_no_false_promise(self):
+        self.form(vera_map="prontera")
+        self.tick(self.a, self.v)
+        self.assertEqual(self.a.actions("pause"), [{"action": "pause"}])
+        asyncio.run(self.v.party.on_my_death({"kind": "died", "map": "prt_fild08"}))
+        self.deliver(self.v, self.a)
+        self.assertEqual(self.a.actions("resume"), [{"action": "resume"}], "погибшего не ждут")
+        note = [d for d in self.a.decisions if d.get("event") == "party_member_dead"][0]
+        self.assertFalse(note["can_resurrect"])
+        self.assertIn("Воскресить не могу", note["text"])
+
     def test_stranger_tags_ignored(self):
         asyncio.run(self.v.party.on_tag("Stranger", "[party:town:]"))
         self.assertIsNone(self.v.party.st.get("leader_mode"))

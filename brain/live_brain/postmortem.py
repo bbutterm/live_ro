@@ -40,6 +40,7 @@ class Postmortem:
     def on_state(self, state):
         heal = state.get("items")
         self.observe("state", {"hp_pct": state.get("hp_pct"), "weight_pct": state.get("weight_pct"),
+                               "statuses": [x for x in state.get("statuses") or [] if x],
                                "map": state.get("map"), "potions": None if heal is None else
                                sum(int(heal.get(i, 0) or 0) for i in ("569", "501", "502", "503", "504"))})
 
@@ -66,6 +67,7 @@ class Postmortem:
                "cause": foes.most_common(1)[0][0] if foes else None,
                "hp_seen": last.get("hp_pct"), "weight_pct": last.get("weight_pct"),
                "potions_left": last.get("potions"), "survival_actions": actions,
+               "statuses": last.get("statuses"),
                "max_dps": max((d.get("dps") or 0 for d in dangers), default=None)}
         unknown = [k for k, v in (("кто бил", rep["cause"]), ("запас зелий", rep["potions_left"]),
                                   ("вес", rep["weight_pct"])) if v is None]
@@ -79,6 +81,10 @@ class Postmortem:
             parts.append(f"вес {rep['weight_pct']}%")
         if actions:
             parts.append("тело пыталось: " + ", ".join(actions))
+        bad = [x for x in rep["statuses"] or [] if any(k in x.upper() for k in ("POISON", "BLIND", "SILENCE", "CURSE",
+                                                                                 "STUN", "FREEZ", "SLEEP", "CONFUSION"))]
+        if bad:
+            parts.append("эффекты: " + ", ".join(bad))
         if unknown:
             parts.append("неизвестно: " + ", ".join(unknown))
         text = "; ".join(parts) + "."
