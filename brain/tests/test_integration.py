@@ -677,6 +677,24 @@ class LongDayAllModulesTest(unittest.TestCase):
         self.assertTrue(all(t0 <= p["ts"] <= end for p in crew.get("prefs", {}).values()), "crew: время реплея")
 
 
+class Review3JointsTest(BodyMixin, unittest.TestCase):
+    """review3: стыки модулей раунда 5 (сплетни, привычки, лекарь, заказы, мечта, копилка, режиссёр) с ядром."""
+
+    def test_recent_events_survive_kind_ts_in_data(self):
+        """Данные событий с ключами kind/ts (gossip_heard, habit_formed, explore_found) не роняют recent_events и промпт."""
+        self.state()
+        mem = self.mem
+        mem.add_event("gossip_heard", {"from": "Vera", "who": "Bob", "what": "heal", "kind": "kind", "hops": 0})
+        mem.add_event("habit_formed", {"kind": "after", "what": "stroll", "cond": "hunt"})
+        mem.add_event("explore_found", {"map": "prt_fild01", "hops": 1, "kind": "field", "ts": 5})
+        rows = mem.recent_events(10)
+        kinds = [r["kind"] for r in rows]
+        self.assertEqual(kinds[-3:], ["gossip_heard", "habit_formed", "explore_found"], "вид события не затёрт данными")
+        self.assertNotEqual(rows[-1]["ts"], 5, "время события не затёрто данными")
+        msgs = self.mind.build_prompt("тест", {})
+        self.assertIn("gossip_heard", msgs[1]["content"])
+
+
 class ProtocolSurfaceTest(unittest.TestCase):
     def test_every_safe_action_has_bridge_branch(self):
         """Действие, которое safety пропускает, исполняет brainBridge.pl (и наоборот: у моста нет лишних веток)."""

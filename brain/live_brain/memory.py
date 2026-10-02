@@ -99,7 +99,19 @@ class Memory:
     def recent_events(self, n=20):
         rows = self.db.execute(
             "SELECT ts, kind, data FROM events WHERE kind != 'state' ORDER BY id DESC LIMIT ?", (n,))
-        return [dict(ts=r["ts"], kind=r["kind"], **json.loads(r["data"])) for r in rows][::-1]
+        out = []
+        for r in rows:
+            # review3: данные с ключами kind/ts (gossip_heard, habit_formed, explore_found) роняли dict(**data) —
+            # и вместе с ним промпт (поле «последние_события»); такие ключи данных — с суффиксом «_», не затирают
+            row = {"ts": r["ts"], "kind": r["kind"]}
+            try:
+                data = json.loads(r["data"])
+            except ValueError:
+                data = None
+            for k, v in (data.items() if isinstance(data, dict) else [("data", data)]):
+                row[k + "_" if k in ("ts", "kind") else k] = v
+            out.append(row)
+        return out[::-1]
 
     def count_events(self, kind, since):
         return self.db.execute("SELECT COUNT(*) FROM events WHERE kind = ? AND ts >= ?",
