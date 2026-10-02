@@ -884,6 +884,42 @@ class Crowd:
 
 **Готово.** Тесты зелёные; раздел в SOCIETY.md; статус ORG-089 «код, в игре не проверено».
 
+### Т-11 · ORG-091 · Сериал-хроника: эпизод недели
+
+**Цель.** Раз в неделю владелец читает «серию» мира: заголовок, 3–5 сцен по сюжетным линиям недели и «в следующей
+серии» — незавершённые линии. Только факты памяти жителей и шины мира; при `BRAIN_LLM=off` всё работает.
+
+**Файлы.** `brain/live_brain/episode.py` (новый, только чтение, как `chronicle.py`), `brain/live_brain/dashboard.py`
+(раздел «Серия недели», блоки `# serial:`), `scripts/lab` (`episode [НЕДЕЛЯ] [--llm]`), `brain/world/goals.json`
+(раздел `episode`), `brain/tests/test_episode.py`, `docs/WORLD_EVENTS.md`. `mind.py` не трогается.
+
+**Интерфейсы.**
+```python
+week_bounds(week=None, tz_hours=0, now=None) -> (start, end, "2026-W40", tz)   # «2026-W40», дата или текущая
+gather(lab_root, bots, start, end) -> (facts, names, first_ts, missing)        # память mode=ro + шина (чужие жители)
+arcs(facts, fmt) -> [arc]          # quarrel, career, pet, death, expedition, rivalry, aims, tradition
+build(lab_root, bots, week, tz_hours, now=None, cfg=None) -> {number, week, title, scenes, next, ...}
+render_text(ep, colored=None) -> str
+colorize(ep, settings, budget, call=llm.chat) -> (текст | None, почему нет)   # один вызов, проверка «только факты»
+```
+- Арка — цепочка событий жителя или пары с началом и (не)завершением: `society_quarrel → society_reconciled`,
+  `career_stage_done → job_changed`, `pet_tamed → pet_hatched`, `death_report → kill/level_up` (возвращение),
+  `explore_start → explore_found → explore_returned`, `rival_chosen/rival_overtook`, `aim_new → aim_done/aim_result`,
+  `tradition_stage`. Открытая арка — строка «в следующей серии».
+- Сцены: сначала по одной арке каждого вида (сильнейшие раньше), затем по весу; меньше 3 — добор заметными
+  одиночными событиями (уровень, гильдия, слух). Каждая сцена кончается «Факты: дата время · житель · вид».
+- Номер серии — номер недели от первой недели с событиями в памяти или шине. Заголовок — сильнейшая арка.
+- LLM (по умолчанию выкл.): `--llm` или `episode.llm=true`, `BRAIN_LLM` включён и общий бюджет `budget.sqlite`
+  даёт резерв → один вызов, ответ проверяется как дневник ORG-049 (числа и латинские имена — только из фактов),
+  кэш `run/episode-<неделя>.json` — второй запуск без вызова.
+
+**Тесты.** Границы недели; ссора пары с двух сторон — одна линия и заголовок; смерть → возвращение; открытые линии в
+«следующей серии»; номер серии по первой неделе; тихая неделя и добор одиночными событиями; житель только из шины,
+тихие снимки шины — не факты; память не меняется; CLI без LLM; LLM выкл. — вызова нет; бюджет исчерпан — вызова
+нет; выдуманное число отклонено; кэш — один вызов; раздел дашборда.
+
+**Готово.** Тесты зелёные; раздел в WORLD_EVENTS.md; статус ORG-091 «код, в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности
