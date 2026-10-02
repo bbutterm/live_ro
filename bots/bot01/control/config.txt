@@ -734,7 +734,8 @@ equipAuto {
 	# [checkMonsterCondition]
 }
 
-useSelf_item Novice Potion, Red Potion, Orange Potion, Yellow Potion, White Potion {
+# live_ro: по ID (AUT-013) — не зависит от языка таблиц: Novice 569, Red 501, Orange 502, Yellow 503, White 504.
+useSelf_item 569, 501, 502, 503, 504 {
 	hp < 50%
 	timeout 1
 	dcOnEmpty 0
@@ -792,9 +793,10 @@ storageAuto_notAfterDeath
 relogAfterStorage 0
 minStorageZeny 100
 
-# live_ro: плагин economy — карты (тип 6) и эти предметы не продавать, а нести на склад.
-# Oridecon, Elunium, Rough Oridecon, Rough Elunium. Пустая строка — только карты.
+# live_ro: плагин economy — карты (тип 6), оружие/броню не из списка продажи items_control и эти
+# предметы не продавать, а нести на склад. Oridecon, Elunium, Rough Oridecon, Rough Elunium.
 economy_storeCards 1
+economy_storeEquipment 1
 economy_storeIds 984,985,756,757
 
 npcTimeResponse

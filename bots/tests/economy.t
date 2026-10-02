@@ -29,7 +29,10 @@ my @inv = (
 	{binID => 2, nameID => 909,  name => 'Jellopy', type => 3, amount => 30},
 	{binID => 3, nameID => 501,  name => 'Red Potion', type => 0, amount => 35},
 	{binID => 4, nameID => 2301, name => 'Cotton Shirt', type => 5, amount => 1, equipped => 1},
+	{binID => 5, nameID => 1201, name => 'Knife', type => 4, amount => 1},
+	{binID => 6, nameID => 2303, name => 'Jacket', type => 5, amount => 1},
 );
+$Globals::items_control{jacket} = {keep => 0, storage => 0, sell => 1};
 $Globals::char = FakeChar->new(name => 'Arkady', zeny => 5000, inv => \@inv, pos_to => {x => 150, y => 180});
 my $vera = {name => 'Vera', pos_to => {x => 156, y => 185}};
 $Globals::playersList = FakePlayers->new($vera);
@@ -43,6 +46,9 @@ is($ic->{4001}{sell}, 0, 'карта — не продавать');
 is($ic->{984}{storage}, 1, 'руда из economy_storeIds — на склад');
 ok(!exists $ic->{909}, 'обычный лут не трогаю');
 is($ic->{jellopy}{sell}, 1, 'своя строка items_control остаётся');
+is($ic->{1201}{storage}, 1, 'оружие не из списка продажи — на склад');
+ok(!exists $ic->{2303}, 'броня из списка продажи (по имени) — продаётся как раньше');
+ok(!exists $ic->{2301}, 'надетое не трогаю');
 
 # ---- состояние ----
 is(economy::itemCounts()->{501}, 35, 'счётчик красных зелий');

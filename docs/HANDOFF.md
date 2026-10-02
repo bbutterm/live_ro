@@ -987,6 +987,7 @@ scripts/lab routine bot01 hunt; scripts/lab routine bot02 hunt
 
 ### Что прислать
 Вывод шагов 0–3 в `docs/qa/HERMES-<sha7>.md`.
+
 ---
 
 ## План дальнейшей автономности (поручение владельца)
@@ -994,3 +995,77 @@ scripts/lab routine bot01 hunt; scripts/lab routine bot02 hunt
 См. [`AUTONOMY_BACKLOG.md`](AUTONOMY_BACKLOG.md): 120 задач AUT-001–AUT-120, приоритеты, критерии готовности, порядок вертикальных срезов и ворота автономности.
 
 Это backlog разработки и проверки, **не разрешение немедленно запускать/обновлять runtime**, менять лимиты API, включать cron/autostart или перезапускать сервер. Существующие реализации №7–10 сначала сопоставить с задачами и довести, не переписывать заново. Перед каждым выпуском подготовить короткий проверяемый HANDOFF для Hermes; отмечать код, локальные проверки и реальные VPS-доказательства раздельно.
+
+## Задание №12: фаза A — «умер → респаун → лечение → безопасная задача»
+
+**Ветка:** `claude/brain-routine` (включает №10, №11, отчёт QA №9 и backlog). **Commit:** из сообщения разработчика.
+Сопоставление с backlog: [`AUTONOMY_STATUS.md`](AUTONOMY_STATUS.md). Можно совместить с №10/№11.
+login/char/map не перезапускать, БД не трогать, GM/SQL-лечение и ручной `respawn` не использовать —
+цель проверки именно в том, чтобы обошлось без них. Без пассивного наблюдения дольше указанного.
+
+### Что изменилось
+- `pause` больше не `ai manual`: бот только перестаёт искать новых монстров, но отбивается и пьёт зелья.
+- Мёртв и AI не в auto > 3 с → тело само включает `ai auto` (OpenKore делает респаун только в auto).
+- После любой смерти: город, отдых; на охоту — только при HP ≥ 80% (и по расписанию, и по `routine hunt`).
+- На охоте HP < 25% и нет зелий 20 с → город. Зелья по ID: `useSelf_item 569, 501, 502, 503, 504`.
+- Застревание не срабатывает, пока сидит/торгует/дерётся. Команды `routine/plan/gift` ждут первого состояния тела
+  (не дольше 10 мин). Цель в памяти следует за распорядком.
+- `stop botNN|brain|live` — сторож больше не поднимает остановленное; `start`/`up` возвращают под надзор.
+- Не продаются (идут на склад): карты, руда, оружие/броня, которых нет в списке продажи `items_control.txt`.
+- `scripts/lab doctor`: раздел «карты мира» — включены ли в rAthena все карты жителей (охота, город, `prt_in`, склад).
+
+### Шаг 0 — код и проверки (4 мин)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine tests.test_economy tests.test_inbox)  # OK, 68
+for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # 1..10, 1..29, 1..33
+scripts/lab doctor | sed -n '/карты мира/,/OpenKore/p'
+```
+Ожидание: все `[ok]` в «карты мира». Если `[!!] prt_in` — продажа и закупка невозможны: прислать вывод и
+`grep -n prt_in $RATHENA_DIR/conf/maps_athena.conf $RATHENA_DIR/conf/import/*.txt`, остальное не делать.
+
+### Шаг 1 — запуск и команда до готовности тела (2 мин)
+```sh
+scripts/lab down; scripts/lab up; scripts/lab routine bot02 rest   # сразу, до входа в игру
+sleep 90; grep -h '"type": "operator"' $LAB_ROOT/state/bot02/decisions.jsonl | tail -2
+scripts/lab routine bot02 show
+```
+Ожидание: ровно одна запись `operator` с `"result": "ok"` после входа, `mode: town`.
+
+### Шаг 2 — пауза не ai manual (2 мин)
+```sh
+grep -h 'решение мозга -> ' $LAB_ROOT/logs/bot0*/console.log | grep -E 'attackAuto 1|ai manual' | tail -3
+```
+Ожидание: если модель ставила паузу — `conf attackAuto 1; conf route_randomWalk 0`, строк `ai manual` от новой
+версии нет. Не ставила — «не наблюдалось» (специально не вызывать).
+
+### Шаг 3 — смерть и самостоятельное возвращение (по факту, без ожидания)
+Только если за время проверки кто-то погиб естественно (не убивать специально):
+```sh
+grep -hE 'You died|Sending respawn|ai auto для респауна|Auto-storaging due to death' $LAB_ROOT/logs/bot0*/console.log | tail -6
+grep -h '"event": "routine_(recover|wait_hp|hunt)"' $LAB_ROOT/state/bot0*/decisions.jsonl | tail -4
+scripts/lab report | grep -E '^== '
+```
+Ожидание: респаун без человека; `routine_recover`; на охоту — только после HP ≥ 80% (`routine_wait_hp`, если ждал).
+Если Arkady уже мёртв при старте — это и есть проверка: через 3–10 с `Sending respawn` без ручной команды.
+
+### Шаг 4 — сторож уважает остановку (2 мин)
+```sh
+scripts/lab stop bot02; sleep 45; scripts/lab status | grep -E 'bot02'
+scripts/lab start live bot02; sleep 45; scripts/lab status | grep -E 'bot02'
+```
+Ожидание: после `stop` — «остановлен владельцем — сторож не поднимает»; после `start` — запущен.
+
+### Риски
+- `pause` больше не замораживает бота: если раньше пауза использовалась, чтобы бот стоял, теперь он отбивается.
+- Новое правило «HP ≥ 80% перед охотой» может удлинить отдых, если вес ≥ 50% (RO не восстанавливает HP) и нет зелий:
+  тогда в `report` бот долго в городе — прислать вес и `routine_wait_hp`.
+- Неперечисленные оружие/броня копятся на складе вместо продажи (при `minStorageZeny 100`).
+
+### Откат
+`scripts/lab down`, `git checkout --detach 490156a0c96a4a08c5588bcb16c781b56967d11c`, `scripts/lab up`.
+
+### Что прислать
+Вывод шагов 0–4 в `docs/qa/HERMES-<sha7>.md`; для каждого AUT из «Что изменилось» — «подтверждено / не наблюдалось / провал».

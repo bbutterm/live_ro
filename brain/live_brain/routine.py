@@ -16,6 +16,12 @@
 Сверка с игрой каждый тик: если настройка OpenKore не соответствует режиму (например, после
 перезапуска бота), команда отправляется заново — не чаще раза в RESEND секунд.
 Во время активного плана встречи распорядок не вмешивается (только закрывает лавку: с ней не ходят).
+Безопасность важнее расписания (AUT-008, AUT-026, AUT-086):
+    после любой смерти — режим «восстановление»: город, отдых, на охоту только при HP >= min_hp_to_hunt;
+    на охоте HP < LOW_HP и нечем лечиться дольше LOW_HP_SEC — в город;
+    из города на охоту не уходит, пока HP ниже min_hp_to_hunt (норма охоты подождёт).
+Застревание (AUT-037): не считается, пока персонаж сидит, торгует, говорит с NPC или в бою.
+Цель (AUT-098): при смене режима мозг записывает цель из распорядка — текст цели не расходится с телом.
 Лавка (vend_in_town, только Merchant с навыком и тележкой): открыть по прибытии в город,
 закрыть перед охотой — с открытой лавкой персонаж не двигается.
 """
@@ -34,6 +40,11 @@ STUCK_SEC = 300           # на охоте без движения и без б
 UNSTUCK_GAP = 120         # не чаще раза в 2 минуты
 DEATH_WINDOW = 1800       # 3 смерти за 30 минут — отдых и карта полегче
 DEATH_LIMIT = 3
+LOW_HP = 25               # на охоте ниже — и без зелий — уходить в город
+LOW_HP_SEC = 20
+HEAL_ITEMS = ("569", "501", "502", "503", "504")   # Novice/Red/Orange/Yellow/White Potion (ID)
+BUSY = ("sitAuto", "sitting", "storageAuto", "sellAuto", "buyAuto", "deal", "NPC", "attack",
+        "skill_use", "take", "items_take", "items_gather", "dead")
 
 
 def load_world(path):
@@ -61,6 +72,8 @@ class Routine:
         self.last_combat = 0.0
         self.last_unstuck = 0.0
         self.last_vend = 0.0
+        self.low_hp_since = None
+        self.waiting_hp_noted = False
         self.st = mind.mem.get("routine") or {}
 
     # ---------- данные ----------
@@ -149,6 +162,10 @@ class Routine:
                 await self.check_stuck(now, state)
             if self.st["hunted"] >= self.st["session_end"] or self.st["hunted"] >= self.st["budget"]:
                 await self.to_town(now)
+            elif self.no_heal_low_hp(now, state):
+                self.note("routine_low_hp", f"HP {state.get('hp_pct')}%, а лечиться нечем — ухожу в город "
+                                            "восстановиться.", 2)
+                await self.to_town(now, rest_minutes=self.cfg.get("after_death_rest_minutes", 10), recover=True)
         else:
             await self.in_town(now, state)
         await self.enforce(now, state)
@@ -159,9 +176,30 @@ class Routine:
     def on_combat(self, now=None):
         self.last_combat = now or self.clock()
 
+    def heal_items(self, state):
+        items = state.get("items")
+        if items is None:
+            return None                              # тело без счётчиков (нет плагина economy)
+        return sum(int(items.get(i, 0) or 0) for i in HEAL_ITEMS)
+
+    def no_heal_low_hp(self, now, state):
+        hp = state.get("hp_pct")
+        if state.get("dead") or hp is None or hp >= LOW_HP or self.heal_items(state) != 0:
+            self.low_hp_since = None
+            return False
+        self.low_hp_since = self.low_hp_since or now
+        return now - self.low_hp_since >= LOW_HP_SEC
+
+    def hp_ok(self, state):
+        hp = state.get("hp_pct")
+        return not state.get("dead") and (hp is None or hp >= self.cfg.get("min_hp_to_hunt", 80))
+
     async def check_stuck(self, now, state):
         pos = (state.get("map"), state.get("x"), state.get("y"))
         if pos[1] is None:
+            return
+        if state.get("sitting") or state.get("activity") in BUSY or state.get("give"):
+            self.anchor = (pos[0], pos[1], pos[2], now)      # законно стоит: отдых, торговля, бой
             return
         if (not self.anchor or self.anchor[0] != pos[0]
                 or max(abs(self.anchor[1] - pos[1]), abs(self.anchor[2] - pos[2])) > 2):
@@ -178,15 +216,23 @@ class Routine:
 
     async def on_death(self, now=None):
         now = now or self.clock()
+        if not self.st:
+            self.new_day(now)
         deaths = self.mind.mem.count_events("died", now - DEATH_WINDOW)
-        if deaths < DEATH_LIMIT or not self.st or self.st.get("mode") != "hunt":
+        if deaths < DEATH_LIMIT:
+            # AUT-008: после респауна не идти сразу в бой с 1 HP — город, отдых, восстановление.
+            if self.st.get("mode") == "hunt":
+                self.note("routine_recover", "Погиб — после возрождения отдохну в городе и восстановлюсь.", 2)
+                await self.to_town(now, rest_minutes=self.cfg.get("after_death_rest_minutes", 10), recover=True)
+            self.st["recover"] = True
+            self.save()
             return
         maps = self.mind.persona["hunt_maps"]
         bad = self.hunt_map()
         self.st["prefer_map"] = maps[0] if bad != maps[0] else (maps[1] if len(maps) > 1 else maps[0])
         self.note("routine_deaths", f"Погиб {deaths} раза за полчаса на {bad} — отдохну и пойду на "
                                     f"{self.st['prefer_map']}.", 3)
-        await self.to_town(now)
+        await self.to_town(now, recover=True)
         self.save()
 
     def diary(self, day_state):
@@ -215,11 +261,14 @@ class Routine:
         self.mind.write_decision({"type": "routine", "event": "diary", "text": text})
         log.info("%s", text)
 
-    async def to_town(self, now):
+    async def to_town(self, now, rest_minutes=None, recover=False):
         done = self.st["hunted"] >= self.st["budget"]
-        rest = self.minutes("break_minutes")
+        rest = rest_minutes * 60 if rest_minutes is not None else self.minutes("break_minutes")
         self.st.update(mode="town", mode_since=now, arrived=False,
                        rest_until=now + rest if not done else float("inf"))
+        if recover:
+            self.st["recover"] = True
+        self.set_goal(f"отдыхаю в {self.town['map']}" + (" и восстанавливаюсь" if recover else ""))
         hunted_min = int(self.st["hunted"] / 60)
         text = (f"Наохотился за день ({hunted_min} мин), иду в {self.town['map']} отдыхать и общаться."
                 if done else f"Устал после охоты ({hunted_min} мин за день), иду в {self.town['map']} "
@@ -243,11 +292,25 @@ class Routine:
             self.last_vend = now
             await self.send({"action": "shop_open"}, "распорядок: открыть лавку в городе")
         if self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
+            if not self.hp_ok(state):                      # AUT-086: больной не идёт драться по расписанию
+                if not self.waiting_hp_noted:
+                    self.waiting_hp_noted = True
+                    self.note("routine_wait_hp", f"Перерыв прошёл, но HP {state.get('hp_pct')}% — "
+                                                 f"жду хотя бы {self.cfg.get('min_hp_to_hunt', 80)}%.", 1)
+                return
+            self.waiting_hp_noted = False
+            self.st["recover"] = False
             left = self.st["budget"] - self.st["hunted"]
             self.st.update(mode="hunt", mode_since=now, arrived=False,
                            session_end=self.st["hunted"] + min(left, self.minutes("session_minutes")))
             self.note("routine_hunt", f"Отдохнул, иду качаться на {self.hunt_map()}.", 2)
+            self.set_goal(f"охочусь на {self.hunt_map()}")
             self.last_sent = 0
+
+    def set_goal(self, text):
+        """AUT-098: цель в памяти следует за распорядком (модель может уточнить, но не отменить режим)."""
+        self.mind.mem.set("goal", text)
+        self.mind.mem.set("goal_source", "routine")
 
     async def enforce(self, now, state):
         """Сверка настройки OpenKore с режимом; при расхождении — команда, не чаще RESEND с."""
@@ -299,6 +362,9 @@ class Routine:
                 self.st["budget"] = self.st["hunted"] + self.minutes("session_minutes")
             self.st["rest_until"] = now
             await self.in_town(now, self.mind.state)
+            if self.st["mode"] != "hunt":
+                self.save()
+                return f"HP {self.mind.state.get('hp_pct')}% ниже {self.cfg.get('min_hp_to_hunt', 80)}% — сначала восстановлюсь"
         else:
             return "rest или hunt"
         self.save()

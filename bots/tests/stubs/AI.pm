@@ -1,1 +1,2 @@
-package AI; sub run {} sub clear {} sub state {2} sub AUTO {2} sub action {} use constant IN_GAME => 5; 1;
+package AI; our $state = 2; our $action;
+sub run {} sub clear {} sub state { $state } sub AUTO {2} sub action { $action } use constant IN_GAME => 5; 1;

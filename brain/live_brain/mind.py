@@ -25,6 +25,7 @@ from .safety import SafetyPolicy
 log = logging.getLogger("mind")
 
 MAX_ACTIONS = 2
+INBOX_TTL = 600           # команда оператора старше 10 минут не исполняется
 PLAN_LLM_ACTIONS = ("propose_meeting", "accept_meeting", "decline_meeting", "cancel_plan")
 
 
@@ -277,6 +278,8 @@ class Mind:
             sent.append(a)
             if a.get("action") == "whisper" and a.get("to") in self.ctx.peers:
                 self.ctx.last[f"talk:{a['to']}"] = time.time()
+            if a.get("action") == "resume":
+                self.ctx.last["resume_sent"] = time.time()
         if self.economy:
             for r in rejected:
                 if isinstance(r["action"], dict):
@@ -289,9 +292,15 @@ class Mind:
                  sent or "нет", f", отклонено {rejected}" if rejected else "")
 
     async def safety_tick(self):
+        if self.state.get("paused") and self.safety.paused_at is None and not self.resumed_recently():
+            self.safety.paused_at = time.time()       # пауза пережила перезапуск мозга — тоже не дольше max_pause
         if self.safety.pause_expired():
             log.warning("пауза дольше %d с — продолжаю охоту по правилу", self.safety.max_pause)
             await self.execute([{"action": "resume"}], source="rule", reason="правило: пауза истекла")
+
+    def resumed_recently(self):
+        """resume отправлен, а состояние тела ещё старое (paused) — не взводить паузу заново."""
+        return time.time() - self.ctx.last.get("resume_sent", 0) < 60
 
     # ---------- когда думать LLM ----------
 
@@ -330,8 +339,12 @@ class Mind:
                 await self.decide(reason, context, kind)
 
     async def read_inbox(self):
-        """Команды оператора из run/brain/<bot>.inbox (JSON-строки): meet <житель>, cancel."""
-        if not self.inbox_path:
+        """Команды оператора из run/brain/<bot>.inbox (JSON-строки): meet, cancel, rest, hunt, ask.
+
+        AUT-006: команды ждут в файле первого свежего состояния тела (иначе решение принималось бы
+        по старому снимку); каждая исполняется один раз; старше INBOX_TTL — отклоняется с причиной.
+        """
+        if not self.inbox_path or not self.fresh_state:
             return
         try:
             with open(self.inbox_path, encoding="utf-8") as f:
@@ -344,7 +357,10 @@ class Mind:
                 cmd = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if cmd.get("cmd") == "meet":
+            age = time.time() - float(cmd.get("ts") or time.time())
+            if age > INBOX_TTL:
+                why = f"команда устарела ({int(age)} с > {INBOX_TTL} с) — не исполняю"
+            elif cmd.get("cmd") == "meet":
                 why = await self.plans.propose(str(cmd.get("with", "")), "operator")
             elif cmd.get("cmd") == "cancel":
                 why = await self.plans.cancel("operator")
@@ -442,7 +458,7 @@ class Mind:
             '{"action": "say", "text": "..."} — сказать в общий чат; '
             '{"action": "whisper", "to": "имя", "text": "..."} — личное сообщение; '
             f'{{"action": "set_hunt_map", "map": "..."}} — сменить место охоты, только из: {maps}; '
-            '{"action": "pause"} — остановиться (тело перестаёт охотиться); '
+            '{"action": "pause"} — перестать искать новых монстров (от напавших тело отбивается, лечится само); '
             '{"action": "resume"} — продолжить охоту; '
             '{"action": "party_create"} — создать свою группу; '
             '{"action": "party_invite", "to": "житель"} — позвать жителя в свою группу; '
@@ -472,7 +488,8 @@ class Mind:
             "повод": reason,
             "подробности": context,
             "моё_состояние": self.state,
-            "текущая_цель": self.mem.get("goal"),
+            "текущая_цель": {"текст": self.mem.get("goal"), "источник": self.mem.get("goal_source"),
+                             "режим_тела": (self.routine.summary() or {}).get("режим") if self.routine else None},
             "настроение": self.mem.get("mood"),
             "последние_события": self.mem.recent_events(20),
             "воспоминания": self.mem.top_memories(12),
@@ -496,6 +513,7 @@ class Mind:
     async def apply(self, d, reason, latency, usage):
         if d.get("goal"):
             self.mem.set("goal", str(d["goal"])[:200])
+            self.mem.set("goal_source", "llm")
         if d.get("mood"):
             self.mem.set("mood", str(d["mood"])[:40])
         for m in d.get("remember") or []:

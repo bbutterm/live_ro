@@ -361,6 +361,12 @@ cmd_doctor() {
     else bad "нет доступа к conf/import/$f.txt"; fi
   done
 
+  echo "== карты мира (AUT-031)"
+  if python3 "$REPO/scripts/world_maps.py" "$rd" "$(profile_root)" $(lab_bots); then
+    ok "все карты жителей включены в rAthena"
+  else
+    bad "жителям нужны выключенные карты (выше) — включить в rAthena или поменять профиль/goals.json"
+  fi
   echo "== OpenKore"
   local od pr; od=$(openkore_dir); pr=$(profile_root)
   if [[ -f "$od/openkore.pl" ]]; then ok "openkore.pl в $od"; else bad "нет $od/openkore.pl"; fi
@@ -708,8 +714,16 @@ SUP_MAX=5             # больше перезапусков в окне — н
 
 sup_log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LAB_ROOT/logs/supervisor.log"; }
 
+# AUT-105: желаемое состояние. stop botNN|brain|live — отметка «остановлен владельцем», сторож такой
+# процесс не поднимает; start/up снимают отметку.
+hold_file() { echo "$LAB_ROOT/run/supervisor/$1.held"; }
+hold() { local n; ( umask 077; mkdir -p "$LAB_ROOT/run/supervisor" ); for n in "$@"; do : > "$(hold_file "$n")"; done; }
+release() { local n; for n in "$@"; do rm -f "$(hold_file "$n")"; done; }
+held() { [[ -f "$(hold_file "$1")" ]]; }
+
 sup_restart() { # sup_restart NAME CMD... — перезапуск с ограничением частоты
   local name="$1"; shift
+  held "$name" && return 0                              # остановлен владельцем — не поднимать
   local f="$LAB_ROOT/run/supervisor/$name.restarts" now; now=$(date +%s)
   local recent=0 t
   if [[ -f "$f" ]]; then
@@ -750,7 +764,7 @@ cmd_up() {
   mkdir -p "$PIDS" "$LAB_ROOT/logs"
   port_open "${PORT[map]}" || die "map-server не отвечает на порту ${PORT[map]}: сначала scripts/lab start (серверы)"
   local b
-  for b in $(lab_bots); do start_brain "$b"; start_bot "$b"; done
+  for b in $(lab_bots); do release "$b" "brain-$b"; start_brain "$b"; start_bot "$b"; done
   start_proc supervisor "$REPO" "$LAB_ROOT/logs/supervisor.out" \
     env "LAB_ROOT=$LAB_ROOT" "LAB_ENV=$LAB_ENV" bash "$REPO/scripts/lab" supervise
   info "жители запущены, сторож следит за ними (лог $LAB_ROOT/logs/supervisor.log). Сводка: scripts/lab report"
@@ -789,9 +803,9 @@ cmd_plan() {
       if [[ "$sub" == meet ]]; then
         [[ "$who" =~ ^[^\"[:cntrl:]]{1,23}$ ]] || die "укажите имя жителя: scripts/lab plan $bot meet Arkady"
       fi
-      ( umask 077; python3 -c 'import json,sys; print(json.dumps({"cmd": sys.argv[1], "with": sys.argv[2]}, ensure_ascii=False))' \
+      ( umask 077; python3 -c 'import json,sys,time; print(json.dumps({"cmd": sys.argv[1], "with": sys.argv[2], "ts": time.time()}, ensure_ascii=False))' \
           "$sub" "$who" >> "$LAB_ROOT/run/brain/$bot.inbox" )
-      info "команда передана мозгу $bot: $sub $who (результат: scripts/lab plan $bot show, decisions.jsonl)" ;;
+      info "команда передана мозгу $bot: $sub $who — исполнится после первого состояния тела, не позже 10 мин (результат: decisions.jsonl \"operator\")" ;;
     *) die "scripts/lab plan botNN meet ИМЯ|cancel|show" ;;
   esac
 }
@@ -803,7 +817,7 @@ cmd_gift() {
     || die "scripts/lab gift botNN ITEM|z N   (например: gift bot02 501 10)"
   load_env
   [[ -n "$(running_pid "brain-$bot")" ]] || die "мозг $bot не запущен: scripts/lab start brain $bot"
-  ( umask 077; python3 -c 'import json,sys; print(json.dumps({"cmd": "ask", "item": sys.argv[1], "amount": int(sys.argv[2])}))' \
+  ( umask 077; python3 -c 'import json,sys,time; print(json.dumps({"cmd": "ask", "item": sys.argv[1], "amount": int(sys.argv[2]), "ts": time.time()}))' \
       "$item" "$n" >> "$LAB_ROOT/run/brain/$bot.inbox" )
   info "команда передана мозгу $bot: попросить $n x $item (итог: scripts/lab report, decisions.jsonl \"economy\")"
 }
@@ -833,10 +847,10 @@ cmd_start() {
   local what="${1:-server}"
   case "$what" in
     server) start_server ;;
-    bot[0-9]*) start_bot "$what" ;;
-    brain) for b in $(bots_arg "${2:-}"); do start_brain "$b"; done ;;
+    bot[0-9]*) release "$what"; start_bot "$what" ;;
+    brain) for b in $(bots_arg "${2:-}"); do release "brain-$b"; start_brain "$b"; done ;;
     # Сначала мозг: иначе событие входа в игру может прийти раньше, чем мозг слушает сокет.
-    live) for b in $(bots_arg "${2:-}"); do start_brain "$b"; start_bot "$b"; done ;;
+    live) for b in $(bots_arg "${2:-}"); do release "$b" "brain-$b"; start_brain "$b"; start_bot "$b"; done ;;
     *) die "start server|botNN|brain [BOT|all]|live [BOT|all]" ;;
   esac
 }
@@ -890,13 +904,13 @@ cmd_stop() {
     n=$(basename "$f" .pid); [[ " ${bots[*]} " == *" $n "* ]] || bots+=("$n")
   done
   case "$what" in
-    all)    for n in "${bots[@]}"; do stop_proc "brain-$n" "$force"; done
+    all)    for n in "${bots[@]}"; do hold "$n" "brain-$n"; stop_proc "brain-$n" "$force"; done
             for n in "${bots[@]}"; do stop_bot "$n" "$force"; done
             for n in map char login; do stop_proc "$n" "$force"; done ;;
     server) for n in map char login; do stop_proc "$n" "$force"; done ;;
-    bot[0-9]*) stop_bot "$what" "$force" ;;
-    brain) for n in $(bots_arg "$which"); do stop_proc "brain-$n" "$force"; done ;;
-    live) for n in $(bots_arg "$which"); do stop_proc "brain-$n" "$force"; stop_bot "$n" "$force"; done ;;
+    bot[0-9]*) hold "$what"; stop_bot "$what" "$force" ;;
+    brain) for n in $(bots_arg "$which"); do hold "brain-$n"; stop_proc "brain-$n" "$force"; done ;;
+    live) for n in $(bots_arg "$which"); do hold "$n" "brain-$n"; stop_proc "brain-$n" "$force"; stop_bot "$n" "$force"; done ;;
     *) die "stop server|botNN|brain [BOT|all]|live [BOT|all]|all" ;;
   esac
   info "остановлено: $what"
@@ -914,6 +928,7 @@ cmd_status_body() {
       [[ -f "$PIDS/$s.pid" && "$(<"$PIDS/$s.pid")" == "$pid" ]] || line+=", запущен не через lab"
     else
       line="не запущен"
+      held "$s" && line+=" (остановлен владельцем — сторож не поднимает; запуск: scripts/lab start)"
     fi
     port=${PORT[$s]:-}
     if [[ -n "$port" ]]; then

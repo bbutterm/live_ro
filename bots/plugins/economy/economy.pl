@@ -1,8 +1,9 @@
 # economy — экономика жителя (live_ro): склад ценного лута, передача вещей жителю, лавка.
 #
-# 1. Склад. Карты (тип предмета 6) и предметы из economy_storeIds (по умолчанию руда
-#    Oridecon/Elunium и их необработанные версии) помечаются «на склад, не продавать»,
-#    если в items_control.txt для них нет своей строки. Остальное делает OpenKore:
+# 1. Склад. Карты (тип предмета 6), оружие и броня (типы 4, 5; economy_storeEquipment) и предметы
+#    из economy_storeIds (по умолчанию руда Oridecon/Elunium и необработанные) помечаются
+#    «на склад, не продавать», если в items_control.txt для них нет своей строки (AUT-020:
+#    правило «продавать всё» не уничтожает ценную вещь; дешёвое снаряжение продаётся по списку). Остальное делает OpenKore:
 #    storageAuto в config.txt (Kafra) срабатывает вместе с продажей (itemsMaxWeight_sellOrStore).
 # 2. Передача жителю (мозг: действие give). Подойти к жителю на 2 клетки (ограничение
 #    rAthena TRADE_DISTANCE), предложить сделку, положить предмет или зени, подтвердить.
@@ -33,7 +34,7 @@ my $hooks = Plugins::addHooks(
 );
 
 our %give;                      # текущая передача: id, to, item ('zeny' или nameID), amount, phase, since
-our @TRACK = (501, 502, 503, 504, 505, 506, 601, 602);   # зелья и крылья — счётчики для мозга
+our @TRACK = (569, 501, 502, 503, 504, 505, 506, 601, 602);   # зелья и крылья — счётчики для мозга
 my $DEFAULT_STORE = '984,985,756,757';                    # Oridecon, Elunium, Rough Oridecon, Rough Elunium
 my %STEP_TIMEOUT = (approach => 40, request => 15, add => 10, finalize => 10, final => 20);
 my $TRADE_DISTANCE = 2;
@@ -53,11 +54,13 @@ sub storeIds {
 sub keepValuables {
 	return 0 unless $char && $char->inventory;
 	my %ids = map { $_ => 1 } storeIds();
-	my $cards = !defined $config{economy_storeCards} || $config{economy_storeCards} ne '0';
+	my %types;
+	$types{6} = 1 if !defined $config{economy_storeCards} || $config{economy_storeCards} ne '0';
+	@types{4, 5} = (1, 1) if !defined $config{economy_storeEquipment} || $config{economy_storeEquipment} ne '0';
 	my $n = 0;
 	for my $item (@{$char->inventory}) {
 		next if $item->{equipped};
-		next unless ($cards && ($item->{type} // -1) == 6) || $ids{$item->{nameID}};
+		next unless $types{$item->{type} // -1} || $ids{$item->{nameID}};
 		next if $items_control{lc($item->{name} // '')} || $items_control{$item->{nameID}};
 		$items_control{$item->{nameID}} = {keep => 0, storage => 1, sell => 0, cart_add => 0, cart_get => 0};
 		$n++;

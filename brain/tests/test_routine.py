@@ -201,6 +201,50 @@ class RoutineTest(unittest.TestCase):
         self.assertIn("достиг 42 уровня", text[0])
         self.assertIn("встречался с Vera", text[0])
 
+    # ---------- AUT-008/026/037/086/098 ----------
+
+    def test_death_recover_town_then_hunt_only_with_hp(self):
+        self.run_for(2)
+        self.mind.state.update(dead=True, hp_pct=0)
+        asyncio.run(self.r.on_death(self.clock.t))
+        self.assertEqual(self.r.st["mode"], "town")
+        self.assertTrue(self.r.st["recover"])
+        self.assertEqual(self.mem.get("goal"), "отдыхаю в prontera и восстанавливаюсь")
+        # возродился в городе с 3% HP: перерыв прошёл, но на охоту не идёт
+        self.mind.state.update(dead=False, hp_pct=3)
+        self.run_for(15 * 60, step=5, on_tick=self.walk_to_town)
+        self.assertEqual(self.r.st["mode"], "town")
+        self.assertEqual(sum(1 for d in self.mind.decisions if d.get("event") == "routine_wait_hp"), 1)
+        self.assertIn("HP", asyncio.run(self.r.force("hunt")))          # и оператор не отправит больного
+        self.mind.state.update(hp_pct=85)
+        self.run_for(5, on_tick=self.walk_to_town)
+        self.assertEqual(self.r.st["mode"], "hunt")
+        self.assertFalse(self.r.st["recover"])
+        self.assertEqual(self.mem.get("goal"), "охочусь на prt_fild08")
+
+    def test_low_hp_without_potions_goes_to_town(self):
+        self.run_for(2)
+        self.mind.state.update(hp_pct=20, items={"501": 3})
+        self.run_for(60, step=5, on_tick=lambda: self.r.on_combat(self.clock.t))
+        self.assertEqual(self.r.st["mode"], "hunt", "есть зелья — тело лечится само")
+        self.mind.state.update(items={"501": 0})
+        self.run_for(10, step=5)
+        self.assertEqual(self.r.st["mode"], "hunt", "короткий провал HP — не паника")
+        self.run_for(20, step=5)
+        self.assertEqual(self.r.st["mode"], "town")
+        self.assertTrue(self.r.st["recover"])
+
+    def test_no_stuck_while_sitting_or_trading(self):
+        self.run_for(2)
+        self.mind.state.update(sitting=True)
+        self.run_for(400, step=5)
+        self.mind.state.update(sitting=False, activity="sellAuto")
+        self.run_for(400, step=5)
+        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [])
+        self.mind.state.update(activity="route")
+        self.run_for(301, step=5)
+        self.assertEqual([a for a in self.mind.sent if a["action"] == "unstuck"], [{"action": "unstuck"}])
+
 
 if __name__ == "__main__":
     unittest.main()

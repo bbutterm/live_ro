@@ -55,7 +55,10 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
   состояние в SQLite (`kv routine`); каждый тик сверка настройки OpenKore с режимом.
 - Модель видит распорядок и цели с прогрессом; `set_hunt_map` выбирает карту (в городе — на следующую сессию).
 - Встреча важнее распорядка: пока план встречи активен, распорядок не переключает режим.
-- Оператор: `scripts/lab routine BOT rest|hunt|show`.
+- Безопасность важнее расписания: после смерти — город и отдых, на охоту только при HP ≥ `min_hp_to_hunt`
+  (80%); на охоте HP < 25% без зелий — в город. Застревание не считается, пока сидит, торгует или дерётся.
+- Цель в памяти пишет распорядок при смене режима (`goal_source`), чтобы текст цели не расходился с телом.
+- Оператор: `scripts/lab routine BOT rest|hunt|show`. Команды ждут первого состояния тела, старше 10 мин — отказ.
 
 ## Хозяйство: продажа, склад, взаимопомощь, лавка
 Тело (OpenKore + плагин `bots/plugins/economy`), без LLM:
@@ -116,7 +119,8 @@ Vera: propose  ─шёпот [meet:id:map:x:y]─►  Arkady: offer → accept (
 
   Не больше `BRAIN_DAILY_LIMIT` запросов за 24 часа.
 - **Действует ограниченно:** `say`, `whisper`, `set_hunt_map` (только карты из `hunt_maps`
-  характера), `pause`, `resume`. Не больше 2 действий за решение. Плагин исполняет действие
+  характера), `pause` (перестать искать монстров — отбиваться и лечиться тело продолжает; не `ai manual`),
+  `resume`. Не больше 2 действий за решение. Плагин исполняет действие
   командой OpenKore и подтверждает исполнение.
 - **Без LLM** (`BRAIN_LLM=off`, нет ключа, исчерпан лимит, ошибка API — пауза 60 с) работают
   правила gate и safety, пишутся память и журнал, а бот играет по профилю OpenKore.
@@ -146,8 +150,8 @@ tail -n 20 $LAB_ROOT/state/bot01/decisions.jsonl
 
 ## Тесты
 ```sh
-cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine tests.test_economy
-perl -Ibots/tests/stubs bots/tests/combat_profile.t && perl -Ibots/tests/stubs bots/tests/economy.t   # из корня
+cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine tests.test_economy tests.test_inbox
+for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # из корня
 ```
 Сквозной тест без сети: фейковый OpenRouter, настоящий процесс мозга, фейковый плагин.
 Проверяет решение, исполнение, память после перезапуска, работу без ключа, `--check` и то,

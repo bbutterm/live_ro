@@ -15,7 +15,10 @@
 #   say {text}            -> c <text>
 #   whisper {to, text}    -> pm "<to>" <text>
 #   set_hunt_map {map}    -> conf lockMap <map>
-#   pause {} / resume {}  -> ai manual / ai auto
+#   pause {}              -> не искать новых целей (attackAuto 1: только отбиваться), не бродить
+#                            (route_randomWalk 0); прежние значения в brainBridge_paused.
+#                            НЕ ai manual: в нём OpenKore не отбивается, не пьёт зелья и не делает респаун.
+#   resume {}             -> вернуть значения из brainBridge_paused; ai auto
 #   party_create {name}   -> party create "LR_<имя>"   (только имена LR_*)
 #   party_invite {to}     -> party request "<to>"
 #   party_accept {}       -> party join 1               (мозг решает по событию party_invite)
@@ -28,6 +31,8 @@
 #   give {to,item,amount} -> плагин economy: подойти, сделка, положить предмет/зени, подтвердить
 #                            (итог — событие give_result; только жителю из dealAuto_names)
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
+# Смерть: если персонаж мёртв, а AI не в auto дольше 3 с (оператор поставил ai manual), плагин
+# сам включает ai auto — иначе OpenKore не делает респаун (AI::CoreLogic processDead только в auto).
 # В state от плагина economy: items (зелья/крылья по ID), vend {can, open}, give (идёт передача).
 package brainBridge;
 
@@ -52,6 +57,7 @@ my ($sock, $inbuf, $lastTry, $lastState) = (undef, '', 0, 0);
 # Ожидают ответа сервера: шёпот (результат 0x9a/private_message_sent) и общий чат (эхо self_chat).
 my (@pendingPM, @pendingSay);
 my $DELIVERY_TIMEOUT = 15;
+my $deadManualSince;
 
 my $hooks = Plugins::addHooks(
 	['mainLoop_post',      \&onTick],
@@ -135,6 +141,10 @@ sub sendState {
 		exp_pct   => pct($char->{exp}, $char->{exp_max}),
 		hp_pct    => pct($char->{hp}, $char->{hp_max}),
 		sp_pct    => pct($char->{sp}, $char->{sp_max}),
+		hp        => $char->{hp} + 0, hp_max => $char->{hp_max} + 0,
+		sp        => $char->{sp} + 0, sp_max => $char->{sp_max} + 0,
+		sitting   => ($char->{sitting} ? JSON::PP::true : JSON::PP::false),
+		paused    => (($config{brainBridge_paused} // '') ne '' ? JSON::PP::true : JSON::PP::false),
 		weight_pct=> pct($char->{weight}, $char->{weight_max}),
 		zeny      => $char->{zeny} + 0,
 		map       => ($field ? $field->baseName : undef),
@@ -327,9 +337,13 @@ sub actionToCommand {
 		return (0, 'лавка не открыта') unless $v && $v->{open};
 		return (1, 'closeshop');
 	} elsif ($kind eq 'pause') {
-		return (1, 'ai manual');
+		return (1, []) if ($config{brainBridge_paused} // '') ne '';      # уже на паузе
+		my $saved = join(' ', map { defined $config{$_} && $config{$_} ne '' ? $config{$_} : 0 } qw(attackAuto route_randomWalk));
+		return (1, ["conf -f brainBridge_paused $saved", 'conf attackAuto 1', 'conf route_randomWalk 0']);
 	} elsif ($kind eq 'resume') {
-		return (1, 'ai auto');
+		my ($attack, $walk) = split ' ', ($config{brainBridge_paused} // '');
+		return (1, ['ai auto']) unless defined $walk;
+		return (1, ["conf attackAuto $attack", "conf route_randomWalk $walk", 'conf -f brainBridge_paused none', 'ai auto']);
 	}
 	return (0, "неизвестное действие '$kind'");
 }
@@ -382,7 +396,22 @@ sub readIncoming {
 	}
 }
 
+# AUT-007: мёртвый персонаж в ai manual не сделает респаун — вернуть ai auto.
+sub deadWatch {
+	if (!inGame() || !$char->{dead} || AI::state() == AI::AUTO()) {
+		undef $deadManualSince;
+		return;
+	}
+	$deadManualSince //= time;
+	return if time - $deadManualSince < 3;
+	warning "[brainBridge] персонаж мёртв, а AI не в auto — включаю ai auto для респауна\n";
+	Commands::run('ai auto');
+	event('auto_resumed_dead');
+	undef $deadManualSince;
+}
+
 sub onTick {
+	deadWatch();
 	tryConnect();
 	return unless $sock;
 	readIncoming();
