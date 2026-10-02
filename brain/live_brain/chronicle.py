@@ -36,6 +36,7 @@ from .herbal import CHRONICLE_LINES as HERBAL_LINES      # herbal: травни�
 from .arrows import CHRONICLE_LINES as ARROW_LINES       # arrows: Arrow Crafting (ORG-075)
 from .trek import CHRONICLE_LINES as TREK_LINES          # trek: дальний поход группой (ORG-078)
 from .wed import CHRONICLE_LINES as WED_LINES            # wed: помолвка и свадьба (ORG-062)
+from .legacy import CHRONICLE_LINES as LEGACY_LINES      # legacy: наследие и уход на покой (ORG-083)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
@@ -75,6 +76,7 @@ LINES = {
     **ARROW_LINES,                                        # arrows: ORG-075
     **TREK_LINES,                                         # trek: ORG-078
     **WED_LINES,                                          # wed: ORG-062
+    **LEGACY_LINES,                                       # legacy: ORG-083
     **places.CHRONICLE_LINES,                             # places: ORG-084
     **MARKET_LINES,                                       # market: ORG-071
     **REFINE_LINES,                                       # refine: ORG-072

@@ -211,6 +211,24 @@ def chapter(facts, sex, start, end, number, born=None, places=None, tz=None):
             "lines": lines, "kinds": kinds}
 
 
+def farewell_lines(fw, sex=None):                                       # legacy: ORG-083 глава «Прощание»
+    """Прощальная глава из kv legacy_farewell (legacy.py) — только факты."""
+    lines = []
+    if fw.get("days") is not None:
+        lines.append(f"Я {g(sex, 'прожил', 'прожила')} в мире {fw['days']} дн.")
+    for d in fw.get("dreams") or []:
+        lines.append(f"Сбылась мечта: {d}.")
+    if fw.get("reasons"):
+        lines.append("Пора на покой: " + "; ".join(fw["reasons"]) + ".")
+    if fw.get("heir"):
+        n = len(fw.get("gifts") or [])
+        lines.append(f"Наследник — {fw['heir']} ({fw.get('heir_kind') or 'друг'}): "
+                     + (f"{g(sex, 'передал', 'передала')} посылок: {n} — сервер подтвердил." if n else
+                        "посылки не подтверждены сервером."))
+    lines.append("Ухожу на покой. Спасибо всем, кто был рядом.")
+    return lines
+
+
 def render_chapter(ch, colored=None):
     out = [f"## Глава {ch['number']}. {ch['title']} ({ch['days'][0]} – {ch['days'][1]})", ""]
     if colored:
@@ -226,7 +244,10 @@ def build(db, name, sex, now=None, week=None, tz_hours=0, until_week_end=False):
     now = now or time.time()
     born = born_ts(db)
     places = kv(db, "places")
-    out = {"name": name, "chapters": [], "born": born}
+    out = {"name": name, "chapters": [], "born": born, "sex": sex}
+    fw = kv(db, "legacy_farewell")                                      # legacy: ORG-083
+    if fw:                                                              # legacy:
+        out["farewell"] = fw                                            # legacy:
     if born is None:
         return out
     first_start, _, _, tz = week_bounds(None, tz_hours, now=born)
@@ -258,6 +279,9 @@ def render(book, colored=None):
         out += ["", "В памяти ещё нет событий."]
     for ch in book["chapters"]:
         out += ["", render_chapter(ch, colored.get(ch.get("week")))]
+    if book.get("farewell"):                                            # legacy: ORG-083 прощальная глава
+        day = datetime.fromtimestamp(book["farewell"].get("ts") or 0).strftime("%Y-%m-%d")   # legacy:
+        out += ["", f"## Прощание ({day})", "", " ".join(farewell_lines(book["farewell"], book.get("sex")))]   # legacy:
     return "\n".join(out) + "\n"
 
 
@@ -370,13 +394,18 @@ class Memoir:
         book = build(self.mind.mem.db, state.get("name") or self.mind.persona.get("name") or "жителя",
                      state.get("sex"), now=now, tz_hours=self.tz_hours, until_week_end=True)
         self.mind.mem.set("memoir_week", current)
-        if not book["chapters"]:
+        if not book["chapters"] and not book.get("farewell"):          # legacy: прощание — и без законченных недель
             return
         try:
             path.write_text(render(book), encoding="utf-8")
         except OSError as e:
             log.warning("мемуары не записаны: %s", e)
             return
+        if book.get("farewell") and not self.mind.mem.get("memoir_farewell"):   # legacy: ORG-083
+            self.mind.mem.set("memoir_farewell", True)                         # legacy:
+            self.mind.mem.add_event("memoir_farewell", {"chapters": len(book["chapters"])})   # legacy:
+        if not book["chapters"]:                                               # legacy:
+            return                                                             # legacy:
         last = book["chapters"][-1]
         self.mind.mem.add_event("memoir_chapter", {"week": last["week"], "title": last["title"],
                                                    "chapters": len(book["chapters"])})

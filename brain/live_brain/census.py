@@ -105,11 +105,14 @@ def read_memory(db_path, now, names):
             rels = {n: int(a or 0) for n, a in db.execute("SELECT name, affinity FROM relations") if n in names}
         except sqlite3.OperationalError:
             rels = {}
+        row = db.execute("SELECT value FROM kv WHERE key = 'legacy'").fetchone()   # legacy: ORG-083
+        legacy = _loads(row[0]) if row else None                                  # legacy:
     except sqlite3.DatabaseError:
         return None
     finally:
         db.close()
-    return {"state": st if isinstance(st, dict) else {}, "activities": acts, "relations": rels}
+    return {"state": st if isinstance(st, dict) else {}, "activities": acts, "relations": rels,
+            "legacy": legacy if isinstance(legacy, dict) else None}             # legacy:
 
 
 def residents(repo, lab_root, lab_bots, now):
@@ -130,6 +133,7 @@ def residents(repo, lab_root, lab_bots, now):
             "persona": o.get("persona"), "party": st.get("party") or None, "memory": mem is not None,
             "relations": (mem or {}).get("relations") or {},
             "activities": sorted(((mem or {}).get("activities") or {}).items(), key=lambda kv: -kv[1])[:3],
+            "legacy": (mem or {}).get("legacy"),                                  # legacy: ORG-083
         })
     return out
 
@@ -274,7 +278,26 @@ def collect(repo, lab_root, lab_bots, max_online=None, now=None, proc="/proc"):
     gs = gaps(rs)
     return {"now": now, "residents": rs, "gaps": gs, "recommend": recommend(repo, rs, gs),
             "capacity": capacity(lab_root, list(lab_bots), max_online, proc, now),
-            "blockers": birth_blockers(repo, rs, now), "next_bot": next_bot(rs)}
+            "blockers": birth_blockers(repo, rs, now), "next_bot": next_bot(rs),
+            "retire": retire_advice(rs)}                                         # legacy: ORG-083
+
+
+def retire_advice(rs):                                                   # legacy: ORG-083
+    """Жители, ушедшие на покой (kv legacy.phase retired) или решившие уйти: совет владельцу, ничего не меняет."""
+    out = []
+    for r in rs:
+        lg = r.get("legacy") or {}
+        if lg.get("phase") not in ("ready", "bequest", "farewell", "retired"):
+            continue
+        done = lg.get("phase") == "retired"
+        item = {"bot": r["bot"], "name": r["name"], "phase": lg.get("phase"), "reasons": lg.get("reasons") or [],
+                "heir": lg.get("heir"), "gifts": lg.get("gifts"), "active": r["active"]}
+        if done and r["active"]:
+            item["todo"] = (f"в brain/world/roster.json у {r['bot']} поставить \"active\": false, затем "
+                            f"scripts/lab roster sync --write, убрать {r['bot']} из LAB_BOTS и остановить штатно: "
+                            f"scripts/lab stop live {r['bot']}")
+        out.append(item)
+    return out
 
 
 def _lv(r):
@@ -337,6 +360,14 @@ def render(data):
     lines += [f"   ! {n}" for n in cap["notes"]]
     lines.append("== блокеры рождения")
     lines += [f"   ! {b}" for b in data["blockers"]] or ["   нет"]
+    if data.get("retire"):                                                    # legacy: ORG-083
+        lines.append("== уход на покой (ORG-083, совет владельцу; мозг процессы и реестр не трогает)")
+        for t in data["retire"]:
+            what = "ушёл(ушла) на покой" if t["phase"] == "retired" else f"готовится уйти ({t['phase']})"
+            heir = f"; наследник {t['heir']}, посылок подтверждено: {t['gifts'] or 0}" if t["heir"] else ""
+            lines.append(f"   {t['bot']} {t['name']}: {what} — {'; '.join(t['reasons']) or '?'}{heir}")
+            if t.get("todo"):
+                lines.append(f"      сделать: {t['todo']}")
     return "\n".join(lines)
 
 

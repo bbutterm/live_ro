@@ -281,5 +281,11 @@
     "check_hours": 12, "ask_gap_days": 14, "max_asks": 2, "near_cells": 8,
     "gift_zeny": 500, "keep_zeny": 5000,
     "level": 45, "fee": {"m": 1300000, "f": 1200000}, "ring_price": 45000, "outfit_price": 43000
+  },
+  "legacy": {
+    "_comment": "ORG-083 наследие и уход на покой (brain/live_brain/legacy.py, docs/LIFE.md §5, docs/POPULATION.md). ВЫКЛЮЧЕНО: уход жителя — решение владельца. Условие (любое): мечта сбылась за >= long_dream_days дней, уровень >= elder_level, возраст >= elder_days (born в roster.json, иначе первое событие памяти); не во время помолвки без брака, опеки ученика, занятости тела. Наследник: ученик, затем супруг/жених, затем друг (affinity >= heir_min). Посылки почтой: карты и зени сверх keep_zeny (<= max_zeny), не больше max_parcels писем. Затем прощальная глава мемуаров, событие legacy_retired и совет в scripts/lab census: active: false в roster.json ставит владелец. Мозг процессы, реестр и БД не трогает.",
+    "enabled": false,
+    "check_hours": 24, "elder_level": 90, "elder_days": 90, "long_dream_days": 30,
+    "heir_min": 4, "keep_zeny": 20000, "max_zeny": 100000, "max_parcels": 3
   }
 }
