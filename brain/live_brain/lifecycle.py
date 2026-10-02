@@ -126,6 +126,9 @@ class Lifecycle:
         party = getattr(m, "party", None)
         if party and (party.waiting_since is not None or party.help_until > now):
             owners.add("party")
+        spar = getattr(m, "spar", None)                      # spar: спарринг ведёт тело (ORG-061) — как этап квеста
+        if (spar and spar.busy()) or (s.get("spar") or {}).get("running"):   # spar:
+            owners.add("plan")                               # spar:
         return owners
 
     def may_move(self, owner, now=None):

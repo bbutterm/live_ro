@@ -51,6 +51,8 @@ bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # 
 market_day (ORG-071) — тик 15 (пороги дня до economy).  # market:
 refine (ORG-072) — тик 105, событие refine_result 65 (own).  # refine:
 gaze (ORG-067) — тик 75, эхо social [chat:] 20.  # look:
+achieve (ORG-080) — события achievement/achievement_list/achievement_reward 80 (own), тик 227, промпт 237.  # achieve:
+spar (ORG-061) — метка [spar:] 47, события spar_step/spar_result 85 (own), тик 195 (без поля промпта).  # spar:
 """
 import inspect
 import re
@@ -93,6 +95,8 @@ from .places import Places           # places: ORG-084 имена мест
 from .market import MarketDay        # market: ORG-071 рыночный день
 from .refine import Refine           # refine: ORG-072 заточка у кузнеца
 from .gaze import Gaze               # look: ORG-067 взгляд на собеседника
+from .spar import Spar               # spar: ORG-061 спарринг на арене (по умолчанию выключен)
+from .achieve import Achieve         # achieve: ORG-080 достижения сервера
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -137,6 +141,8 @@ MODULES = (
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
     Bestiary,          # bestiary: ORG-077 после social (тема bestiary); тик 225, событие kill 75, промпт 235
+    Spar,              # spar: ORG-061 после rivalry и society (соперник, ссоры); тик 195, метка [spar:] 47
+    Achieve,           # achieve: ORG-080 после social (тема achieve) и rivalry; тик 227, события 80, промпт 237
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 

@@ -1,0 +1,1811 @@
+{
+ "_comment": "ORG-080: scripts/gen_achievements.py из rAthena db/re/achievement_db.yml — руками не править",
+ "source": "db/re/achievement_db.yml",
+ "achievements": {
+  "110000": {
+   "name": "At this time I live to eat",
+   "group": "Eat",
+   "score": 10
+  },
+  "110001": {
+   "name": "A fan of this polarity",
+   "group": "Chatting",
+   "score": 10
+  },
+  "120001": {
+   "name": "North Prontera Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120002": {
+   "name": "North Prontera Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120003": {
+   "name": "North Prontera Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120004": {
+   "name": "West Prontera Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120005": {
+   "name": "West Prontera Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120006": {
+   "name": "East Prontera Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120007": {
+   "name": "South Prontera Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120008": {
+   "name": "South Prontera Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120009": {
+   "name": "South Prontera Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120010": {
+   "name": "South Prontera Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120011": {
+   "name": "East Geffen Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120012": {
+   "name": "Southeast Geffen Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120013": {
+   "name": "Northwest Geffen Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120014": {
+   "name": "Northwest Geffen Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120015": {
+   "name": "Northwest Geffen Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120016": {
+   "name": "South Geffen Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120017": {
+   "name": "South Geffen Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120018": {
+   "name": "Sograt Desert Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120019": {
+   "name": "Sograt Desert Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120020": {
+   "name": "Sograt Desert Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120021": {
+   "name": "Sograt Desert Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120022": {
+   "name": "Sograt Desert Field Exploration(5)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120023": {
+   "name": "Sograt Desert Field Exploration(6)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120024": {
+   "name": "Southwest Payon Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120025": {
+   "name": "Southwest Payon Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120026": {
+   "name": "Southwest Payon Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120027": {
+   "name": "Southwest Payon Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120028": {
+   "name": "East Payon Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120029": {
+   "name": "East Payon Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120030": {
+   "name": "East Payon Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120031": {
+   "name": "East Payon Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120032": {
+   "name": "North Mjolnir Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120033": {
+   "name": "North Mjolnir Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120034": {
+   "name": "North Mjolnir Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120035": {
+   "name": "North Mjolnir Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120036": {
+   "name": "North Mjolnir Field Exploration(5)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120037": {
+   "name": "South Mjolnir Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120038": {
+   "name": "South Mjolnir Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120039": {
+   "name": "South Mjolnir Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120040": {
+   "name": "South Mjolnir Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120041": {
+   "name": "South Mjolnir Field Exploration(5)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120042": {
+   "name": "South Mjolnir Field Exploration(6)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120043": {
+   "name": "South Aldebaran Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120044": {
+   "name": "Comodo Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120045": {
+   "name": "Comodo Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120046": {
+   "name": "Comodo Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120047": {
+   "name": "Comodo Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120048": {
+   "name": "Comodo Field Exploration(5)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120049": {
+   "name": "Comodo Field Exploration(6)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120050": {
+   "name": "Comodo Field Exploration(7)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120051": {
+   "name": "Comodo Field Exploration(8)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120052": {
+   "name": "Border Checkpoint Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120053": {
+   "name": "Border Checkpoint Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120054": {
+   "name": "Kiel Hyre Mansion Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120055": {
+   "name": "El Mes Plateau Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120056": {
+   "name": "El Mes Plateau Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120057": {
+   "name": "El Mes Plateau Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120058": {
+   "name": "El Mes Gorge Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120059": {
+   "name": "Kiel Hyre Academy Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120060": {
+   "name": "Guard Camp Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120061": {
+   "name": "Juno Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120062": {
+   "name": "Front of Thanatos Tower Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120063": {
+   "name": "Hugel Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120064": {
+   "name": "Hugel Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120065": {
+   "name": "Hugel Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120066": {
+   "name": "Abyss Lake Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120067": {
+   "name": "Einbroch Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120068": {
+   "name": "Einbroch Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120069": {
+   "name": "Einbroch Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120070": {
+   "name": "Einbroch Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120071": {
+   "name": "Einbroch Field Exploration(5)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120072": {
+   "name": "Einbroch Field Exploration(6)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120073": {
+   "name": "Einbroch Field Exploration(7)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120074": {
+   "name": "Einbroch Field Exploration(8)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120075": {
+   "name": "Lighthalzen Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120076": {
+   "name": "Lighthalzen Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120077": {
+   "name": "Lighthalzen Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120078": {
+   "name": "Rachel Audhumbla Plains Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120079": {
+   "name": "Rachel Plains Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120080": {
+   "name": "Rachel Plains Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120081": {
+   "name": "Rachel Plains Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120082": {
+   "name": "Rachel Audhumbla Grassland Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120083": {
+   "name": "Rachel Audhumbla Grassland Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120084": {
+   "name": "Portus Luna Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120085": {
+   "name": "Veins Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120086": {
+   "name": "Veins Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120087": {
+   "name": "Veins Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120088": {
+   "name": "Veins Field Exploration(4)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120089": {
+   "name": "Veins Field Exploration(5)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120090": {
+   "name": "Eclage Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120091": {
+   "name": "North Bitfrost Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120092": {
+   "name": "South Bitfrost Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120093": {
+   "name": "Splendide Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120094": {
+   "name": "Splendide Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120095": {
+   "name": "Splendide Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120096": {
+   "name": "Manuk Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120097": {
+   "name": "Manuk Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120098": {
+   "name": "Manuk Field Exploration(3)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120099": {
+   "name": "Outskirts of Kamidal Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120100": {
+   "name": "Outskirts of Kamidal Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120101": {
+   "name": "Amatsu Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120102": {
+   "name": "Kunlun Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120103": {
+   "name": "Kunlun Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120104": {
+   "name": "Ayothaya Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120105": {
+   "name": "Moscovia Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120106": {
+   "name": "Brasilis Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120107": {
+   "name": "Dewata Field Exploration",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120108": {
+   "name": "Malaya Field Exploration(1)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120109": {
+   "name": "Malaya Field Exploration(2)",
+   "group": "Adventure",
+   "score": 10
+  },
+  "120110": {
+   "name": "Abbey Underground Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120111": {
+   "name": "Abyss Lake Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120112": {
+   "name": "Clock Tower Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120113": {
+   "name": "Amatsu Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120114": {
+   "name": "Ant Hell Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120115": {
+   "name": "Ayothaya Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120116": {
+   "name": "Comodo Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120117": {
+   "name": "Brasilis Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120118": {
+   "name": "Clock Tower Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120119": {
+   "name": "Istana Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120120": {
+   "name": "Scaraba Hole Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120121": {
+   "name": "Bitfrost Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120122": {
+   "name": "Einbroch Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120123": {
+   "name": "Geffen Underground Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120124": {
+   "name": "Glastheim Dungeon Exploration(1)",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120125": {
+   "name": "Glastheim Dungeon Exploration(2)",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120126": {
+   "name": "Glastheim Dungeon Exploration(3)",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120127": {
+   "name": "Glastheim Dungeon Exploration(4)",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120128": {
+   "name": "Kunlun Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120129": {
+   "name": "Rachel Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120130": {
+   "name": "Sphinx Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120131": {
+   "name": "Izlude Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120132": {
+   "name": "Robot Factory Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120133": {
+   "name": "Bio Lab Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120134": {
+   "name": "Kunlun Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120135": {
+   "name": "Nogg Road Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120136": {
+   "name": "Coal Mine Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120137": {
+   "name": "Pyramid Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120138": {
+   "name": "Orc Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120139": {
+   "name": "Payon Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120140": {
+   "name": "Labyrinth Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120141": {
+   "name": "Undersea Tunnel Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120142": {
+   "name": "Thanatos Tower Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120143": {
+   "name": "Thor Volcano Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120144": {
+   "name": "Sunken Ship Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120145": {
+   "name": "Turtle Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "120146": {
+   "name": "Toy Factory Dungeon Exploration",
+   "group": "Adventure",
+   "score": 20
+  },
+  "127001": {
+   "name": "Prontera Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127002": {
+   "name": "Geffen Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127003": {
+   "name": "Morocc Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127004": {
+   "name": "Payon Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127005": {
+   "name": "Juno Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127006": {
+   "name": "Lighthalzen Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127007": {
+   "name": "Einbroch Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127008": {
+   "name": "Rachel Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "127009": {
+   "name": "Veins Contribution",
+   "group": "Chatting",
+   "score": 10
+  },
+  "128000": {
+   "name": "Uninvited Guest",
+   "group": "Battle",
+   "score": 10
+  },
+  "128001": {
+   "name": "Strange Guest",
+   "group": "Battle",
+   "score": 10
+  },
+  "128002": {
+   "name": "Get along with map...",
+   "group": "Battle",
+   "score": 20
+  },
+  "128003": {
+   "name": "Welcomed Guest",
+   "group": "Battle",
+   "score": 30
+  },
+  "128004": {
+   "name": "Kimmy's best friend",
+   "group": "Battle",
+   "score": 50
+  },
+  "128005": {
+   "name": "Novice Angler",
+   "group": "Battle",
+   "score": 10
+  },
+  "128006": {
+   "name": "Juicy Hunter",
+   "group": "Battle",
+   "score": 20
+  },
+  "128007": {
+   "name": "Rhythm Master",
+   "group": "Battle",
+   "score": 50
+  },
+  "128008": {
+   "name": "Bold Adventurer",
+   "group": "Battle",
+   "score": 10
+  },
+  "128009": {
+   "name": "Baphomet Hatred",
+   "group": "Battle",
+   "score": 20
+  },
+  "128010": {
+   "name": "Goat's Nemesis",
+   "group": "Battle",
+   "score": 50
+  },
+  "128011": {
+   "name": "Ordinary Tourist",
+   "group": "Battle",
+   "score": 10
+  },
+  "128012": {
+   "name": "Backcountry Expert",
+   "group": "Battle",
+   "score": 20
+  },
+  "128013": {
+   "name": "Able to eat more like this",
+   "group": "Battle",
+   "score": 50
+  },
+  "128014": {
+   "name": "Digest hard meat",
+   "group": "Battle",
+   "score": 10
+  },
+  "128015": {
+   "name": "Master of Escape",
+   "group": "Battle",
+   "score": 20
+  },
+  "128016": {
+   "name": "Immortal Hunter",
+   "group": "Battle",
+   "score": 50
+  },
+  "128017": {
+   "name": "Stood up and overcame despair",
+   "group": "Battle",
+   "score": 10
+  },
+  "128018": {
+   "name": "Ember of Hope",
+   "group": "Battle",
+   "score": 10
+  },
+  "128019": {
+   "name": "Pouring Aurora",
+   "group": "Battle",
+   "score": 20
+  },
+  "128020": {
+   "name": "Who is desperate? I am hopeless!",
+   "group": "Battle",
+   "score": 30
+  },
+  "128021": {
+   "name": "I know god will save the world",
+   "group": "Battle",
+   "score": 50
+  },
+  "128022": {
+   "name": "There was mercy in Morocc army",
+   "group": "Battle",
+   "score": 10
+  },
+  "128023": {
+   "name": "There was fear in Morocc army",
+   "group": "Battle",
+   "score": 20
+  },
+  "128024": {
+   "name": "Guard of weak army",
+   "group": "Battle",
+   "score": 50
+  },
+  "128025": {
+   "name": "Audience with the queen",
+   "group": "Battle",
+   "score": 10
+  },
+  "128026": {
+   "name": "Warm earth",
+   "group": "Battle",
+   "score": 10
+  },
+  "128027": {
+   "name": "Water is very good exactly",
+   "group": "Battle",
+   "score": 10
+  },
+  "128028": {
+   "name": "Pleasant breeze",
+   "group": "Battle",
+   "score": 10
+  },
+  "128029": {
+   "name": "Visitor of old castle",
+   "group": "Battle",
+   "score": 10
+  },
+  "128030": {
+   "name": "Lord of old castle",
+   "group": "Battle",
+   "score": 20
+  },
+  "128031": {
+   "name": "Conqueror of old castle",
+   "group": "Battle",
+   "score": 50
+  },
+  "128032": {
+   "name": "Haggard sucker",
+   "group": "Battle",
+   "score": 10
+  },
+  "128033": {
+   "name": "Hope of the Knight",
+   "group": "Battle",
+   "score": 20
+  },
+  "128034": {
+   "name": "Guardian of the Dawn",
+   "group": "Battle",
+   "score": 50
+  },
+  "128035": {
+   "name": "Time Traveler",
+   "group": "Battle",
+   "score": 10
+  },
+  "128036": {
+   "name": "Restore ancient relic",
+   "group": "Battle",
+   "score": 20
+  },
+  "128037": {
+   "name": "Master of relic transport",
+   "group": "Battle",
+   "score": 50
+  },
+  "128038": {
+   "name": "Show Jailbreak to the captain",
+   "group": "Battle",
+   "score": 10
+  },
+  "128039": {
+   "name": "Show Jailbreak to the weak captain",
+   "group": "Battle",
+   "score": 10
+  },
+  "128040": {
+   "name": "Riot on board",
+   "group": "Battle",
+   "score": 20
+  },
+  "128041": {
+   "name": "Turmoil on board",
+   "group": "Battle",
+   "score": 20
+  },
+  "128042": {
+   "name": "Rebellion on board",
+   "group": "Battle",
+   "score": 50
+  },
+  "128043": {
+   "name": "Revolt of Riot",
+   "group": "Battle",
+   "score": 50
+  },
+  "128044": {
+   "name": "Magic tournament champion",
+   "group": "Battle",
+   "score": 10
+  },
+  "128045": {
+   "name": "Gladiator of Coliseum",
+   "group": "Battle",
+   "score": 20
+  },
+  "128046": {
+   "name": "Slayer of Colosseum",
+   "group": "Battle",
+   "score": 50
+  },
+  "128047": {
+   "name": "Endless Tower challenger",
+   "group": "Battle",
+   "score": 10
+  },
+  "128048": {
+   "name": "Endless Tower Slayer",
+   "group": "Battle",
+   "score": 20
+  },
+  "128049": {
+   "name": "Lord of the tower",
+   "group": "Battle",
+   "score": 50
+  },
+  "128050": {
+   "name": "Novice Exorcist",
+   "group": "Battle",
+   "score": 10
+  },
+  "128051": {
+   "name": "Experienced Exorcist",
+   "group": "Battle",
+   "score": 20
+  },
+  "128052": {
+   "name": "Legendary Exorcist",
+   "group": "Battle",
+   "score": 50
+  },
+  "129001": {
+   "name": "Prontera Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129002": {
+   "name": "Geffen Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129003": {
+   "name": "Sograt Desert Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129004": {
+   "name": "Payon Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129005": {
+   "name": "North Mjolnir Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129006": {
+   "name": "South Mjolnir Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129007": {
+   "name": "Comodo Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129008": {
+   "name": "Rune-Midgarts Explorer",
+   "group": "Adventure",
+   "score": 50
+  },
+  "129009": {
+   "name": "Juno Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129010": {
+   "name": "Hugel Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129011": {
+   "name": "Einbroch Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129012": {
+   "name": "Lighthalzen Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129013": {
+   "name": "Schwarzwald Explorer",
+   "group": "Adventure",
+   "score": 50
+  },
+  "129014": {
+   "name": "Rachel Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129015": {
+   "name": "Veins Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129016": {
+   "name": "Arunafeltz Explorer",
+   "group": "Adventure",
+   "score": 50
+  },
+  "129017": {
+   "name": "Laphine Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129018": {
+   "name": "Manuk Explorer",
+   "group": "Adventure",
+   "score": 20
+  },
+  "129019": {
+   "name": "Eclage Explorer",
+   "group": "Adventure",
+   "score": 50
+  },
+  "129020": {
+   "name": "Localizing fields explorer",
+   "group": "Adventure",
+   "score": 50
+  },
+  "129021": {
+   "name": "Glastheim Challenge Mode",
+   "group": "Battle",
+   "score": 10
+  },
+  "130000": {
+   "name": "Socialite debut",
+   "group": "Chatting",
+   "score": 10
+  },
+  "130005": {
+   "name": "Who made the king",
+   "group": "Chatting",
+   "score": 10
+  },
+  "170000": {
+   "name": "Song chamber is not an accident",
+   "group": "Chatting",
+   "score": 10
+  },
+  "190000": {
+   "name": "Alliance workers of merchant city",
+   "group": "Chatting",
+   "score": 50
+  },
+  "200000": {
+   "name": "Acquire the first aura!",
+   "group": "Goal_Level",
+   "score": 50
+  },
+  "200001": {
+   "name": "Acquire the second aura!",
+   "group": "Goal_Level",
+   "score": 60
+  },
+  "200002": {
+   "name": "Acquire the third aura!",
+   "group": "Goal_Level",
+   "score": 70
+  },
+  "200003": {
+   "name": "Master Job level!",
+   "group": "Goal_Level",
+   "score": 30
+  },
+  "200004": {
+   "name": "Grandmaster Job level!",
+   "group": "Goal_Level",
+   "score": 50
+  },
+  "200005": {
+   "name": "Official Adventurer",
+   "group": "Job_Change",
+   "score": 10
+  },
+  "200006": {
+   "name": "First step of job change!",
+   "group": "Job_Change",
+   "score": 20
+  },
+  "200007": {
+   "name": "Veteran Adventurer! (1)",
+   "group": "Job_Change",
+   "score": 25
+  },
+  "200008": {
+   "name": "Veteran Adventurer! (2)",
+   "group": "Job_Change",
+   "score": 25
+  },
+  "200009": {
+   "name": "Warrior (1)",
+   "group": "Job_Change",
+   "score": 30
+  },
+  "200010": {
+   "name": "Warrior (2)",
+   "group": "Job_Change",
+   "score": 30
+  },
+  "200011": {
+   "name": "Elite Adventurer! (1)",
+   "group": "Job_Change",
+   "score": 50
+  },
+  "200012": {
+   "name": "Transcendentaler! (1)",
+   "group": "Job_Change",
+   "score": 60
+  },
+  "200013": {
+   "name": "Elite Adventurer! (2)",
+   "group": "Job_Change",
+   "score": 50
+  },
+  "200014": {
+   "name": "Transcendentaler! (2)",
+   "group": "Job_Change",
+   "score": 60
+  },
+  "200015": {
+   "name": "The way of exceptional character",
+   "group": "Job_Change",
+   "score": 10
+  },
+  "200016": {
+   "name": "This is My way!",
+   "group": "Job_Change",
+   "score": 20
+  },
+  "200017": {
+   "name": "Bearish Power!",
+   "group": "Goal_Status",
+   "score": 10
+  },
+  "200018": {
+   "name": "Overflowing Magic!",
+   "group": "Goal_Status",
+   "score": 10
+  },
+  "200019": {
+   "name": "Healthy Body and Mental Health!",
+   "group": "Goal_Status",
+   "score": 10
+  },
+  "200020": {
+   "name": "Speed of Light",
+   "group": "Goal_Status",
+   "score": 10
+  },
+  "200021": {
+   "name": "Hawk Eyes",
+   "group": "Goal_Status",
+   "score": 10
+  },
+  "200022": {
+   "name": "Maximum Luck",
+   "group": "Goal_Status",
+   "score": 10
+  },
+  "200023": {
+   "name": "Dragonlike Power!",
+   "group": "Goal_Status",
+   "score": 20
+  },
+  "200024": {
+   "name": "Magic Insanity",
+   "group": "Goal_Status",
+   "score": 20
+  },
+  "200025": {
+   "name": "Rock Alloy",
+   "group": "Goal_Status",
+   "score": 20
+  },
+  "200026": {
+   "name": "Speed of Light",
+   "group": "Goal_Status",
+   "score": 20
+  },
+  "200027": {
+   "name": "Falcon's Eyes",
+   "group": "Goal_Status",
+   "score": 20
+  },
+  "200028": {
+   "name": "Lucky Fever",
+   "group": "Goal_Status",
+   "score": 20
+  },
+  "200029": {
+   "name": "Incarnation of Love and Hate",
+   "group": "Goal_Status",
+   "score": 30
+  },
+  "200030": {
+   "name": "I really love it!",
+   "group": "Goal_Status",
+   "score": 30
+  },
+  "200031": {
+   "name": "Reborn in Valhalla!",
+   "group": "Job_Change",
+   "score": 10
+  },
+  "200032": {
+   "name": "The start of another adventure!",
+   "group": "Goal_Level",
+   "score": 10
+  },
+  "200033": {
+   "name": "With a new mind!(1)",
+   "group": "Goal_Level",
+   "score": 50
+  },
+  "200034": {
+   "name": "With a new mind!(2)",
+   "group": "Goal_Level",
+   "score": 50
+  },
+  "200035": {
+   "name": "Level 200 achieved!",
+   "group": "Goal_Level",
+   "score": 100
+  },
+  "220000": {
+   "name": "Community begin",
+   "group": "Chatting_Create",
+   "score": 10
+  },
+  "220001": {
+   "name": "A mouth only moment",
+   "group": "Chatting_Dying",
+   "score": 10
+  },
+  "220002": {
+   "name": "Admiring the chatter",
+   "group": "Chatting_Count",
+   "score": 10
+  },
+  "220003": {
+   "name": "My friend's friend~",
+   "group": "Add_Friend",
+   "score": 10
+  },
+  "220004": {
+   "name": "A competition of popularity",
+   "group": "Add_Friend",
+   "score": 10
+  },
+  "220005": {
+   "name": "Let's Party~",
+   "group": "Party",
+   "score": 10
+  },
+  "220006": {
+   "name": "Married with who..?",
+   "group": "Marry",
+   "score": 20
+  },
+  "220007": {
+   "name": "Can you grow?",
+   "group": "Baby",
+   "score": 20
+  },
+  "220008": {
+   "name": "Being a parent",
+   "group": "Baby",
+   "score": 20
+  },
+  "220009": {
+   "name": "Activating the market economy (1)",
+   "group": "Spend_Zeny",
+   "score": 10
+  },
+  "220010": {
+   "name": "Activating the market economy (2)",
+   "group": "Spend_Zeny",
+   "score": 15
+  },
+  "220011": {
+   "name": "Activating the market economy (3)",
+   "group": "Spend_Zeny",
+   "score": 20
+  },
+  "220012": {
+   "name": "Activating the market economy (4)",
+   "group": "Spend_Zeny",
+   "score": 30
+  },
+  "220013": {
+   "name": "Activating the market economy (5)",
+   "group": "Spend_Zeny",
+   "score": 50
+  },
+  "220014": {
+   "name": "I can't quit from refining! (1)",
+   "group": "Enchant_Success",
+   "score": 10
+  },
+  "220015": {
+   "name": "I can't quit from refining! (2)",
+   "group": "Enchant_Success",
+   "score": 15
+  },
+  "220016": {
+   "name": "I can't quit from refining! (3)",
+   "group": "Enchant_Success",
+   "score": 10
+  },
+  "220017": {
+   "name": "I can't quit from refining! (4)",
+   "group": "Enchant_Success",
+   "score": 15
+  },
+  "220018": {
+   "name": "I can't quit from refining! (5)",
+   "group": "Enchant_Success",
+   "score": 15
+  },
+  "220019": {
+   "name": "I can't quit from refining! (6)",
+   "group": "Enchant_Success",
+   "score": 20
+  },
+  "220020": {
+   "name": "I can't quit from refining! (7)",
+   "group": "Enchant_Success",
+   "score": 20
+  },
+  "220021": {
+   "name": "I can't quit from refining! (8)",
+   "group": "Enchant_Success",
+   "score": 30
+  },
+  "220022": {
+   "name": "Human's greed has no ending..",
+   "group": "Enchant_Fail",
+   "score": 10
+  },
+  "220023": {
+   "name": "I found it! (1)",
+   "group": "Get_Item",
+   "score": 10
+  },
+  "220024": {
+   "name": "I found it! (2)",
+   "group": "Get_Item",
+   "score": 10
+  },
+  "220025": {
+   "name": "I found it! (3)",
+   "group": "Get_Item",
+   "score": 15
+  },
+  "220026": {
+   "name": "I found it! (4)",
+   "group": "Get_Item",
+   "score": 15
+  },
+  "220027": {
+   "name": "I found it! (5)",
+   "group": "Get_Item",
+   "score": 20
+  },
+  "220028": {
+   "name": "I found it! (6)",
+   "group": "Get_Item",
+   "score": 20
+  },
+  "220029": {
+   "name": "I found it! (7)",
+   "group": "Get_Item",
+   "score": 30
+  },
+  "220030": {
+   "name": "Rich King (1)",
+   "group": "Get_Zeny",
+   "score": 10
+  },
+  "220031": {
+   "name": "Rich King (2)",
+   "group": "Get_Zeny",
+   "score": 15
+  },
+  "220032": {
+   "name": "Rich King (3)",
+   "group": "Get_Zeny",
+   "score": 20
+  },
+  "220033": {
+   "name": "Rich King (4)",
+   "group": "Get_Zeny",
+   "score": 25
+  },
+  "220034": {
+   "name": "Rich King (5)",
+   "group": "Get_Zeny",
+   "score": 30
+  },
+  "220035": {
+   "name": "Rich King (6)",
+   "group": "Get_Zeny",
+   "score": 40
+  },
+  "230100": {
+   "name": "Poring is Love",
+   "group": "Taming",
+   "score": 50
+  },
+  "230101": {
+   "name": "Poring - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230102": {
+   "name": "Drops - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230103": {
+   "name": "Poporing - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230104": {
+   "name": "Novice Poring - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230110": {
+   "name": "Entomologist",
+   "group": "Taming",
+   "score": 50
+  },
+  "230111": {
+   "name": "Chonchon - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230112": {
+   "name": "Steel Chonchon - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230113": {
+   "name": "Hunter Fly - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230114": {
+   "name": "Rocker - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230115": {
+   "name": "Spore - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230116": {
+   "name": "Poison Spore - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230120": {
+   "name": "Animals are also our friend",
+   "group": "Taming",
+   "score": 50
+  },
+  "230121": {
+   "name": "Lunatic - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230122": {
+   "name": "Picky - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230123": {
+   "name": "Savage Bebe - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230124": {
+   "name": "Baby Desert Wolf - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230125": {
+   "name": "Smokie - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230126": {
+   "name": "Yoyo - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230127": {
+   "name": "Peco Peco - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230128": {
+   "name": "Petite - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230140": {
+   "name": "Monster Girls Unite!!",
+   "group": "Taming",
+   "score": 50
+  },
+  "230141": {
+   "name": "Munak - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230142": {
+   "name": "Isis - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230143": {
+   "name": "Sohee - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230144": {
+   "name": "Zherlthsh - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230145": {
+   "name": "Alice - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230146": {
+   "name": "Succubus - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230147": {
+   "name": "Loli Ruri - taming",
+   "group": "Taming",
+   "score": 10
+  },
+  "230200": {
+   "name": "Poring seeker",
+   "group": "Battle",
+   "score": 10
+  },
+  "230201": {
+   "name": "Exploring Poring's life (1)",
+   "group": "Battle",
+   "score": 10
+  },
+  "230202": {
+   "name": "Exploring Poring's life (2)",
+   "group": "Battle",
+   "score": 20
+  },
+  "230203": {
+   "name": "Exploring Poring's life (3)",
+   "group": "Battle",
+   "score": 20
+  },
+  "240000": {
+   "name": "First Login after the introduction of Achievement Tasks",
+   "group": "Goal_Level",
+   "score": 10
+  },
+  "240001": {
+   "name": "Reaching Level 1",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240002": {
+   "name": "Reaching Level 2",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240003": {
+   "name": "Reaching Level 3",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240004": {
+   "name": "Reaching Level 4",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240005": {
+   "name": "Reaching Level 5",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240006": {
+   "name": "Reaching Level 6",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240007": {
+   "name": "Reaching Level 7",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240008": {
+   "name": "Reaching Level 8",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240009": {
+   "name": "Reaching Level 9",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240010": {
+   "name": "Reaching Level 10",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240011": {
+   "name": "Reaching Level 11",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240012": {
+   "name": "Reaching Level 12",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240013": {
+   "name": "Reaching Level 13",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240014": {
+   "name": "Reaching Level 14",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240015": {
+   "name": "Reaching Level 15",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240016": {
+   "name": "Reaching Level 16",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240017": {
+   "name": "Reaching Level 17",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240018": {
+   "name": "Reaching Level 18",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240019": {
+   "name": "Reaching Level 19",
+   "group": "Goal_Achieve",
+   "score": 10
+  },
+  "240020": {
+   "name": "Reaching Level 20",
+   "group": "Goal_Achieve",
+   "score": 10
+  }
+ }
+}

@@ -1873,6 +1873,141 @@ def faces(player, me) -> bool  # player.dir смотрит на меня
 
 **Готово.** Тесты зелёные; `docs/SOCIETY.md`; статус ORG-067 «код, в игре не проверено».
 
+### Т-30 · ORG-061 · Спарринг на арене PvP по согласию
+
+**Цель.** Два жителя ≥ 31 уровня, соперники недели (ORG-060) или друзья, по взаимному согласию идут к Gate Keeper в
+`prt_in`, платят 500 z, входят в пустую комнату Yoyo и дерутся до первого «сдаюсь» (HP < 30 %) или падения. После боя
+звучат дружеские реплики и эмоции, итог по фактам тела попадает в память, летопись, шину мира и счёт соперничества.
+Против людей — никогда: только жители и только по согласию обоих. **По умолчанию выключено** (`goals.json` →
+`"spar": {"enabled": false}`): высокий риск, в игре не проверено.
+
+**Данные (сверено с upstream).**
+- Gate Keeper `prt_in,52,140` — `npc/other/pvp.txt:278` (дубль скрипта `gkut` `:178`). Меню 1 (`:187`):
+  `' PvP Nightmare Mode'` / `' PvP Yoyo Mode'` / `' PvP Event Mode'` / `Quit`; OpenKore снимает цветовые коды
+  (`Receive.pm:7795`), кавычки и пробел остаются. Меню 2 (`:200`): `Move` / `Cancel`. Условие `Zeny > 499 &&
+  BaseLevel > 30` (`:202`), плата 500 (`:203`), перенос в `pvp_y_room` в одну из 10 точек (`L_Warp`, `:257-273`).
+- Приёмная «Free for all» `Fight Square Reception#8`, `pvp_y_room,54,85` (`npc/re/other/pvp.txt:45`), без проверки
+  уровня → `F_PVP_FSRS` (`npc/other/pvp.txt:287`): меню `Prontera [n / 128]:Izlude [...]:...:Morocc [...]:Cancel.`,
+  где n — `getmapusers` комнаты; выбор → `warp pvp_y_8-<i>,0,0` (`:316`) (случайная клетка карты).
+- Флаги `pvp_y_8-1`: `pvp` (`npc/mapflag/pvp.txt:48`), `nopenalty` (`nopenalty.txt:243`), `noteleport`
+  (`noteleport.txt:294`), `nosave SavePoint` (`nosave.txt:127`); `noreturn` закомментирован (`noreturn.txt:201`), значит
+  Butterfly Wing (602, группа `MF_NORETURN`, `src/map/pc.cpp:6329`) работает, а Fly Wing — нет. Варп-NPC выхода из
+  `pvp_y_room` и `pvp_y_*` в `npc/` нет. Выход — крыло бабочки (на точку сохранения) или падение (`nopenalty`:
+  опыт не теряется, возрождение на точке сохранения).
+- OpenKore: `kill <player #>` (`Commands.pm:401`, `cmdKill` `:3981` → `attack`). Автоатака выбирает только монстров,
+  `target_died` — только для монстров (`AI/Attack.pm:454`); смерть игрока — `$player->{dead}` (`Receive.pm:2479`).
+  Поля: `pvp_y_8-1` → `prontera.fld2`, `pvp_y_room` → `pvp_room.fld2` (`tables/kRO/resnametable.txt:518, 756`);
+  проходимы `prt_in 52,138`, `pvp_room 54,83`, `prontera 156,185` (место встречи на арене).
+- `@duel` недоступен группе 0 (`conf/groups.yml:44-55`) — не используется.
+
+**Файлы.** `bots/plugins/spar/spar.pl` (новый плагин-исполнитель), `bots/plugins/brainBridge/brainBridge.pl` (действия
+`spar`/`spar_stop`, `state.spar`, запрет движений тела во время спарринга; блоки `# spar:`), `bots/bot0*/control/sys.txt`
+и `scripts/lab` (загрузка плагина), `brain/live_brain/spar.py` (модуль реестра), `brain/live_brain/modules.py`,
+`brain/live_brain/safety.py`, `brain/live_brain/lifecycle.py` (арбитр), `brain/live_brain/rivalry.py` (метрика),
+`brain/live_brain/world_bus.py`, `brain/live_brain/chronicle.py`, `brain/world/goals.json`, `brain/tests/test_spar.py`,
+`bots/tests/spar.t`, `docs/SOCIETY.md`.
+
+**Протокол.**
+```text
+шёпот (≤ 78):  [spar:ask]  [spar:yes]  [spar:no:<why>]  [spar:in:<комната>]  [spar:yield]  [spar:off:<why>]
+действия:      spar {to, role first|second, room}   spar_stop {why}
+события тела:  spar_step {phase arena|fight, room}   spar_result {outcome won|yield|down|draw|stopped|aborted, reason}
+память:        spar_result {peer, outcome, why}; победитель — spar_won {peer, loser}; ничья (вызвавший) — spar_draw
+шина:          spar_won (важность 3), spar_draw (2) — через world_bus.PUBLISH
+```
+1. Вызывающий (в городе, день, тело свободно) раз в `check_minutes` выбирает партнёра: соперник недели или друг
+   (affinity ≥ `friend_min`), не в ссоре, и шепчет `[spar:ask]`.
+2. Партнёр соглашается по характеру: смелость ≥ `min_bravery`, шанс `0.3 + 0.6 × смелость` (+0.2 сопернику,
+   +0.25 после недавнего примирения — «размяться в знак мира»), HP ≥ `min_hp`, без смерти за `hurt_hours`, не «день
+   осторожности» режиссёра. **Ссора — отказ**: бой не для мести (примирение остаётся за society.py; уже помирившимся
+   спарринг даётся охотнее).
+3. Общие условия: уровень ≥ 31, зени ≥ 500 + `zeny_reserve`, крыло бабочки ≥ 1, не больше `max_per_day` в день.
+4. Согласие → вызывающий отправляет `spar {role first}`: плагин идёт к Gate Keeper, отвечает в меню по тексту
+   (`PvP Yoyo Mode`, `Move`), в `pvp_y_room` — к приёмной #8, выбирает комнату из `rooms` (по умолчанию только Prontera),
+   **только если в ней 0 игроков**; на арене — событие `spar_step arena`, мозг шепчет `[spar:in:Prontera]`.
+5. Партнёр отправляет `spar {role second}`: тот же путь, комнату берёт, **только если в ней ровно 1 игрок**
+   (вызвавший). Иначе — отмена, крыло, `[spar:off:busy]`.
+6. Бой: оба идут к месту встречи; увидев соперника — `kill <номер>` только по нему (на время боя `attackAuto 0`,
+   `route_randomWalk 0`, `survival 0`, `useSelf_item_*_disabled 1` — без зелий; после — прежние значения).
+   Посторонний игрок на арене или в зоне видимости — сразу `aborted stranger` и выход. HP < `yield_hp` (30) —
+   `yield`, выход крылом. Падение — `down`. Соперник упал — `won`. Лимит боя — `draw`.
+7. Проигравший шепчет `[spar:yield]`, победитель по нему останавливает плагин (`spar_stop`) и выходит.
+   Отмена — `[spar:off:<why>]` в обе стороны. Сторож мозга: нет итога `max_minutes` — отмена.
+8. Итог: воспоминание, событие памяти, шина, летопись, реплика и эмоция (`no1`/`gg` победителю, `heh`/`thx`
+   проигравшему), счёт пары (kv `spar.score`), отношение +1 за честный бой, метрика `spar` в соперничестве
+   («по победам в спарринге» за неделю).
+
+**Интерфейсы.**
+```python
+class Spar:   # ATTR spar, FEATURE spar, CONFIG spar, ENABLED False, REQUIRES peers, ARGS world, TICK_ORDER 195
+    TAGS [spar:...] 47; EVENTS spar_step/spar_result (own) 85; поля промпта нет (как boss)
+    def blocker(self, now) -> str | None      # общие условия (уровень, зени, крыло, HP, город, день, лимит)
+    def partners(self) -> [имя]               # соперник недели, затем друзья; без ссоры
+    def willing(self, peer) -> bool           # характер, здоровье, примирение
+    def busy(self) -> bool                    # тело в спарринге — арбитр (lifecycle) отдаёт его владельцу plan
+    async def tick(self) / on_tag(sender, text) / on_step(event) / on_result(event)
+```
+
+**Тесты.** Python: вызов только сопернику/другу; ссора, трусость, низкий уровень, нет крыла/зени, ночь — отказ с
+причиной; согласие → `spar first`, `[spar:in:]` → `spar second`; исходы `yield`/`down`/`won`/`stopped` по шёпоту
+`[spar:yield]`; отмена `[spar:off:]`, сторож; запись в память, шину (`spar_won` у одного жителя), летопись,
+счёт и метрика соперничества; арбитр не даёт распорядку двигать тело; выключатель по умолчанию; safety (только
+жителю, комната из списка). Perl (`bots/tests/spar.t`): меню Gate Keeper и приёмной по тексту, проверка числа игроков
+в комнате, посторонний — выход, атака только соперника, сдача при HP < 30 %, восстановление настроек, крыло.
+
+**Готово.** Тесты зелёные; `docs/SOCIETY.md`; статус ORG-061 «код, выключено, в игре не проверено».
+
+### Т-31 · ORG-080 · Достижения сервера как коллекция
+
+**Цель.** Житель знает свои достижения rAthena, по данным сервера: гордится новыми (воспоминание, летопись, шина,
+тема разговора), сравнивает счёт с соперником, по желанию владельца сам забирает награду.
+
+**Данные (сверено).**
+- rAthena: `feature.achievement: on` (`conf/battle/feature.conf:81`); `db/re/achievement_db.yml` — 361 запись (в ORG-080
+  ошибочно 539; 498 — в таблице OpenKore). Пакеты `0A23 ZC_ALL_ACH_LIST` (при входе, только если есть хоть одна
+  запись — `clif.cpp:21831`), `0A24 ZC_ACH_UPDATE` (66 байт), `0A25/0A26` — награда (`clif_packetdb.hpp:1766-1769`,
+  блок `#if PACKETVER >= 20150513` — 20180620 подходит).
+- OpenKore (`serverType kRO_RagexeRE_2018_06_20e` наследует `kRO/Sakexe_0.pm:640-642`): разбор `achievement_list`
+  и `achievement_update` (`Receive.pm:9800-9842`) побайтно совпадает с `clif_achievement_list_all/update`
+  (заголовок 22 байта, запись 50 байт `V C V10 V C`, `MAX_ACHIEVEMENT_OBJECTIVES 10`); хук `packet/<имя>` вызывается
+  после обработчика (`PacketParser.pm:289`), `$achievementList` уже заполнен. Названия — `tables/achievement_list.txt`
+  (`%achievements`), команда `achieve reward <id>` (`Commands.pm:59`, проверка «выполнено и не получено»).
+- Достижимые для жителей сейчас: «Official Adventurer» (первая профессия, Job_Change), «Let's Party~» (группа),
+  «My friend's friend~» (друг), «Community begin» (чат-комната society.py), «Rich King (1)» (10 000 z), питомцы
+  (Taming), «Activating the market economy (1)» (траты).
+
+**Файлы.** `scripts/gen_achievements.py` → `brain/world/achievements.json` (id → название, группа, очки),
+`bots/plugins/brainBridge/brainBridge.pl` (хуки, событие, `state.achievements`, действие `achieve_reward`; `# achieve:`),
+`brain/live_brain/achieve.py`, `brain/live_brain/modules.py`, `brain/live_brain/safety.py`, `brain/live_brain/rivalry.py`
+(метрика), `brain/live_brain/world_bus.py`, `brain/live_brain/chronicle.py`, `brain/world/goals.json`,
+`brain/tests/test_achieve.py`, `bots/tests/brain_bridge.t`, `docs/SOCIETY.md`.
+
+**Протокол.**
+```text
+события моста: achievement {id, at, reward, points, rank, title}     — только выполненные (прогресс не шлётся)
+               achievement_list {points, rank, done: [[id, at, reward], ...]}   — список при входе (≤ 300 записей)
+               achievement_reward {id, ok}
+действие:      achieve_reward {id}  -> «achieve reward <id>» (только при goals.json achieve.claim_rewards)
+kv achieve:    {done: {id: at}, unrewarded: [id], points, rank, synced, told: {житель: [id]}, compared}
+память/шина:   achievement_done {id, name, group, score}  -> шина «achievement» (важность 3), летопись
+               тихий снимок achieve_known {n, points} (затирание)
+```
+- Первый список после установки модуля — молча (история не объявляется). Новое выполненное после него
+  (обновление или следующий список) — воспоминание «Получил(а) достижение «X» — по данным сервера», событие,
+  шина, тема `achieve` каждому жителю один раз за `brag_days`, сравнение с соперником недели («У меня 5
+  достижений, у тебя 3!») раз в день.
+- Название: `achievements.json` (rAthena), иначе `title` из таблицы OpenKore, иначе «№ id».
+- Если пакеты не придут (не проверено в игре), модуль просто молчит: собственных «достижений» по памяти он не
+  выдумывает — личные вехи уже ведут коллекция (ORG-074), бестиарий (ORG-077) и мечта (ORG-081).
+- Выключатель: `BRAIN_DISABLE=achieve`, `"achieve": {"enabled": false}`; награды — `claim_rewards` (по умолчанию нет).
+
+**Тесты.** Генератор совпадает с файлом; первый список молча; новое из обновления и из второго списка — память,
+событие, шина, летопись; прогресс без выполнения не приходит; повтор не объявляется; тема разговора раз каждому;
+сравнение с соперником; награда только при `claim_rewards` и только невзятая; метрика соперничества; мост —
+события по хукам, `state.achievements`, `achieve_reward` (Perl).
+
+**Готово.** Тесты зелёные; `docs/SOCIETY.md`; статус ORG-080 «код, в игре не проверено».
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности

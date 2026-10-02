@@ -27,8 +27,11 @@ METRICS = {   # метрика -> как сказать «по чему»
     "kills_week": "по победам за неделю",
     "places": "по открытым местам",
     "aims": "по целям недели",
+    "spar": "по победам в спарринге",            # spar: ORG-061 (победы недели, событие spar_won)
+    "achieve": "по достижениям",                 # achieve: ORG-080 (выполненные достижения сервера, всего)
 }
-SCORE_KEY = {"level": "lv", "kills_week": "kills_week", "places": "places", "aims": "aims"}
+SCORE_KEY = {"level": "lv", "kills_week": "kills_week", "places": "places", "aims": "aims", "spar": "spar",
+             "achieve": "achieve"}
 DEFAULTS = {"enabled": True, "max_level_gap": 3, "publish_minutes": 20, "max_per_day": 3, "tick_seconds": 30,
             "boost": 0.2, "lead_min": 5}
 MIN_TRAIT = 0.2
@@ -106,7 +109,9 @@ class Rivalry:
                 "kills_day": mem.count_events("kill", self.day_start(now)),
                 "kills_week": mem.count_events("kill", wk),
                 "places": mem.count_events("explore_found", 0),
-                "aims": mem.count_events("aim_done", wk)}
+                "aims": mem.count_events("aim_done", wk),
+                "spar": mem.count_events("spar_won", wk),                     # spar: победы недели на арене
+                "achieve": len((mem.get("achieve") or {}).get("done") or {})}   # achieve: достижения сервера
 
     def others(self, now=None):
         now = now or self.clock()
@@ -197,7 +202,7 @@ class Rivalry:
     def values(self, metric, mine, theirs):
         k = SCORE_KEY[metric]
         a, b = mine.get(k), theirs.get(k)
-        if metric in ("kills_week", "aims") and theirs.get("week") != mine.get("week"):
+        if metric in ("kills_week", "aims", "spar") and theirs.get("week") != mine.get("week"):   # spar: тоже за неделю
             b = 0                                    # снимок соперника с прошлой недели
         return a, b
 

@@ -74,6 +74,16 @@
 #                            $CAST_RANGE клеток, не я. rAthena не даёт кастовать в чат-комнате и сидя (clif.cpp
 #                            clif_parse_skill_toid: chatID, pc_issit) — chat leave здесь, встать — Task::UseSkill.
 #                            В state — support_skills {AL_HEAL: ур., ...}: выученные навыки из %CAST.
+#   spar {to, role first|second, room} / spar_stop {why} -> плагин spar: дружеский спарринг жителей на арене  # spar:
+#                            PvP Yoyo (ORG-061, по умолчанию выключен в мозге); только жителю из residents. Пока  # spar:
+#                            плагин ведёт спарринг, мост отклоняет всё, кроме реплик (%SPAR_OK), — тело у плагина.  # spar:
+#                            В state — spar {running, phase, to, room}; события spar_step, spar_result.  # spar:
+# achieve: достижения сервера (ORG-080). Хуки packet/achievement_list (0A23 при входе) и packet/achievement_update
+#   (0A24) — после разбора OpenKore (Receive.pm:9800-9842, PacketParser.pm:289): событие achievement {id, at, reward,
+#   points, rank, title} — только ВЫПОЛНЕННОЕ (прогресс по счётчикам не шлётся), один раз за сессию на id и флаг
+#   награды; achievement_list {points, rank, done: [[id, at, reward], ...]} (≤ 300); 0A26 -> achievement_reward {id, ok}.
+#   В state — achievements {points, rank, done}. Действие achieve_reward {id} -> «achieve reward <id>» (Commands.pm:59):
+#   только выполненное и ещё не полученное по $achievementList.
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -97,6 +107,7 @@ use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %s
                %friends @friendsID $currentChatRoom %chatRooms);   # society: чат-комната
 use Globals qw(%guild $charID);                                     # guild: состав гильдии (ORG-052)
 use Globals qw($messageSender %currentDeal %outgoingDeal %incomingDeal $shopstarted);   # dreams: банк (ORG-073)
+use Globals qw($achievementList %achievements);                    # achieve: достижения сервера (ORG-080)
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -136,6 +147,10 @@ my $hooks = Plugins::addHooks(
 	['packet/banking_check',       sub { onBank('check', $_[1]) }],          # dreams: 09A6 вклад
 	['packet/banking_deposit',     sub { onBank('deposit', $_[1]) }],        # dreams: 09A8 итог вклада
 	['packet/banking_withdraw',    sub { onBank('withdraw', $_[1]) }],       # dreams: 09AA итог снятия
+	['packet/achievement_list',    \&onAchievementList],                     # achieve: 0A23 список при входе
+	['packet/achievement_update',  \&onAchievementUpdate],                   # achieve: 0A24 одно достижение
+	['packet/achievement_reward_ack', sub { event('achievement_reward', id => ($_[1]{achievementID} // 0) + 0,   # achieve: 0A26
+	                                              ok => ($_[1]{received} ? JSON::PP::true : JSON::PP::false)) }],   # achieve: 1 — выдана
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -236,6 +251,7 @@ sub sendState {
 		(defined &refine::status ? (refine => refine::status()) : ()),             # refine: заточка (ORG-072)
 		dir       => ($char->{look} && defined $char->{look}{body} ? $char->{look}{body} + 0 : undef),   # look: ORG-067
 		(defined &pets::status ? (pet => pets::status()) : ()),                  # pets: питомец (ORG-051)
+		(defined &spar::status ? (spar => spar::status()) : ()),                 # spar: спарринг (ORG-061)
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
 		(defined &economy::buyStatus ? (buy => economy::buyStatus()) : ()),   # market: жду продавца
@@ -244,7 +260,42 @@ sub sendState {
 		chat_room => chatTitle(),                                                 # society: комната, где я сейчас
 		guild     => guildState(), emperium => emperiumCount(),                   # guild: ORG-052
 		support_skills => supportSkills(),                                        # healer: ORG-069
+		achievements => achState(),                                               # achieve: ORG-080
 	});
+}
+
+# ---------- achieve: достижения сервера (ORG-080) ----------
+our %ach = (points => undef, rank => undef);   # achieve: заголовок последнего пакета 0A23/0A24
+our %achSent;                                   # achieve: id -> флаг награды, уже сообщённые мозгу за сессию
+sub achState {
+	my @done = grep { $_ && $_->{completed} } values %{$achievementList || {}};
+	return undef unless defined $ach{points} || @done;
+	return {points => $ach{points}, rank => $ach{rank}, done => scalar @done};
+}
+sub achHead {
+	my ($args) = @_;
+	@ach{qw(points rank)} = (($args->{total_points} // 0) + 0, ($args->{rank} // 0) + 0);
+}
+sub onAchievementList {
+	my (undef, $args) = @_;
+	achHead($args);
+	my @done = sort { $a->{achievementID} <=> $b->{achievementID} } grep { $_ && $_->{completed} } values %{$achievementList || {}};
+	splice(@done, 300) if @done > 300;
+	$achSent{$_->{achievementID}} = ($_->{reward} ? 1 : 0) for @done;
+	event('achievement_list', points => $ach{points}, rank => $ach{rank},
+	      done => [map { [$_->{achievementID} + 0, ($_->{completed_at} // 0) + 0, ($_->{reward} ? 1 : 0)] } @done]);
+}
+sub onAchievementUpdate {
+	my (undef, $args) = @_;
+	achHead($args);
+	return unless $args->{completed};                                   # прогресс счётчиков — не повод
+	my $id = ($args->{achievementID} // 0) + 0;
+	my $reward = $args->{reward} ? 1 : 0;
+	return if exists $achSent{$id} && $achSent{$id} == $reward;
+	$achSent{$id} = $reward;
+	my $info = $achievements{$id};
+	event('achievement', id => $id, at => ($args->{completed_at} // 0) + 0, reward => $reward,
+	      points => $ach{points}, rank => $ach{rank}, title => ($info && defined $info->{title} ? "$info->{title}" : undef));
 }
 
 sub supportSkills {                                                           # healer: выученные навыки поддержки
@@ -475,6 +526,9 @@ our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav
 my %MOVES = map { $_ => 1 } qw(follow meet_point hunt unstuck service give offer_sell offer_buy job_change
                                sleep shop_open explore skill_on_player);   # explore: экспедиция двигает тело; healer: каст
 $MOVES{refine} = 1;                                                           # refine: идёт к продавцу руды и кузнецу
+$MOVES{spar} = 1;                                                              # spar: поход к Gate Keeper
+# spar: пока плагин spar ведёт тело (арена, бой), от мозга — только реплики и стоп; остальное отклоняется.
+our %SPAR_OK = map { $_ => 1 } qw(say whisper emote party_say guild_say spar_stop);   # spar:
 my %CHAT_BUSY = map { $_ => 1 } qw(route move attack follow sellAuto buyAuto storageAuto take items_take
                                    NPC deal skill_use);
 sub inChat { return defined $currentChatRoom && $currentChatRoom ne ''; }
@@ -745,6 +799,24 @@ sub actionToCommand {
 		return (0, 'открыта лавка') if $shopstarted;                          # refine:
 		my ($ok, $desc) = refine::start($a);                                  # refine:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                       # refine:
+	} elsif ($kind eq 'achieve_reward') {                                  # achieve: награда достижения (ORG-080)
+		my $id = $a->{id} // '';                                             # achieve:
+		return (0, 'неверный номер достижения') unless $id =~ /^\d{1,9}$/;    # achieve:
+		my $rec = ($achievementList || {})->{$id};                           # achieve:
+		return (0, "достижения $id нет в списке сервера") unless $rec;      # achieve:
+		return (0, "достижение $id не выполнено") unless $rec->{completed};  # achieve:
+		return (0, "награда за $id уже получена") if $rec->{reward};        # achieve:
+		return (1, "achieve reward $id");                                    # achieve:
+	} elsif ($kind eq 'spar') {                                            # spar: спарринг жителей (ORG-061)
+		return (0, 'плагин spar не загружен') unless defined &spar::start;   # spar:
+		my $to = cleanText($a->{to});                                        # spar:
+		return (0, 'спарринг — только с жителем') unless grep { $_ eq $to } residents();   # spar:
+		my ($ok, $desc) = spar::start({%$a, to => $to});                     # spar:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                      # spar:
+	} elsif ($kind eq 'spar_stop') {                                       # spar:
+		return (0, 'спарринг не идёт') unless defined &spar::running && spar::running();   # spar:
+		spar::stop(cleanText($a->{why}) || 'остановлен мозгом');            # spar:
+		return (1, {note => 'спарринг остановлен'});                         # spar:
 	} elsif ($kind eq 'pet_tame' || $kind eq 'pet_hatch' || $kind eq 'pet_setup') {   # pets: (ORG-051)
 		return (0, 'плагин pets не загружен') unless defined &pets::startTame;
 		my ($ok, $desc) = $kind eq 'pet_tame' ? pets::startTame($a)
@@ -823,7 +895,10 @@ sub handleLine {
 		return;
 	}
 	return unless ($msg->{type} || '') eq 'action';
-	my ($ok, $res) = inGame() ? actionToCommand($msg) : (0, 'бот не в игре');
+	my ($ok, $res) = !inGame() ? (0, 'бот не в игре')
+		: (defined &spar::running && spar::running() && !$SPAR_OK{$msg->{action} || ''})   # spar: тело у плагина spar
+		? (0, 'идёт спарринг — тело у плагина spar')                                      # spar:
+		: actionToCommand($msg);
 	if ($ok && $MOVES{$msg->{action} || ''} && inChat()) {                # society: в комнате не уйти — сначала chat leave
 		message "[brainBridge] перед $msg->{action} закрываю чат-комнату\n", 'system';
 		Commands::run('chat leave');

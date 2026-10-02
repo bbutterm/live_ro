@@ -30,6 +30,8 @@ from .mentor import CHRONICLE_LINES as MENTOR_LINES     # mentor: наставн
 from .bestiary import CHRONICLE_LINES as BESTIARY_LINES  # bestiary: первооткрыватели (ORG-077)
 from .market import CHRONICLE_LINES as MARKET_LINES     # market: рыночный день (ORG-071)
 from .refine import CHRONICLE_LINES as REFINE_LINES     # refine: заточка (ORG-072)
+from .spar import CHRONICLE_LINES as SPAR_LINES          # spar: спарринг на арене (ORG-061)
+from .achieve import CHRONICLE_LINES as ACHIEVE_LINES    # achieve: достижения сервера (ORG-080)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
@@ -63,6 +65,8 @@ LINES = {
     **SAVINGS_LINES,                                      # dreams: ORG-073
     **MENTOR_LINES,                                       # mentor: ORG-057
     **BESTIARY_LINES,                                     # bestiary: ORG-077
+    **SPAR_LINES,                                         # spar: ORG-061
+    **ACHIEVE_LINES,                                      # achieve: ORG-080
     **places.CHRONICLE_LINES,                             # places: ORG-084
     **MARKET_LINES,                                       # market: ORG-071
     **REFINE_LINES,                                       # refine: ORG-072
