@@ -477,6 +477,7 @@ class Mind:
     def reconnected(self):
         """AUT-003/106: новое подключение тела — старый снимок не текущий, незавершённое сверить."""
         self.epoch += 1
+        self.sent.clear()                              # ack прошлого подключения уже не придут (иначе копятся)
         self.fresh_state = False
         self.state_received = 0.0
         if self.economy and self.economy.giving:

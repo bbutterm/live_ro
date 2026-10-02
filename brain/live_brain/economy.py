@@ -58,7 +58,7 @@ RECEIVE_TIMEOUT = 240     # после ok — дождаться передач�
 GIVE_TIMEOUT = 180        # отдаю: итог give_result от тела должен прийти раньше
 OFFER_TAG = re.compile(r"\[offer:([a-z0-9]{4,8}):(?:(ok|no)|(\d{1,6}):(\d{1,5}):(\d{1,9}))\]")
 SELL_TIMEOUT = 300        # продаю: подойти, сделка, итог give_result
-BUY_TIMEOUT = 300         # покупаю: продавец подходит, итог buy_result
+BUY_TIMEOUT = 330         # покупаю: продавец подходит, итог buy_result (плагин: ждёт 240 + сделка 60 с — итог раньше)
 VERIFY_TIMEOUT = 60       # после buy_result ok — рост предмета в рюкзаке
 MAIL_TIMEOUT = 120        # итог mail_result / mail_taken от тела
 REMOTE_RECEIVE = 900      # подарок почтой: письмо надо получить и забрать
@@ -574,7 +574,10 @@ class Economy:
                 return
             if answer == "no":
                 declined = self.mind.mem.get("market_declined") or {}
-                declined[o["item"]] = self.clock()
+                now = self.clock()
+                keep = 2 * 3600 * float(self.market.get("decline_hours", 12))     # старые отказы не копить
+                declined = {k: v for k, v in declined.items() if now - v < keep}
+                declined[o["item"]] = now
                 self.mind.mem.set("market_declined", declined)
                 self.end_offer(f"{sender} не взял {self.lot(o)}.", "offer_refused", 1)
                 return
