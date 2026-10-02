@@ -642,7 +642,7 @@ start_bot() {
   local tables="$od/tables" plugins="$od/plugins"
   [[ -d "$pr/bots/$bot/tables" ]] && tables="$pr/bots/$bot/tables:$tables"
   [[ -d "$pr/bots/plugins" ]] && plugins="$pr/bots/plugins:$plugins"
-  local -a cmd=(env "LIVE_RO_BRAIN_SOCKET=$LAB_ROOT/run/brain/$bot.sock"
+  local -a cmd=(env "LIVE_RO_BRAIN_SOCKET=$LAB_ROOT/run/brain/$bot.sock" "LIVE_RO_COMBAT=$pr/bots/combat/classes.json"
                 perl openkore.pl --control="$ctl" --tables="$tables" --plugins="$plugins"
                 --logs="$LAB_ROOT/logs/$bot")
   local log="$LAB_ROOT/logs/$bot/console.log"

@@ -1,0 +1,259 @@
+{
+  "_comment": [
+    "Боевые профили по профессиям для всех ботов live_ro. Применяет плагин bots/plugins/combatProfile.",
+    "Профиль выбирается по номеру профессии (jobs) из игры, наследует навыки родителя (inherits).",
+    "Включаются только изученные навыки: неизученный слот получает _disabled 1.",
+    "attack -> attackSkillSlot, self -> useSelf_skill, party -> partySkill (лечение/баффы группы).",
+    "Условия в формате OpenKore: \"sp\": \"> 15%\", \"hp\": \"< 50%\", \"target_hp\": \"< 60%\".",
+    "stats/skills -> statsAddAuto_list/skillsAddAuto_list (плагины raiseStat/raiseSkill).",
+    "Бой, лечение и экстренные реакции — правила OpenKore, без запросов к LLM."
+  ],
+
+  "archetypes": {
+    "melee":  {"attackDistance": 1, "attackMaxDistance": 1, "attackDistanceAuto": 1, "runFromTarget": 0,
+               "attackUseWeapon": 1, "sitAuto_sp_lower": 0, "sitAuto_hp_lower": 40},
+    "ranged": {"attackDistance": 7, "attackMaxDistance": 9, "attackDistanceAuto": 0, "runFromTarget": 1,
+               "runFromTarget_dist": 4, "attackUseWeapon": 1, "sitAuto_sp_lower": 0, "sitAuto_hp_lower": 40},
+    "caster": {"attackDistance": 8, "attackMaxDistance": 9, "attackDistanceAuto": 0, "runFromTarget": 1,
+               "runFromTarget_dist": 5, "attackUseWeapon": 0, "sitAuto_sp_lower": 25, "sitAuto_sp_upper": 90,
+               "sitAuto_hp_lower": 45}
+  },
+
+  "classes": {
+    "Novice": {
+      "jobs": [0, 161, 4001, 4023], "archetype": "melee",
+      "stats": "30 agi, 30 str, 30 vit, 30 dex",
+      "skills": "NV_BASIC 9",
+      "attack": [], "self": [], "party": []
+    },
+
+    "Swordsman": {
+      "jobs": [1, 4002], "archetype": "melee",
+      "stats": "40 str, 30 vit, 40 agi, 20 dex, 80 str, 60 vit",
+      "skills": "SM_SWORD 10, SM_RECOVERY 5, SM_BASH 10, SM_ENDURE 5, SM_MAGNUM 5",
+      "attack": [
+        {"skill": "SM_MAGNUM", "sp": "> 40%", "dist": 1, "maxUses": 1, "aggressives": "> 2"},
+        {"skill": "SM_BASH", "sp": "> 20%", "dist": 1, "maxUses": 2}
+      ],
+      "self": [
+        {"skill": "SM_ENDURE", "hp": "< 50%", "sp": "> 10%", "timeout": 10, "whenStatusInactive": "Endure"}
+      ],
+      "party": []
+    },
+    "Knight": {
+      "jobs": [7, 13, 4008, 4014], "inherits": "Swordsman", "archetype": "melee",
+      "stats": "50 str, 40 agi, 40 vit, 30 dex, 90 str, 70 agi",
+      "skills": "KN_PIERCE 10, KN_TWOHANDQUICKEN 10, KN_BOWLINGBASH 10, KN_AUTOCOUNTER 5",
+      "attack": [
+        {"skill": "KN_BOWLINGBASH", "sp": "> 30%", "dist": 1, "maxUses": 1, "aggressives": "> 1"},
+        {"skill": "KN_PIERCE", "sp": "> 20%", "dist": 2, "maxUses": 2}
+      ],
+      "self": [
+        {"skill": "KN_TWOHANDQUICKEN", "sp": "> 20%", "timeout": 10, "whenStatusInactive": "Two-Hand Quicken", "inLockOnly": 1}
+      ],
+      "party": []
+    },
+    "Crusader": {
+      "jobs": [14, 21, 4015, 4022], "inherits": "Swordsman", "archetype": "melee",
+      "stats": "40 str, 40 vit, 30 int, 30 dex, 70 vit, 70 str",
+      "skills": "CR_AUTOGUARD 5, CR_SHIELDCHARGE 5, CR_HOLYCROSS 10, AL_HEAL 5",
+      "attack": [
+        {"skill": "CR_HOLYCROSS", "sp": "> 25%", "dist": 1, "maxUses": 2}
+      ],
+      "self": [
+        {"skill": "CR_AUTOGUARD", "sp": "> 20%", "timeout": 10, "whenStatusInactive": "Auto Guard", "inLockOnly": 1},
+        {"skill": "AL_HEAL", "hp": "< 45%", "sp": "> 15%", "timeout": 2}
+      ],
+      "party": [
+        {"skill": "AL_HEAL", "target_hp": "< 50%", "sp": "> 20%", "maxDist": 9, "timeout": 2}
+      ]
+    },
+
+    "Mage": {
+      "jobs": [2, 4003], "archetype": "caster",
+      "stats": "40 int, 30 dex, 20 vit, 70 int, 50 dex, 99 int",
+      "skills": "MG_SRECOVERY 3, MG_COLDBOLT 10, MG_FIREBOLT 10, MG_LIGHTNINGBOLT 10, MG_SOULSTRIKE 10, MG_NAPALMBEAT 5, MG_FIREWALL 5",
+      "attack": [
+        {"skill": "MG_FIREBOLT", "sp": "> 10%", "dist": 8, "maxUses": 1, "lvl": 5},
+        {"skill": "MG_COLDBOLT", "sp": "> 10%", "dist": 8, "maxUses": 1, "lvl": 5},
+        {"skill": "MG_LIGHTNINGBOLT", "sp": "> 10%", "dist": 8, "maxUses": 1, "lvl": 5},
+        {"skill": "MG_SOULSTRIKE", "sp": "> 10%", "dist": 8, "maxUses": 1},
+        {"skill": "MG_NAPALMBEAT", "sp": "> 5%", "dist": 8, "maxUses": 2}
+      ],
+      "self": [
+        {"skill": "MG_FIREWALL", "hp": "< 50%", "sp": "> 20%", "timeout": 5, "aggressives": "> 0"}
+      ],
+      "party": []
+    },
+    "Wizard": {
+      "jobs": [9, 4010], "inherits": "Mage", "archetype": "caster",
+      "stats": "60 int, 40 dex, 30 vit, 90 int, 70 dex, 99 int",
+      "skills": "WZ_JUPITEL 10, WZ_EARTHSPIKE 5, WZ_FIREPILLAR 5",
+      "attack": [
+        {"skill": "WZ_JUPITEL", "sp": "> 20%", "dist": 8, "maxUses": 1},
+        {"skill": "WZ_EARTHSPIKE", "sp": "> 15%", "dist": 8, "maxUses": 1}
+      ],
+      "self": [], "party": []
+    },
+    "Sage": {
+      "jobs": [16, 4017], "inherits": "Mage", "archetype": "caster",
+      "stats": "60 int, 40 dex, 30 vit, 90 int, 70 dex, 99 int",
+      "skills": "SA_FREECAST 10, SA_FLAMELAUNCHER 3, SA_VOLCANO 1",
+      "attack": [], "self": [], "party": []
+    },
+
+    "Archer": {
+      "jobs": [3, 4004], "archetype": "ranged",
+      "stats": "40 dex, 30 agi, 20 vit, 70 dex, 50 agi, 99 dex",
+      "skills": "AC_OWL 10, AC_VULTURE 10, AC_CONCENTRATION 10, AC_DOUBLE 10, AC_SHOWER 10",
+      "attack": [
+        {"skill": "AC_SHOWER", "sp": "> 40%", "dist": 8, "maxUses": 1, "aggressives": "> 2"},
+        {"skill": "AC_DOUBLE", "sp": "> 20%", "dist": 8, "maxUses": 1}
+      ],
+      "self": [
+        {"skill": "AC_CONCENTRATION", "sp": "> 30%", "timeout": 10, "whenStatusInactive": "Improve Concentration", "inLockOnly": 1}
+      ],
+      "party": []
+    },
+    "Hunter": {
+      "jobs": [11, 4012], "inherits": "Archer", "archetype": "ranged",
+      "stats": "60 dex, 40 agi, 30 int, 90 dex, 60 agi, 99 dex",
+      "skills": "HT_BLITZBEAT 5, HT_SKIDTRAP 5, HT_LANDMINE 5",
+      "attack": [], "self": [], "party": []
+    },
+    "Bard": {
+      "jobs": [19, 4020], "inherits": "Archer", "archetype": "ranged",
+      "stats": "60 dex, 40 agi, 30 vit, 90 dex, 60 agi, 99 dex",
+      "skills": "BA_MUSICALSTRIKE 5",
+      "attack": [{"skill": "BA_MUSICALSTRIKE", "sp": "> 20%", "dist": 8, "maxUses": 1}],
+      "self": [], "party": []
+    },
+    "Dancer": {
+      "jobs": [20, 4021], "inherits": "Archer", "archetype": "ranged",
+      "stats": "60 dex, 40 agi, 30 vit, 90 dex, 60 agi, 99 dex",
+      "skills": "DC_THROWARROW 5",
+      "attack": [{"skill": "DC_THROWARROW", "sp": "> 20%", "dist": 8, "maxUses": 1}],
+      "self": [], "party": []
+    },
+
+    "Acolyte": {
+      "jobs": [4, 4005], "archetype": "melee",
+      "stats": "40 int, 30 vit, 30 dex, 70 int, 50 vit, 50 dex",
+      "skills": "AL_HEAL 10, AL_BLESSING 10, AL_INCAGI 10, AL_ANGELUS 5, AL_DP 10, AL_DEMONBANE 10",
+      "attack": [],
+      "self": [
+        {"skill": "AL_HEAL", "hp": "< 50%", "sp": "> 15%", "timeout": 2},
+        {"skill": "AL_BLESSING", "sp": "> 40%", "timeout": 10, "whenStatusInactive": "Blessing", "inLockOnly": 1},
+        {"skill": "AL_INCAGI", "sp": "> 40%", "timeout": 10, "whenStatusInactive": "Increase AGI", "inLockOnly": 1}
+      ],
+      "party": [
+        {"skill": "AL_HEAL", "target_hp": "< 60%", "sp": "> 15%", "maxDist": 9, "timeout": 2},
+        {"skill": "AL_BLESSING", "sp": "> 50%", "maxDist": 9, "timeout": 20, "target_whenStatusInactive": "Blessing"},
+        {"skill": "AL_INCAGI", "sp": "> 50%", "maxDist": 9, "timeout": 20, "target_whenStatusInactive": "Increase AGI"}
+      ]
+    },
+    "Priest": {
+      "jobs": [8, 4009], "inherits": "Acolyte", "archetype": "melee",
+      "stats": "60 int, 40 vit, 40 dex, 90 int, 60 vit, 60 dex",
+      "skills": "PR_KYRIE 10, PR_MAGNIFICAT 5, PR_GLORIA 5, PR_IMPOSITIO 5, PR_LEXAETERNA 1, PR_TURNUNDEAD 10, PR_SANCTUARY 7",
+      "attack": [],
+      "self": [
+        {"skill": "PR_MAGNIFICAT", "sp": "< 70%", "timeout": 30, "whenStatusInactive": "Magnificat"}
+      ],
+      "party": [
+        {"skill": "PR_KYRIE", "target_hp": "< 80%", "sp": "> 30%", "maxDist": 9, "timeout": 10, "target_whenStatusInactive": "Kyrie Eleison"}
+      ]
+    },
+    "Monk": {
+      "jobs": [15, 4016], "inherits": "Acolyte", "archetype": "melee",
+      "stats": "50 str, 50 agi, 30 vit, 30 dex, 80 str, 70 agi",
+      "skills": "MO_CALLSPIRITS 5, MO_TRIPLEATTACK 10, MO_FINGEROFFENSIVE 5, MO_INVESTIGATE 5",
+      "attack": [{"skill": "MO_INVESTIGATE", "sp": "> 30%", "dist": 1, "maxUses": 1}],
+      "self": [], "party": []
+    },
+
+    "Merchant": {
+      "jobs": [5, 4006], "archetype": "melee",
+      "stats": "40 str, 30 vit, 30 dex, 70 str, 50 vit, 50 dex",
+      "skills": "MC_INCCARRY 10, MC_DISCOUNT 10, MC_OVERCHARGE 10, MC_PUSHCART 10, MC_MAMMONITE 10, MC_LOUD 1",
+      "attack": [{"skill": "MC_MAMMONITE", "sp": "> 30%", "dist": 1, "maxUses": 1}],
+      "self": [{"skill": "MC_LOUD", "sp": "> 30%", "timeout": 30, "whenStatusInactive": "Loud Exclamation", "inLockOnly": 1}],
+      "party": []
+    },
+    "Blacksmith": {
+      "jobs": [10, 4011], "inherits": "Merchant", "archetype": "melee",
+      "stats": "50 str, 40 vit, 40 dex, 90 str, 60 vit, 60 dex",
+      "skills": "BS_ADRENALINE 5, BS_HAMMERFALL 5, BS_MAXIMIZE 5",
+      "attack": [{"skill": "BS_HAMMERFALL", "sp": "> 30%", "dist": 1, "maxUses": 1, "aggressives": "> 2"}],
+      "self": [{"skill": "BS_ADRENALINE", "sp": "> 30%", "timeout": 10, "whenStatusInactive": "Adrenaline Rush", "inLockOnly": 1}],
+      "party": []
+    },
+    "Alchemist": {
+      "jobs": [18, 4019], "inherits": "Merchant", "archetype": "melee",
+      "stats": "50 str, 40 vit, 40 int, 40 dex, 80 str, 60 vit",
+      "skills": "AM_ACIDTERROR 5, AM_DEMONSTRATION 5, AM_POTIONPITCHER 5",
+      "attack": [{"skill": "AM_ACIDTERROR", "sp": "> 30%", "dist": 8, "maxUses": 1}],
+      "self": [], "party": []
+    },
+
+    "Thief": {
+      "jobs": [6, 4007], "archetype": "melee",
+      "stats": "40 agi, 40 str, 20 vit, 30 dex, 80 agi, 60 str",
+      "skills": "TF_DOUBLE 10, TF_MISS 10, TF_POISON 10, TF_HIDING 10",
+      "attack": [{"skill": "TF_POISON", "sp": "> 40%", "dist": 1, "maxUses": 1}],
+      "self": [], "party": []
+    },
+    "Assassin": {
+      "jobs": [12, 4013], "inherits": "Thief", "archetype": "melee",
+      "stats": "60 agi, 50 str, 30 vit, 40 dex, 90 agi, 70 str",
+      "skills": "AS_SONICBLOW 10, AS_GRIMTOOTH 5, AS_ENCHANTPOISON 10, AS_CLOAKING 5",
+      "attack": [{"skill": "AS_SONICBLOW", "sp": "> 30%", "dist": 1, "maxUses": 1}],
+      "self": [], "party": []
+    },
+    "Rogue": {
+      "jobs": [17, 4018], "inherits": "Thief", "archetype": "melee",
+      "stats": "50 agi, 50 str, 30 vit, 40 dex, 80 agi, 70 str",
+      "skills": "RG_BACKSTAP 10, RG_RAID 5, RG_STRIPWEAPON 5",
+      "attack": [{"skill": "RG_RAID", "sp": "> 30%", "dist": 1, "maxUses": 1, "aggressives": "> 1"}],
+      "self": [], "party": []
+    },
+
+    "Super Novice": {
+      "jobs": [23], "inherits": "Novice", "archetype": "melee",
+      "stats": "50 str, 50 agi, 30 vit, 30 dex, 80 str, 70 agi",
+      "skills": "SM_BASH 10, AL_HEAL 5, MG_FIREBOLT 5, AL_BLESSING 5, AL_INCAGI 5",
+      "attack": [{"skill": "SM_BASH", "sp": "> 20%", "dist": 1, "maxUses": 1}],
+      "self": [
+        {"skill": "AL_HEAL", "hp": "< 50%", "sp": "> 15%", "timeout": 2},
+        {"skill": "AL_BLESSING", "sp": "> 40%", "timeout": 10, "whenStatusInactive": "Blessing", "inLockOnly": 1}
+      ],
+      "party": []
+    },
+    "Taekwon": {
+      "jobs": [4046], "archetype": "melee",
+      "stats": "50 str, 50 agi, 30 vit, 30 dex, 80 str, 70 agi",
+      "skills": "TK_STORMKICK 7, TK_DOWNKICK 7, TK_TURNKICK 7",
+      "attack": [], "self": [], "party": []
+    },
+    "Ninja": {
+      "jobs": [25], "archetype": "ranged",
+      "stats": "50 dex, 40 agi, 30 int, 30 vit, 80 dex, 60 agi",
+      "skills": "NJ_SYURIKEN 10, NJ_KUNAI 5, NJ_HUUMA 5, NJ_KOUENKA 10",
+      "attack": [
+        {"skill": "NJ_KOUENKA", "sp": "> 25%", "dist": 8, "maxUses": 1},
+        {"skill": "NJ_SYURIKEN", "sp": "> 10%", "dist": 8, "maxUses": 1}
+      ],
+      "self": [], "party": []
+    },
+    "Gunslinger": {
+      "jobs": [24], "archetype": "ranged",
+      "stats": "60 dex, 40 agi, 30 vit, 90 dex, 60 agi, 99 dex",
+      "skills": "GS_SINGLEACTION 10, GS_TRACKING 10, GS_RAPIDSHOWER 10, GS_TRIPLEACTION 1, GS_DESPERADO 10",
+      "attack": [
+        {"skill": "GS_TRACKING", "sp": "> 20%", "dist": 8, "maxUses": 1},
+        {"skill": "GS_RAPIDSHOWER", "sp": "> 20%", "dist": 8, "maxUses": 1}
+      ],
+      "self": [], "party": []
+    }
+  }
+}

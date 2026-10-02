@@ -659,12 +659,8 @@ doCommand {
 	# [checkSelfCondition]
 }
 
-# live_ro: самолечение Vera.
-useSelf_skill AL_HEAL {
+useSelf_skill {
 	lvl
-	hp < 50%
-	sp > 15%
-	timeout 2
 	maxCastTime 0
 	minCastTime 0
 	smartEncore 0
@@ -676,20 +672,16 @@ useSelf_skill_smartHeal 1
 
 partySkillDistance 0..8
 
-# live_ro: Vera (Acolyte) лечит участников группы по правилам OpenKore, без LLM.
-partySkill AL_HEAL {
+partySkill {
 	lvl
 	dist 1
-	maxDist 9
+	maxDist 8
 	maxCastTime 0
 	minCastTime 0
 	target
 	notPartyOnly 0
 	isSelfSkill 0
 	noSmartHeal 0
-	target_hp < 60%
-	sp > 15%
-	timeout 2
 	# [checkSelfCondition]
 	# [checkPlayerCondition]
 }

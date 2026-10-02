@@ -141,6 +141,7 @@ sub sendState {
 		%{identity($char)},
 		party     => ($char->{party} && $char->{party}{joined} ? "$char->{party}{name}" : undef),
 		follow    => ($config{follow} ? $config{followTarget} : undef),
+		combat    => (%combatProfile::current ? {%combatProfile::current} : undef),
 		activity  => (AI::action() || 'idle'),
 		players   => nearbyPlayers(),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
