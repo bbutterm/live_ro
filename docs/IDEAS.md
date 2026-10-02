@@ -1741,7 +1741,7 @@ humanize(text, names)            # летопись: «погиб на prt_fild0
 **Интерфейсы.**
 ```python
 class Spar:   # ATTR spar, FEATURE spar, CONFIG spar, ENABLED False, REQUIRES peers, ARGS world, TICK_ORDER 195
-    TAGS [spar:...] 47; EVENTS spar_step/spar_result (own) 85; PROMPT «спарринг» 232
+    TAGS [spar:...] 47; EVENTS spar_step/spar_result (own) 85; поля промпта нет (как boss)
     def blocker(self, now) -> str | None      # общие условия (уровень, зени, крыло, HP, город, день, лимит)
     def partners(self) -> [имя]               # соперник недели, затем друзья; без ссоры
     def willing(self, peer) -> bool           # характер, здоровье, примирение
