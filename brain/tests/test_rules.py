@@ -88,6 +88,19 @@ class SafetyTest(unittest.TestCase):
         self.assertIsNotNone(self.p.check({"action": "whisper", "to": "A", "text": "y"}, STATE, now + 1)[1])
         self.assertIsNone(self.p.check({"action": "whisper", "to": "A", "text": "z"}, STATE, now + 11)[1])
 
+    def test_text_fits_one_message_and_keeps_tag(self):
+        """OpenKore режет > 80 символов на несколько шёпотов: реплика ≤ 78, метка в конце целиком."""
+        from live_brain.safety import MAX_TEXT, fit_text
+        long = "Очень длинная реплика жителя про охоту и погоду в Пронтере, " * 3
+        tagged = fit_text(long + "[meet:abc123:prt_fild08:150:160]")
+        self.assertLessEqual(len(tagged), MAX_TEXT)
+        self.assertTrue(tagged.endswith("[meet:abc123:prt_fild08:150:160]"))
+        self.assertLessEqual(len(fit_text(long)), MAX_TEXT)
+        self.assertEqual(fit_text("  коротко  "), "коротко")
+        clean, _ = self.p.check({"action": "whisper", "to": "A", "text": long + "[chat:greet:1]"}, STATE, 5000.0,
+                                protocol=True)
+        self.assertTrue(clean["text"].endswith("[chat:greet:1]"))
+
     def test_no_repeat_same_text(self):
         """AUT-095: та же реплика тому же адресату — не раньше чем через час; протокол не ограничен."""
         now = 1000.0

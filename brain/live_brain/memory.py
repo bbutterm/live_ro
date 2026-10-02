@@ -41,6 +41,10 @@ class Memory:
         self.path = Path(path)
         self.db = sqlite3.connect(str(path))
         self.db.row_factory = sqlite3.Row
+        if str(path) != ":memory:":
+            # ORG D7: WAL + synchronous NORMAL — запись без fsync на каждый коммит, чтение не блокирует запись.
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA)
         self.migrate()
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(llm_calls)")}

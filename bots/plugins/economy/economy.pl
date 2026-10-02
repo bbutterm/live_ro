@@ -192,8 +192,11 @@ sub driveGive {
 	}
 }
 
+our $dealWith;               # с кем открыта сделка (обе стороны) — для события deal_complete
+
 sub onEngaged {
 	my (undef, $args) = @_;
+	$dealWith = $args->{name};
 	return unless %give && $give{phase} eq 'request';
 	if (($args->{name} // '') ne $give{to}) {
 		return failGive("сделка открылась не с тем ($args->{name})", 1);
@@ -208,7 +211,10 @@ sub onDealError {
 	failGive('сервер отклонил сделку: ' . ($why{$args->{type} // ''} || "код " . ($args->{type} // '?')));
 }
 
-sub onCancelled { failGive('сделка отменена') if %give && $give{phase} ne 'approach'; }
+sub onCancelled {
+	undef $dealWith;
+	failGive('сделка отменена') if %give && $give{phase} ne 'approach';
+}
 
 # dealAuto 3 с dealAuto_names молча игнорирует чужие предложения — висящее предложение
 # мешало бы передаче между жителями. Чужим — явный отказ (как dealAuto 1).
@@ -224,7 +230,15 @@ sub onIncoming {
 	Commands::run('deal no');
 }
 
-sub onComplete { report(1, 'сделка завершена сервером') if %give && $give{phase} eq 'final'; }
+# Сервер завершил сделку. Получателю это доказательство «передача была именно сделкой с жителем»,
+# а не покупкой у NPC (мозг: economy.check_request ждёт deal_complete от того, кого просил).
+sub onComplete {
+	my $with = $dealWith;
+	undef $dealWith;
+	my $ev = brainBridge->can('event');
+	$ev->('deal_complete', with => $with, gave => (%give ? JSON::PP::true() : JSON::PP::false())) if $ev && defined $with;
+	report(1, 'сделка завершена сервером') if %give && $give{phase} eq 'final';
+}
 
 # ---------- тик ----------
 

@@ -104,6 +104,9 @@ class EconomyTest(unittest.TestCase):
         self.a.state["items"]["501"] = 25
         self.v.state["items"]["501"] = 17
         self.run_(self.v.economy.tick())
+        self.assertIsNotNone(self.v.economy.req, "рост запаса без сделки (могла быть покупка у NPC) — не подарок")
+        self.v.economy.on_deal_complete({"kind": "deal_complete", "with": "Arkady"})
+        self.run_(self.v.economy.tick())
         self.assertIsNone(self.v.economy.req)
         self.assertIn("gift_received", self.kinds(self.v))
         self.assertIn("gift_given", self.kinds(self.a))

@@ -89,7 +89,8 @@ class PartyTest(unittest.TestCase):
 
     def form(self, vera_map="prt_fild08", vx=101, vy=101, online=True, hp=100):
         self.a.state.update(party="LR_Arkady", party_members=[
-            {"name": "Vera", "online": online, "hp_pct": hp, "map": vera_map, "x": vx, "y": vy}])
+            {"name": "Vera", "online": online, "hp_pct": hp, "map": vera_map, "x": vx, "y": vy,
+             "visible": vera_map == "prt_fild08", "dead": hp == 0}])
         self.v.state.update(party="LR_Arkady", party_members=[
             {"name": "Arkady", "online": True, "hp_pct": 100, "map": "prt_fild08", "x": 100, "y": 100, "leader": True}])
 
@@ -180,10 +181,17 @@ class PartyTest(unittest.TestCase):
         self.assertEqual(self.a.actions("follow"), [{"action": "follow", "to": "Vera"}])
 
     def test_heal_confirmed_by_server_packet(self):
-        self.a.party.on_support({"kind": "support", "skill": "AL_HEAL", "from": "Vera", "to": "Arkady", "amount": 120})
-        self.a.party.on_support({"kind": "support", "skill": "AL_HEAL", "from": "Vera", "to": "Arkady", "amount": 80})
+        self.a.party.on_support({"kind": "support", "skill": "AL_HEAL", "from": "Vera", "to": "Arkady", "amount": 120,
+                                 "hp_before": 100, "hp_max": 500})
+        self.a.party.on_support({"kind": "support", "skill": "AL_HEAL", "from": "Vera", "to": "Arkady", "amount": 80,
+                                 "hp_before": 450, "hp_max": 500})
+        self.a.party.on_support({"kind": "support", "skill": "AL_HEAL", "from": "Vera", "to": "Arkady", "amount": 80,
+                                 "hp_before": 500, "hp_max": 500})
         heals = [json.loads(r[0]) for r in self.a.mem.db.execute("SELECT data FROM events WHERE kind='heal_confirmed'")]
-        self.assertEqual([h["amount"] for h in heals], [120, 80])
+        self.assertEqual([h["amount"] for h in heals], [120, 50], "прирост не больше недостающего HP; полный HP — не лечение")
+        self.v.party.on_support({"kind": "support", "skill": "AL_HEAL", "from": "Vera", "to": "Arkady", "amount": 120})
+        self.assertEqual(self.v.mem.count_events("heal_confirmed", 0), 0, "лечащий не пишет heal_confirmed (без удвоения)")
+        self.assertEqual(self.v.mem.count_events("heal_given", 0), 1)
         mems = [m["text"] for m in self.a.mem.top_memories(20) if "Heal" in m["text"]]
         self.assertEqual(len(mems), 1, "воспоминание не чаще раза в час")
         self.assertEqual(self.a.mem.relation("Vera")["affinity"], 1)

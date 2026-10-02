@@ -136,9 +136,20 @@ def report(args, memory, state_dir):
     return 0
 
 
-def peer_names(persona_path):
+def env_bots(env_path):
+    try:
+        return load_env(env_path).get("LAB_BOTS", "").strip().strip("\"'")
+    except OSError:
+        return ""
+
+
+def peer_names(persona_path, bots=None):
+    """Имена жителей. bots (LAB_BOTS) — только запущенные: иначе лидер группы звал бы офлайн-жителя,
+    а слухи уходили бы в пустоту (ORG-004). Без LAB_BOTS — все характеры (как раньше)."""
     names = set()
-    for f in Path(persona_path).parent.glob("*.json"):
+    folder = Path(persona_path).parent
+    files = [folder / f"{b}.json" for b in bots] if bots else folder.glob("*.json")
+    for f in files:
         try:
             names.add(load_persona(f)["name"])
         except (ValueError, OSError):
@@ -155,7 +166,8 @@ async def main_async(args, settings, persona, memory, state_dir):
 
     bridge = Bridge(socket_path, on_message)
     fast = make_fast_gate(settings)
-    peers = peer_names(args.persona)
+    lab_bots = (env_bots(args.env) or os.environ.get("LAB_BOTS", "")).split()
+    peers = peer_names(args.persona, lab_bots or None)
     shared = SharedBudget(Path(args.lab_root) / "state" / "shared" / "budget.sqlite", args.bot)
     mind = Mind(settings, persona, memory, bridge.send_action, state_dir / "decisions.jsonl",
                 RuleGate(), fast=fast, peers=peers,

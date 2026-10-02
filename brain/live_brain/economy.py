@@ -15,7 +15,8 @@ storageAuto) и плагин economy. Этот модуль решает тол�
 за сутки отдал меньше gifts_per_day раз, не идёт другая передача.
 Доказательства:
     «отдал»     — событие give_result ok от тела: сервер завершил сделку;
-    «получил»   — количество предмета/зени в моём состоянии из игры выросло после ok.
+    «получил»   — сервер завершил сделку именно с этим жителем (deal_complete) И количество предмета/зени
+                  в моём состоянии выросло (покупка у NPC в то же время подарком не считается).
 Слова и ack команды доказательством не считаются.
 """
 import logging
@@ -170,7 +171,7 @@ class Economy:
             self.finish(f"{r['peer']} не ответил на просьбу.", "gift_failed", 1)
         elif r["status"] == "accepted":
             got = self.have(r["item"], state) - r["base"]
-            if got > 0:
+            if got > 0 and r.get("deal_done"):     # рост запаса И сделка с этим жителем (не покупка у NPC)
                 self.mind.mem.update_relation(r["peer"], 1, "выручил, когда мне не хватало")
                 self.finish(f"{r['peer']} дал мне {self.label(r['item'], got)} — по данным игры.", "gift_received", 3,
                             got=got)
@@ -242,6 +243,13 @@ class Economy:
         await self.mind.execute([{"action": "give", "to": sender, "item": give_item, "amount": amount}],
                                 source="economy", reason=f"экономика: отдать {sender} {self.label(item, amount)}",
                                 protocol=True)
+
+    def on_deal_complete(self, event):
+        """Сервер завершил сделку с жителем — для получателя это доказательство передачи (вместе с ростом запаса)."""
+        r = self.req
+        if r and r["status"] == "accepted" and event.get("with") == r["peer"]:
+            r["deal_done"] = True
+            self.save()
 
     def on_give_result(self, event):
         g = self.giving

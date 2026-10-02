@@ -54,7 +54,7 @@ class MapStatsTest(unittest.TestCase):
         self.ms.tick({"map": "prt_fild08", "exp_pct": 50}, hunting=False)
         self.clock.t += 3600                                    # мозг не работал час
         self.ms.tick({"map": "prt_fild08", "exp_pct": 60}, hunting=True)
-        m = self.mem.get("map_stats")["prt_fild08"]
+        m = self.ms.stats()["prt_fild08"]                       # в SQLite пишется не чаще раза в 30 с
         self.assertAlmostEqual(m["minutes"], 10, delta=0.2)
         self.assertAlmostEqual(m["exp"], 3, delta=0.3)
 

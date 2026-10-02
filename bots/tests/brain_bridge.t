@@ -64,10 +64,16 @@ $Globals::accountID = 'ME';
 $Globals::char->{party} = {joined => 1, name => 'LR_Arkady', users => {
 	ME => {name => 'Arkady', admin => 1, online => 1},
 	V1 => {name => 'Vera', online => 1, hp => 50, hp_max => 200, map => 'prt_fild08.gat', pos => {x => 10, y => 12}}}};
+$Globals::playersList = FakePlayers->new(V1 => {name => 'Vera'});
 my $members = brainBridge::partyMembers();
 is(scalar @$members, 1, 'в составе только другие');
 is($members->[0]{name}, 'Vera', 'имя участника');
-is($members->[0]{hp_pct}, 25, 'HP участника');
+is($members->[0]{hp_pct}, 25, 'HP видимого участника');
+ok(!$members->[0]{dead}, 'жива');
+$Globals::playersList = FakePlayers->new();
+is(brainBridge::partyMembers()->[0]{hp_pct}, undef, 'не видна — HP устаревшее, не передаю');
+$Globals::playersList = FakePlayers->new(V1 => {name => 'Vera', dead => 1});
+ok(brainBridge::partyMembers()->[0]{dead}, 'видна мёртвой — dead');
 is($members->[0]{map}, 'prt_fild08', 'карта без .gat');
 ok(brainBridge::isPartyLeader(), 'я лидер');
 
@@ -76,7 +82,9 @@ $Globals::playersList = FakePlayers->new(V1 => {name => 'Vera'});
 my @ev;
 { no warnings 'redefine'; *brainBridge::event = sub { push @ev, [@_] }; }
 Plugins::call('packet_skilluse', {skillID => 28, sourceID => 'V1', targetID => 'ME', amount => 120});
-is_deeply($ev[0], ['support', skill => 'AL_HEAL', from => 'Vera', to => 'Arkady', amount => 120], 'Heal от Vera мне');
+is($ev[0][0], 'support', 'событие поддержки');
+is_deeply({@{$ev[0]}[1 .. $#{$ev[0]}]}, {skill => 'AL_HEAL', from => 'Vera', to => 'Arkady', amount => 120,
+	hp_before => 3, hp_max => 400}, 'Heal от Vera мне — с HP до пакета');
 @ev = ();
 Plugins::call('packet_skilluse', {skillID => 28, sourceID => 'V1', targetID => 'X9', amount => 99});
 is_deeply(\@ev, [], 'чужое лечение не про меня — нет события');
@@ -112,5 +120,19 @@ ok(!$ok4, 'ругательная эмоция 6 не из списка');
 ok(!$ok4, 'мусор вместо номера отклонён');
 ($ok4, $c4) = brainBridge::actionToCommand({action => 'emote'});
 ok(!$ok4, 'без номера отклонено');
+
+# ---- D1: сидение не блокирует продажу и движение ----
+my ($okS, $resS) = brainBridge::actionToCommand({action => 'sit'});
+ok($okS && ref $resS eq 'HASH', 'sit — без команды sit (флаг sitAuto_forcedBySitCommand не ставится)');
+$Globals::char->{sitting} = 1;
+my ($okM, $resM) = brainBridge::actionToCommand({action => 'meet_point', map => 'prontera', x => 150, y => 180});
+is($resM->[0], 'stand', 'сидит — сначала встать, потом к точке');
+$Globals::char->{sitting} = 0;
+$Globals::ai_v{sitAuto_forcedBySitCommand} = 1;
+my ($okF, $resF) = brainBridge::actionToCommand({action => 'follow', to => 'Vera'});
+is_deeply($resF, ['stand', 'follow Vera'], 'флаг sit-команды — снять через stand');
+delete $Globals::ai_v{sitAuto_forcedBySitCommand};
+($okF, $resF) = brainBridge::actionToCommand({action => 'follow', to => 'Vera'});
+is_deeply($resF, ['follow Vera'], 'стоит — без лишнего stand');
 
 done_testing();

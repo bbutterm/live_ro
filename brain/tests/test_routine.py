@@ -185,7 +185,7 @@ class RoutineTest(unittest.TestCase):
             self.mem.db.execute("INSERT INTO events (ts, kind, data) VALUES (?, 'died', '{}')", (self.clock.t - i * 60,))
         asyncio.run(self.r.on_death(self.clock.t))
         self.assertEqual(self.r.st["mode"], "town")
-        self.assertEqual(self.r.st["prefer_map"], "prt_fild08")
+        self.assertIn("prt_fild07", self.mem.get("map_bans"))
         self.assertTrue(any("Погиб 3 раза" in d["text"] for d in self.mind.decisions if d["type"] == "routine"))
 
     def test_diary_written_at_day_end(self):

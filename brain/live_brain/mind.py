@@ -260,6 +260,10 @@ class Mind:
             return
         if self.party and kind == "danger":
             await self.party.on_danger(event)
+        if kind == "deal_complete":
+            if self.economy:
+                self.economy.on_deal_complete(event)
+            return
         if kind == "give_result":
             if self.economy:
                 self.economy.on_give_result(event)

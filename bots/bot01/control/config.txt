@@ -58,6 +58,7 @@ ignoreInvalidLogin 0
 # Opening cash shop when connected to map server (recv/ST0)
 whenInGame_requestCashPoints 0
 
+# live_ro: реплики мозга не длиннее 78 символов (safety.MAX_TEXT) — одно сообщение, метка не отрывается.
 message_length_max 80
 
 ######## Main configuration ########

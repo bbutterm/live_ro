@@ -13,6 +13,7 @@
 - эмоция (emote) — только от исполнителей правил (social.py), номер из EMOTES, не больше
   EMOTE_LIMIT за 10 минут.
 """
+import re
 import time
 
 ACTIONS = ("say", "whisper", "set_hunt_map", "pause", "resume",
@@ -27,6 +28,25 @@ EMOTE_LIMIT = 6
 MAX_GIVE = 100000
 PEER_ONLY = ("party_invite", "follow")
 WINDOW = 600
+
+
+# OpenKore режет сообщение длиннее message_length_max (80 символов в профилях) на несколько шёпотов
+# (Misc::sendMessage) — машинная метка оторвалась бы от текста. Одно сообщение — не длиннее MAX_TEXT.
+MAX_TEXT = 78
+TAIL_TAG = re.compile(r"\s*(\[[a-z]+:[^\[\]]{1,40}\])$")
+
+
+def fit_text(text, limit=MAX_TEXT):
+    """Схлопнуть пробелы и уложить в limit символов; метку [вид:...] в конце сохранить целиком."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    m = TAIL_TAG.search(text)
+    if not m:
+        return text[:limit].rstrip()
+    tag = m.group(1)
+    body = text[:m.start()][:max(0, limit - len(tag) - 1)].rstrip()
+    return f"{body} {tag}".strip()
 
 
 class SafetyPolicy:
@@ -107,7 +127,7 @@ class SafetyPolicy:
             return {"action": "meet_point", "map": action["map"], "x": x, "y": y}, None
         hp = state.get("hp_pct")
         if kind in ("say", "whisper"):
-            text = " ".join(str(action.get("text", "")).split())[:100]
+            text = fit_text(str(action.get("text", "")))
             if not text:
                 return None, "пустой текст"
             action = dict(action, text=text)

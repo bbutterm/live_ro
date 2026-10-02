@@ -25,11 +25,21 @@ class MapStats:
         self.mind = mind
         self.clock = clock
         self.last = None            # (ts, map, exp_pct, zeny)
+        self.cache = None
+        self.saved = 0.0
 
     def stats(self):
-        return self.mind.mem.get("map_stats", {})
+        if self.cache is None:
+            self.cache = self.mind.mem.get("map_stats", {})
+        return self.cache
 
-    def save(self, st):
+    def save(self, st, throttle=False):
+        """Тик копит в памяти процесса и пишет в SQLite не чаще раза в 30 с (ORG D7); события — сразу."""
+        self.cache = st
+        now = self.clock()
+        if throttle and now - self.saved < 30:
+            return
+        self.saved = now
         self.mind.mem.set("map_stats", st)
 
     def tick(self, state, hunting):
@@ -47,7 +57,7 @@ class MapStats:
             m["exp"] += cur[2] - prev[2]                       # уровень-ап сбрасывает %, его не считаем
         if prev[3] is not None and cur[3] is not None:
             m["zeny"] += cur[3] - prev[3]
-        self.save(st)
+        self.save(st, throttle=True)
 
     def on_kill(self, hmap):
         self._bump(hmap, "kills")

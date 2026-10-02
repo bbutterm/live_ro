@@ -52,7 +52,7 @@ use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use JSON::PP;
 use Time::HiRes qw(time);
 use Plugins;
-use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID);
+use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %sex_lut @lastpm $accountID %ai_v);
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -201,8 +201,13 @@ sub partyMembers {
 		my $u = $char->{party}{users}{$id};
 		next unless defined $u->{name} && $u->{name} ne $char->{name};
 		(my $map = $u->{map} // '') =~ s/\.(gat|rsw)$//;
+		# HP участника сервер шлёт только в зоне видимости — без видимости оно устаревает (ORG D14);
+		# смерть — флаг видимого игрока ($player->{dead}), а не HP 0.
+		my ($p) = $playersList ? grep { defined $_->{name} && $_->{name} eq $u->{name} } @{$playersList->getItems() || []} : ();
 		push @out, {name => "$u->{name}", online => ($u->{online} ? JSON::PP::true : JSON::PP::false),
-		            hp_pct => pct($u->{hp}, $u->{hp_max}), map => (length $map ? $map : undef),
+		            visible => ($p ? JSON::PP::true : JSON::PP::false),
+		            dead => ($p && $p->{dead} ? JSON::PP::true : JSON::PP::false),
+		            hp_pct => ($p ? pct($u->{hp}, $u->{hp_max}) : undef), map => (length $map ? $map : undef),
 		            x => ($u->{pos} ? $u->{pos}{x} : undef), y => ($u->{pos} ? $u->{pos}{y} : undef),
 		            leader => ($u->{admin} ? JSON::PP::true : JSON::PP::false)};
 	}
@@ -240,8 +245,11 @@ sub onSkillUse {
 	my (undef, $args) = @_;
 	my $skill = $SUPPORT{$args->{skillID} // -1} or return;
 	return unless $accountID && (($args->{sourceID} // '') eq $accountID || ($args->{targetID} // '') eq $accountID);
+	# amount у Heal — расчётное лечение из пакета (rAthena heal.cpp до status_heal), не прирост HP:
+	# если цель — я, приложить HP до пакета (обновление HP приходит отдельным пакетом позже).
+	my %mine = (($args->{targetID} // '') eq $accountID) ? (hp_before => $char->{hp} + 0, hp_max => $char->{hp_max} + 0) : ();
 	event('support', skill => $skill, from => nameOf($args->{sourceID}), to => nameOf($args->{targetID}),
-	      amount => ($args->{amount} // 0) + 0);
+	      amount => ($args->{amount} // 0) + 0, %mine);
 }
 
 sub nearbyPlayers {
@@ -329,6 +337,12 @@ sub cleanText {
 our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav', 15 => 'thx', 17 => 'sry',
                18 => 'heh', 20 => 'hmm', 21 => 'no1', 28 => 'sob', 29 => 'gg', 33 => 'ok');
 
+# Перед движением: если бот посажен командой sit (флаг sitAuto_forcedBySitCommand) или сидит — stand,
+# иначе OpenKore не пойдёт к lockMap/за целью (флаг снимает только cmdStand).
+sub standFirst {
+	return ($ai_v{sitAuto_forcedBySitCommand} || ($char && $char->{sitting})) ? 'stand' : ();
+}
+
 # Возвращает (1, команда) или (0, причина).
 sub actionToCommand {
 	my ($a) = @_;
@@ -362,7 +376,7 @@ sub actionToCommand {
 	} elsif ($kind eq 'follow') {
 		my $to = cleanText($a->{to});
 		return (0, 'неверная цель') unless $to =~ /^[^"]{1,23}$/ && $to ne 'stop';
-		return (1, "follow $to");
+		return (1, [standFirst(), "follow $to"]);
 	} elsif ($kind eq 'unfollow') {
 		return (1, 'follow stop');
 	} elsif ($kind eq 'meet_point') {
@@ -373,7 +387,7 @@ sub actionToCommand {
 		if ($field && $field->baseName eq $map && !$field->isWalkable($x, $y)) {
 			return (0, "клетка $x,$y на $map непроходима");
 		}
-		return (1, ["conf lockMap $map", "conf lockMap_x $x", "conf lockMap_y $y",
+		return (1, [standFirst(), "conf lockMap $map", "conf lockMap_x $x", "conf lockMap_y $y",
 		            'conf lockMap_randX 2', 'conf lockMap_randY 2']);
 	} elsif ($kind eq 'hunt') {
 		# Распорядок: охотиться на карте (без точки), встать, если сидел.
@@ -395,7 +409,10 @@ sub actionToCommand {
 		}
 		return (0, 'нет проходимой клетки рядом');
 	} elsif ($kind eq 'sit') {
-		return (1, 'sit');
+		# НЕ команда sit: она ставит sitAuto_forcedBySitCommand, и OpenKore перестаёт продавать, ходить к
+		# lockMap и атаковать (Commands.pm cmdSit; CoreLogic processStartAutoStorageBuySell/processLockMap).
+		# Сесть без флага OpenKore умеет сам: sitAuto_idle 1 + ai_sit_idle — бот садится, когда ему нечего делать.
+		return (1, {note => 'сяду сам, когда освобожусь (sitAuto_idle)'});
 	} elsif ($kind eq 'stand') {
 		return (1, 'stand');
 	} elsif ($kind eq 'clear_point') {

@@ -115,7 +115,7 @@ class Settings:
             model=env.get("OPENROUTER_MODEL", "") or "deepseek/deepseek-chat",
             api_base=(env.get("BRAIN_API_BASE", "") or "https://openrouter.ai/api/v1").rstrip("/"),
             daily_limit=_int(env, "BRAIN_DAILY_LIMIT", 300),
-            decide_interval=_int(env, "BRAIN_DECIDE_INTERVAL", 300),
+            decide_interval=_int(env, "BRAIN_DECIDE_INTERVAL", 1800),
             event_min_gap=_int(env, "BRAIN_EVENT_MIN_GAP", 60),
             chat_min_gap=_int(env, "BRAIN_CHAT_MIN_GAP", 15),
             timeout=_int(env, "BRAIN_TIMEOUT", 30),

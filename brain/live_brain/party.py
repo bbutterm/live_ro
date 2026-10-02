@@ -174,8 +174,8 @@ class Party:
     def lagging(self, state):
         """Участник, которого стоит подождать: онлайн, жив (HP > 0), но далеко или на другой карте."""
         for m in self.members():
-            if not m.get("online") or m.get("hp_pct") == 0:
-                continue                                    # AUT-060: офлайн/мёртвого не ждём
+            if not m.get("online") or m.get("dead") or (m.get("visible") and m.get("hp_pct") == 0):
+                continue                                    # AUT-060: офлайн/мёртвого не ждём (HP — только у видимого)
             if m.get("map") and m["map"] != state.get("map"):
                 return m["name"]
             if None not in (m.get("x"), state.get("x")) and \
@@ -278,9 +278,21 @@ class Party:
         other = frm if to == me else to
         if frm == me and to == me:
             return                                            # самолечение — не событие группы
-        self.mind.mem.add_event("heal_confirmed", {"from": frm, "to": to, "amount": amount})
-        self.mind.write_decision({"type": "party", "event": "heal_confirmed", "from": frm, "to": to, "amount": amount})
-        log.info("лечение подтверждено сервером: %s -> %s +%d HP", frm, to, amount)
+        if to != me:
+            # Лечил я: пишем heal_given; heal_confirmed пишет только получатель (иначе счёт удваивается).
+            self.mind.mem.add_event("heal_given", {"from": frm, "to": to, "amount": amount})
+        else:
+            hp, hp_max = event.get("hp_before"), event.get("hp_max")
+            if hp is not None and hp_max and hp >= hp_max:
+                self.mind.write_decision({"type": "party", "event": "heal_overheal", "from": frm, "amount": amount})
+                return                                        # HP был полным — лечения по факту не было
+            gained = min(amount, hp_max - hp) if hp is not None and hp_max else amount
+            amount = gained
+            self.mind.mem.add_event("heal_confirmed", {"from": frm, "to": to, "amount": amount,
+                                                       "hp_before": hp, "hp_max": hp_max})
+            self.mind.write_decision({"type": "party", "event": "heal_confirmed", "from": frm, "to": to,
+                                      "amount": amount, "hp_before": hp, "hp_max": hp_max})
+            log.info("лечение подтверждено сервером: %s -> меня +%d HP (было %s/%s)", frm, amount, hp, hp_max)
         if other in self.mind.ctx.peers and self.due(f"heal_mem:{other}", 3600, self.clock()):
             text = (f"{frm} подлечил меня Heal на {amount} HP — по пакету сервера." if to == me
                     else f"Мой Heal подлечил {to} на {amount} HP — по пакету сервера.")

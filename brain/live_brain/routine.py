@@ -35,6 +35,7 @@ from pathlib import Path
 log = logging.getLogger("routine")
 
 RESEND = 60
+SAVE_EVERY = 30
 MAX_TICK_GAP = 5          # не засчитывать охоту за время, когда мозг не работал
 STUCK_SEC = 300           # на охоте без движения и без боя дольше — «застрял»
 UNSTUCK_GAP = 120         # не чаще раза в 2 минуты
@@ -42,6 +43,7 @@ LADDER_WINDOW = 1800      # лестница выхода из застрева�
 STUCK_BAN = 1800          # после неудачной лестницы карта исключается на 30 мин
 DEATH_WINDOW = 1800       # 3 смерти за 30 минут — отдых и карта полегче
 DEATH_LIMIT = 3
+DEATH_BAN = 3600          # после серии смертей карта исключена на час
 LOW_HP = 25               # на охоте ниже — и без зелий — уходить в город
 LOW_HP_SEC = 20
 HEAL_ITEMS = ("569", "501", "502", "503", "504")   # Novice/Red/Orange/Yellow/White Potion (ID)
@@ -74,13 +76,21 @@ class Routine:
         self.last_combat = 0.0
         self.last_unstuck = 0.0
         self.last_vend = 0.0
+        self.last_saved = 0.0
+        self.saved_mode = None
         self.low_hp_since = None
         self.waiting_hp_noted = False
         self.st = mind.mem.get("routine") or {}
 
     # ---------- данные ----------
 
-    def save(self):
+    def save(self, throttle=False):
+        """В SQLite. Тик сохраняет не чаще SAVE_EVERY с (ORG D7: не коммит каждую секунду), но смена
+        режима и все прочие изменения — сразу. При перезапуске теряется не больше SAVE_EVERY с охоты."""
+        now = self.clock()
+        if throttle and now - self.last_saved < SAVE_EVERY and self.st.get("mode") == self.saved_mode:
+            return
+        self.last_saved, self.saved_mode = now, self.st.get("mode")
         self.mind.mem.set("routine", self.st)
 
     def today(self, now):
@@ -94,10 +104,14 @@ class Routine:
         """Карта охоты: выбор модели/группы, но не исключённая после смертей (AUT-010)."""
         pref = self.st.get("prefer_map")
         maps = self.mind.persona["hunt_maps"]
-        pm = getattr(self.mind, "postmortem", None)
-        bans = pm.bans(self.clock()) if pm else {}
+        bans = self.bans()
         allowed = [m for m in maps if m not in bans] or maps
         return pref if pref in allowed else allowed[0]
+
+    def bans(self):
+        """Исключённые карты (смерти, застревания) — общее хранилище kv map_bans."""
+        now = self.clock()
+        return {m: t for m, t in (self.mind.mem.get("map_bans") or {}).items() if t > now}
 
     def summary(self, now=None):
         now = now or self.clock()
@@ -158,7 +172,7 @@ class Routine:
             if (state.get("vend") or {}).get("open") and now - self.last_vend >= RESEND:
                 self.last_vend = now
                 await self.send({"action": "shop_close"}, "распорядок: закрыть лавку — иду на встречу")
-            self.save()
+            self.save(throttle=True)
             return                                    # план встречи важнее распорядка
 
         party = getattr(self.mind, "party", None)
@@ -187,7 +201,7 @@ class Routine:
         else:
             await self.in_town(now, state)
         await self.enforce(now, state)
-        self.save()
+        self.save(throttle=True)
 
     # ---------- самостоятельность: застревание, смерти, дневник ----------
 
@@ -269,11 +283,15 @@ class Routine:
             self.st["recover"] = True
             self.save()
             return
-        maps = self.mind.persona["hunt_maps"]
         bad = self.hunt_map()
-        self.st["prefer_map"] = maps[0] if bad != maps[0] else (maps[1] if len(maps) > 1 else maps[0])
-        self.note("routine_deaths", f"Погиб {deaths} раза за полчаса на {bad} — отдохну и пойду на "
-                                    f"{self.st['prefer_map']}.", 3)
+        # Не обещать конкретную карту: её выберет pick_map при выходе на охоту (с учётом опыта и атласа).
+        # Опасную карту исключить на DEATH_BAN — тогда выбор точно будет другим, и запись правдива.
+        bans = self.mind.mem.get("map_bans") or {}
+        bans[bad] = max(bans.get(bad, 0), now + DEATH_BAN)
+        self.mind.mem.set("map_bans", bans)
+        if self.st.get("prefer_map") == bad:
+            self.st.pop("prefer_map", None)
+        self.note("routine_deaths", f"Погиб {deaths} раза за полчаса на {bad} — отдохну, а туда пока не пойду.", 3)
         alert = getattr(self.mind, "alert", None)
         if alert:
             alert("deaths", f"{deaths} смерти за 30 мин на {bad}")
@@ -491,8 +509,7 @@ class Routine:
         if not maps or self.st.get("prefer_source") == "llm":
             self.st.pop("prefer_source", None)               # выбор модели действует одну сессию
             return
-        pm = getattr(self.mind, "postmortem", None)
-        bans = pm.bans(self.clock()) if pm else {}
+        bans = self.bans()
         self.grow(maps)
         choice, why = maps.choose(self.mind.persona["hunt_maps"], bans, level=self.mind.state.get("lv"))
         if choice != self.st.get("prefer_map"):
