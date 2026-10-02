@@ -224,9 +224,10 @@ class Economy:
         if self.market["enabled"]:
             await self.market_tick(now, state)
 
-    async def ask(self, item, amount, force=False, remote=False):
+    async def ask(self, item, amount, force=False, remote=False, to=None):
         """Попросить у жителя рядом. force — команда оператора: без проверки нехватки и интервала.
-        remote — рядом никого: попросить друга шёпотом, он пришлёт почтой (ORG-035)."""
+        remote — рядом никого: попросить друга шёпотом, он пришлёт почтой (ORG-035).
+        to — попросить именно этого жителя (mentor: подарок наставника ORG-057), иначе — любого рядом."""
         now = self.clock()
         state = self.state
         if not re.fullmatch(r"z|\d{1,6}", item) or not isinstance(amount, int) or amount <= 0:
@@ -237,10 +238,13 @@ class Economy:
             return "персонаж мёртв"
         if force and not self.mind.fresh_state:
             return "нет состояния от тела"
-        peer = self.peer_near(state)
+        if to:                                                              # mentor: адресат задан
+            peer = to if to in self.mind.ctx.peers and self.sender_near(to, state) else None   # mentor:
+        else:                                                               # mentor:
+            peer = self.peer_near(state)
         far = False
         if not peer and remote and now - (self.mind.mem.get("econ_last_remote") or 0) >= self.market["remote_gap_minutes"] * 60:
-            peer, far = self.best_friend(hidden_only=True), True
+            peer, far = (to if to in self.mind.ctx.peers else None) if to else self.best_friend(hidden_only=True), True   # mentor:
             if peer:
                 self.mind.mem.set("econ_last_remote", now)
         if not peer:

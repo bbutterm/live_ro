@@ -26,6 +26,7 @@ from .healer import CHRONICLE_LINES as HEALER_LINES     # healer: лекарь �
 from .orders import CHRONICLE_LINES as ORDER_LINES      # orders: заказы между жителями (ORG-070)
 from .dream import CHRONICLE_LINES as DREAM_LINES       # dreams: жизненный путь (ORG-081)
 from .savings import CHRONICLE_LINES as SAVINGS_LINES   # dreams: копилка и банк (ORG-073)
+from .mentor import CHRONICLE_LINES as MENTOR_LINES     # mentor: наставничество (ORG-057)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 
 LINES = {
@@ -56,6 +57,7 @@ LINES = {
     **ORDER_LINES,                                        # orders: ORG-070
     **DREAM_LINES,                                        # dreams: ORG-081
     **SAVINGS_LINES,                                      # dreams: ORG-073
+    **MENTOR_LINES,                                       # mentor: ORG-057
 }
 
 
