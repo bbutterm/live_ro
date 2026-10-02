@@ -1,0 +1,16 @@
+{
+  "_comment": "Merchant: Iron Ore 1002 и Iron 998 на склад — товар для будущей лавки (не проверено в игре).",
+  "base": "bot01",
+  "archetype": "Merchant",
+  "job": "Merchant",
+  "combat": "melee",
+  "sex": "M",
+  "default_name": "Bram",
+  "keep_quest_items": [],
+  "config": {
+    "economy_storeIds": "984,985,756,757,1002,998",
+    "autoCreate_hairStyle": "4",
+    "autoCreate_hairColor": "2"
+  },
+  "persona": "persona.json"
+}

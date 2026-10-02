@@ -1,0 +1,15 @@
+{
+  "_comment": "Thief: общий профиль без отличий, кроме внешности.",
+  "base": "bot01",
+  "archetype": "Thief",
+  "job": "Thief",
+  "combat": "melee",
+  "sex": "M",
+  "default_name": "Rook",
+  "keep_quest_items": [],
+  "config": {
+    "autoCreate_hairStyle": "9",
+    "autoCreate_hairColor": "7"
+  },
+  "persona": "persona.json"
+}

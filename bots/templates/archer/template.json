@@ -1,0 +1,16 @@
+{
+  "_comment": "Archer: Trunk 1019 на склад (материал стрел, arrowcraft). Дистанцию боя задаёт combatProfile (ranged).",
+  "base": "bot01",
+  "archetype": "Archer",
+  "job": "Archer",
+  "combat": "ranged",
+  "sex": "F",
+  "default_name": "Ilsa",
+  "keep_quest_items": [],
+  "config": {
+    "economy_storeIds": "984,985,756,757,1019",
+    "autoCreate_hairStyle": "12",
+    "autoCreate_hairColor": "5"
+  },
+  "persona": "persona.json"
+}

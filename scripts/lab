@@ -57,8 +57,16 @@ usage() {
   alerts [N]            последние оповещения владельцу (тупик, восстановление невозможно, сторож сдался)
   gift BOT ITEM N       BOT сейчас просит у жителя рядом N предметов ITEM (ID, например 501, или z — зени);
                         для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
-Боты: LAB_BOTS в env-файле (по умолчанию "bot01").
+Боты: LAB_BOTS в env-файле (по умолчанию "bot01"). LAB_MAX_ONLINE=N — сторож и up держат онлайн не больше N
+                        бодрствующих жителей (ORG-044, сон по brain/personas/*.json); пусто — все из LAB_BOTS.
   db-backup             дамп основной и лог-БД в backups/
+Население (ORG-040..043, docs/POPULATION.md):
+  roster [check]        реестр жителей brain/world/roster.json против профилей и персон (только чтение)
+  roster sync [--write] residents/dealAuto_names в bots/*/control/config.txt по реестру (меняет checkout)
+  new-resident BOT ШАБЛОН ИМЯ [--sex M|F] [--persona FILE]
+                        новый житель из bots/templates/ШАБЛОН (active: false): профиль, персона, реестр
+  birth BOT [--yes]     процедура рождения: проверки и следующие шаги; с --yes — db-backup (если нет
+                        свежего) и db-add-account BOT, больше ничего
 Только режим release:
   build [DIR] | deploy <commit> | activate <release> | rollback | db-init
 EOF
@@ -380,9 +388,19 @@ cmd_doctor() {
     v="${b^^}_CONTROL_DIR"
     if is_set "$v"; then note "$b использует готовый control: ${!v} (профиль и плагины из Git НЕ применяются)"; fi
   done
-  for p in lowHpGuard gracefulStop brainBridge combatProfile economy survival jobChange; do
+  for p in lowHpGuard gracefulStop brainBridge combatProfile economy survival jobChange autoCreate; do
     if [[ -f "$pr/bots/plugins/$p/$p.pl" ]]; then ok "плагин $p"; else bad "нет плагина $p"; fi
   done
+  echo "== жители (реестр ORG-040)"
+  python3 "$pr/scripts/lib/roster.py" --repo "$pr" check --bots "$(lab_bots | tr '\n' ' ')" || DOC_FAIL=1
+  for b in $(lab_bots); do
+    if [[ -f "$LAB_ROOT/logs/$b/autoCreate.refused" ]]; then
+      bad "$b: сервер отказал в создании персонажа ($(tr '\n' ' ' < "$LAB_ROOT/logs/$b/autoCreate.refused")) — разобраться и удалить метку"
+    fi
+  done
+  if [[ -n "${LAB_MAX_ONLINE:-}" ]]; then
+    note "LAB_MAX_ONLINE=$LAB_MAX_ONLINE: сейчас онлайн держатся $(shift_bots | tr '\n' ' ')(ORG-044)"
+  fi
   echo "== мозг"
   if command -v python3 >/dev/null; then ok "python3 $(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"; else bad "нет python3"; fi
   if [[ "${BRAIN_LLM:-off}" == openrouter ]]; then
@@ -409,7 +427,7 @@ cmd_doctor() {
         found=$(sql "$DB_NAME" -N -e "SELECT CONCAT(c.name, ' slot ', c.char_num, ' lv ', c.base_level, ' map ', c.last_map, ' online ', c.online) FROM \`char\` c JOIN login l USING (account_id) WHERE l.userid=$(sql_quote "${!v}")" 2>/dev/null || true)
         if [[ -n "$found" ]]; then note "$b: $found"
         elif [[ -n "$(sql "$DB_NAME" -N -e "SELECT account_id FROM login WHERE userid=$(sql_quote "${!v}")" 2>/dev/null)" ]]; then
-          note "$b: аккаунт есть, персонажа нет (создать через консоль OpenKore в tmux)"
+          note "$b: аккаунт есть, персонажа нет (autoCreate 1 создаст при start, иначе — консоль OpenKore в tmux)"
         else note "$b: аккаунта нет (scripts/lab db-add-account $b после db-backup)"; fi
       done
     else
@@ -751,18 +769,48 @@ sup_restart() { # sup_restart NAME CMD... — перезапуск с огран
   ( "$@" ) >> "$LAB_ROOT/logs/supervisor.log" 2>&1 || sup_log "$name: перезапуск не удался (см. выше)"
 }
 
+# ORG-044: диспетчер смен. Без LAB_MAX_ONLINE — все боты LAB_BOTS (прежнее поведение). С ним — не больше N
+# бодрствующих по хронотипу (persona.sleep, scripts/lib/roster.py shift), по порядку LAB_BOTS; спящих не будим.
+# Запущенных сторож не останавливает: засыпание — relog внутри OpenKore (мозг), лимит действует на подъём.
+shift_bots() {
+  if [[ -z "${LAB_MAX_ONLINE:-}" ]]; then lab_bots; return; fi
+  [[ "$LAB_MAX_ONLINE" =~ ^[0-9]+$ ]] || die "LAB_MAX_ONLINE должен быть числом (сейчас '$LAB_MAX_ONLINE')"
+  local pr out; pr=$(profile_root)
+  if out=$(python3 "$pr/scripts/lib/roster.py" --repo "$pr" shift --max "$LAB_MAX_ONLINE" --bots "$(lab_bots | tr '\n' ' ')"); then
+    awk '$2 == "awake" {print $1}' <<<"$out"
+  else
+    warn "диспетчер смен не ответил — беру первых $LAB_MAX_ONLINE из LAB_BOTS"
+    local -a all; mapfile -t all < <(lab_bots)
+    printf '%s\n' "${all[@]:0:$LAB_MAX_ONLINE}"
+  fi
+}
+
+online_count() { # сколько ботов LAB_BOTS сейчас запущено (процесс OpenKore есть)
+  local b n=0
+  for b in $(lab_bots); do [[ -n "$(running_pid "$b")" ]] && n=$((n + 1)); done
+  echo "$n"
+}
+
+may_start_bot() { # may_start_bot BOT ALLOWED... — можно ли поднять бота при LAB_MAX_ONLINE (без лимита — всегда)
+  local bot="$1"; shift
+  [[ -z "${LAB_MAX_ONLINE:-}" ]] && return 0
+  [[ " $* " == *" $bot "* ]] || return 1
+  (( $(online_count) < LAB_MAX_ONLINE ))
+}
+
 cmd_supervise() {
   load_env
   ( umask 077; mkdir -p "$LAB_ROOT/run/supervisor" )
-  sup_log "сторож запущен: боты $(lab_bots | tr '\n' ' ')"
+  sup_log "сторож запущен: боты $(lab_bots | tr '\n' ' ')${LAB_MAX_ONLINE:+, онлайн не больше $LAB_MAX_ONLINE}"
   trap 'sup_log "сторож остановлен"; exit 0' TERM INT
-  local b warned=0
+  local b warned=0 allowed
   while true; do
     if port_open "${PORT[map]}"; then
       warned=0
+      allowed=$(shift_bots | tr '\n' ' ')
       for b in $(lab_bots); do
         [[ -n "$(running_pid "brain-$b")" ]] || sup_restart "brain-$b" start_brain "$b"
-        [[ -n "$(running_pid "$b")" ]] || sup_restart "$b" start_bot "$b"
+        if [[ -z "$(running_pid "$b")" ]] && may_start_bot "$b" "$allowed"; then sup_restart "$b" start_bot "$b"; fi
       done
     elif (( ! warned )); then
       sup_log "map-server не отвечает на порту ${PORT[map]} — боты не перезапускаются, жду сервер"
@@ -776,8 +824,12 @@ cmd_up() {
   load_env
   mkdir -p "$PIDS" "$LAB_ROOT/logs"
   port_open "${PORT[map]}" || die "map-server не отвечает на порту ${PORT[map]}: сначала scripts/lab start (серверы)"
-  local b
-  for b in $(lab_bots); do release "$b" "brain-$b"; start_brain "$b"; start_bot "$b"; done
+  local b allowed; allowed=$(shift_bots | tr '\n' ' ')
+  for b in $(lab_bots); do
+    release "$b" "brain-$b"; start_brain "$b"
+    if may_start_bot "$b" "$allowed"; then start_bot "$b"
+    else info "$b: смена (LAB_MAX_ONLINE=$LAB_MAX_ONLINE) — спит по хронотипу или лимит онлайн; поднимет сторож"; fi
+  done
   start_proc supervisor "$REPO" "$LAB_ROOT/logs/supervisor.out" \
     env "LAB_ROOT=$LAB_ROOT" "LAB_ENV=$LAB_ENV" bash "$REPO/scripts/lab" supervise
   info "жители запущены, сторож следит за ними (лог $LAB_ROOT/logs/supervisor.log). Сводка: scripts/lab report"
@@ -854,7 +906,72 @@ cmd_db_add_account() {
   # SQL через stdin: при ошибке клиент не печатает запрос (а в нём пароль).
   sql "$DB_NAME" <<<"INSERT INTO login (userid, user_pass, sex, email) VALUES ($(sql_quote "${!u}"), $(sql_quote "${!p}"), $(sql_quote "${!sx:-M}"), '$bot@lab.local');"
   info "аккаунт $bot создан: account_id $(sql "$DB_NAME" -N -e "SELECT account_id FROM login WHERE userid=$(sql_quote "${!u}")"); бэкап до изменения: $recent"
-  info "персонаж создаётся при первом входе через консоль OpenKore: BOT_RUNNER=tmux, tmux attach -t live_ro_$bot"
+  info "персонаж создаётся при первом входе: плагин autoCreate (config autoCreate 1, имя из реестра) или консоль OpenKore в tmux (tmux attach -t live_ro_$bot)"
+}
+
+# ---------- население (ORG-040..043, docs/POPULATION.md) ----------
+
+# Реестр жителей правит файлы checkout ($REPO), не runtime и не БД.
+cmd_roster() {
+  local sub="${1:-check}"; shift || true
+  case "$sub" in
+    check) if [[ -f "$LAB_ENV" ]]; then load_env; fi
+           python3 "$REPO/scripts/lib/roster.py" --repo "$REPO" check --bots "$(lab_bots | tr '\n' ' ')" ;;
+    sync)  python3 "$REPO/scripts/lib/roster.py" --repo "$REPO" sync "$@" ;;
+    *) die "scripts/lab roster check|sync [--write]" ;;
+  esac
+}
+
+cmd_new_resident() {
+  (( $# >= 3 )) || die "scripts/lab new-resident botNN ШАБЛОН ИМЯ [--sex M|F] [--persona FILE] (шаблоны: bots/templates)"
+  python3 "$REPO/scripts/lib/roster.py" --repo "$REPO" new "$@"
+  info "секретов в профиле нет: логин/пароль — ${1^^}_USER/${1^^}_PASS/${1^^}_SEX в $LAB_ENV на VPS. Проверьте git diff и закоммитьте."
+}
+
+# ORG-043: рождение жителя. Без --yes только проверяет и печатает шаги; с --yes вызывает db-backup (если нет
+# бэкапа за 24 ч) и db-add-account BOT. Запуск бота, реестр, LAB_BOTS — шаги оператора (печатаются).
+cmd_birth() {
+  local bot="${1:-}" yes=0
+  [[ "$bot" =~ ^bot[0-9]+$ ]] || die "scripts/lab birth botNN [--yes]"
+  [[ "${2:-}" == --yes ]] && yes=1
+  load_env
+  local pr; pr=$(profile_root)
+  local u="${bot^^}_USER" p="${bot^^}_PASS" sx="${bot^^}_SEX" recent="" account=""
+  echo "== 1. профиль, персона, реестр ($pr)"
+  python3 "$pr/scripts/lib/roster.py" --repo "$pr" birth "$bot" || DOC_FAIL=1
+  echo "== 2. учётные данные в $LAB_ENV (значения не печатаются)"
+  if is_set "$u" && cred_ok "$u"; then ok "$u задан"; else bad "$u: заполните (1-23 ASCII без пробелов)"; fi
+  if is_set "$p" && cred_ok "$p"; then ok "$p задан"; else bad "$p: заполните (1-23 ASCII без пробелов)"; fi
+  if [[ "${!sx:-}" =~ ^[MF]$ ]]; then ok "$sx=${!sx}"; else bad "$sx: M или F (пол аккаунта и персонажа)"; fi
+  echo "== 3. бэкап БД не старше 24 ч и аккаунт (только SELECT)"
+  if ( resolve_db ) 2>/dev/null; then
+    resolve_db
+    recent=$(find "$LAB_ROOT/backups" -maxdepth 1 -name "${DB_NAME}-*.sql.gz" -mmin -1440 2>/dev/null | head -n1)
+    if [[ -n "$recent" ]]; then ok "бэкап $recent"; else note "свежего бэкапа нет (db-add-account его требует)"; fi
+    if is_set "$u"; then
+      account=$(sql "$DB_NAME" -N -e "SELECT account_id FROM login WHERE userid=$(sql_quote "${!u}")" 2>/dev/null || true)
+      if [[ -n "$account" ]]; then note "аккаунт уже есть (account_id $account)"; else note "аккаунта нет"; fi
+    fi
+  else
+    bad "реквизиты БД не определены"
+  fi
+  if ((yes)); then
+    ((DOC_FAIL == 0)) || die "есть [FAIL] — исправьте и повторите"
+    if [[ -z "$recent" ]]; then info "db-backup перед изменением БД"; cmd_db_backup; fi
+    if [[ -z "$account" ]]; then cmd_db_add_account "$bot"; else info "аккаунт уже есть — db-add-account пропущен"; fi
+  else
+    echo "== с --yes будет выполнено:${recent:+ (бэкап свежий)}${recent:- scripts/lab db-backup;}${account:+ (аккаунт есть)}${account:- scripts/lab db-add-account $bot}"
+  fi
+  cat <<STEPS
+== дальше — оператор (docs/POPULATION.md, «Рождение жителя»):
+  4. первый вход: scripts/lab start live $bot  (autoCreate создаёт персонажа с именем из реестра; отказ сервера —
+     метка $LAB_ROOT/logs/$bot/autoCreate.refused, повторов нет)
+  5. проверка входа: scripts/lab doctor (строка $bot: имя, slot, map) и $LAB_ROOT/logs/$bot/console.log
+  6. в Git: roster.json $bot active: true, born: $(date -u +%F); scripts/lab roster sync --write; commit;
+     доставка (existing: git pull в checkout; release: deploy/activate)
+  7. $LAB_ENV: LAB_BOTS += $bot; scripts/lab down && scripts/lab up (residents других обновит рендер)
+STEPS
+  ((DOC_FAIL == 0)) || return 1
 }
 
 cmd_start() {
@@ -985,6 +1102,9 @@ main() {
     brain-check) cmd_brain_check --check "${1:-}" ;;
     brain-check-jev) cmd_brain_check --check-jev "${1:-}" ;;
     db-add-account) cmd_db_add_account "$@" ;;
+    roster) cmd_roster "$@" ;;
+    new-resident) cmd_new_resident "$@" ;;
+    birth) cmd_birth "$@" ;;
     plan) cmd_plan "$@" ;;
     gift) cmd_gift "$@" ;;
     up) cmd_up ;;
