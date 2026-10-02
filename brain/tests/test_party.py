@@ -209,6 +209,18 @@ class PartyTest(unittest.TestCase):
         self.assertFalse(note["can_resurrect"])
         self.assertIn("Воскресить не могу", note["text"])
 
+    def test_small_groups_and_hostile(self):
+        """ORG-020: при 5 жителях — группы по 3 и 2, лидеры — первые в своей группе; врага не зовут."""
+        self.a.ctx.peers = {"Bram", "Cora", "Dima", "Vera"}
+        self.assertEqual(self.a.party.group(), ["Arkady", "Bram", "Cora"])
+        self.assertEqual(self.a.party.leader, "Arkady")
+        self.v.ctx.peers = {"Arkady", "Bram", "Cora", "Dima"}
+        self.assertEqual(self.v.party.group(), ["Dima", "Vera"])
+        self.assertEqual(self.v.party.leader, "Dima")
+        self.a.mem.update_relation("Cora", -2)
+        self.a.mem.update_relation("Cora", -2)
+        self.assertEqual(self.a.party.mates(), {"Bram"}, "с испорченными отношениями в группу не зовём")
+
     def test_stranger_tags_ignored(self):
         asyncio.run(self.v.party.on_tag("Stranger", "[party:town:]"))
         self.assertIsNone(self.v.party.st.get("leader_mode"))

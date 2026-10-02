@@ -32,7 +32,9 @@ LEADER_FRESH = 900        # режим лидера устаревает чер�
 WAIT_DIST = 12
 WAIT_MAX = 180
 HELP_SEC = 60
-SIGNAL_GAP = 30           # срочные сигналы — свой лимит, не общий лимит болтовни (AUT-092)
+SIGNAL_GAP = 30
+GROUP_SIZE = 3            # ORG-020: малые группы
+HOSTILE = -3              # отношение ниже — в группу не зовём           # срочные сигналы — свой лимит, не общий лимит болтовни (AUT-092)
 
 
 def dist(ax, ay, bx, by):
@@ -57,7 +59,25 @@ class Party:
 
     @property
     def leader(self):
-        return min({self.me} | set(self.mind.ctx.peers))
+        return self.group()[0]
+
+    def group(self):
+        """ORG-020: малые группы до GROUP_SIZE — по порядку имён запущенных жителей (у всех одинаково,
+        без переговоров); лидер — первый в своей группе. При 2 жителях — одна группа, как раньше."""
+        names = sorted({self.me} | set(self.mind.ctx.peers))
+        i = names.index(self.me) // GROUP_SIZE * GROUP_SIZE
+        return names[i:i + GROUP_SIZE]
+
+    def mates(self):
+        """Жители моей группы, кроме меня; с испорченными отношениями (affinity <= HOSTILE) — не зовём."""
+        out = set()
+        for name in self.group():
+            if name == self.me:
+                continue
+            rel = self.mind.mem.relation(name) or {}
+            if rel.get("affinity", 0) > HOSTILE:
+                out.add(name)
+        return out
 
     @property
     def is_leader(self):
@@ -69,7 +89,7 @@ class Party:
 
     def members(self):
         return [m for m in self.mind.state.get("party_members") or []
-                if isinstance(m, dict) and m.get("name") in self.mind.ctx.peers]
+                if isinstance(m, dict) and m.get("name") in self.mates()]
 
     def member(self, name):
         return next((m for m in self.members() if m["name"] == name), None)
@@ -138,7 +158,7 @@ class Party:
                 await self.act([{"action": "party_create"}], f"группа: создаю {self.name}")
             elif party == self.name:
                 inside = {m["name"] for m in self.members()}
-                for peer in sorted(self.mind.ctx.peers - inside):
+                for peer in sorted(self.mates() - inside):
                     if self.due(f"invite:{peer}", INVITE_GAP, now):
                         await self.act([{"action": "party_invite", "to": peer}], f"группа: зову {peer}")
         elif party and party.startswith("LR_") and party != self.name and self.due("leave", CREATE_GAP, now):
