@@ -290,8 +290,12 @@ class Routine:
         short = heal is not None and heal < 10 and (state.get("zeny") or 0) > 3000
         if not (heavy or short) or state.get("activity") in BUSY:
             return
+        await self.service_now(now, "Схожу по делам: " + ("рюкзак тяжёлый" if heavy else "мало зелий") + ".")
+
+    async def service_now(self, now, text):
+        """Продать/сдать на склад/докупить сейчас (OpenKore autostorage/autosell) — распорядок или каталог занятий."""
         self.st["service_at"] = now
-        self.note("routine_service", "Схожу по делам: " + ("рюкзак тяжёлый" if heavy else "мало зелий") + ".", 1)
+        self.note("routine_service", text, 1)
         await self.send({"action": "service"}, "распорядок: продать/сдать/докупить")
 
     # ---------- самостоятельность: застревание, смерти, дневник ----------

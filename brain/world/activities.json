@@ -1,0 +1,48 @@
+{
+  "_comment": "Каталог занятий жителя (ORG-016). satisfies — какие мотивы (needs.py) удовлетворяет; requires — предусловия (activity.py: REQUIRES); proof — игровой факт завершения за proof_minutes; иначе — неудача. Выбор (ORG-017): сумма satisfies × взвешенный мотив + инерция текущего + шум характера; переключение — только если лучше текущего на switch_margin.",
+  "decide_minutes": [5, 10],
+  "min_hunt_minutes": 20,
+  "inertia": 0.15,
+  "switch_margin": 0.08,
+  "activities": {
+    "rest": {
+      "label": "отдохнуть на месте", "modes": ["town"],
+      "satisfies": {"rest": 0.6, "safety": 0.4}, "requires": {}, "cooldown_minutes": 0, "proof": "none"
+    },
+    "stroll": {
+      "label": "прогуляться по городу", "modes": ["town"],
+      "satisfies": {"curiosity": 0.5, "social": 0.2, "rest": 0.1},
+      "requires": {"day": true}, "cooldown_minutes": 10, "proof": "moved", "proof_minutes": 5
+    },
+    "socialize": {
+      "label": "навестить жителя", "modes": ["town"],
+      "satisfies": {"social": 1.0, "care": 0.5},
+      "requires": {"day": true, "peer_visible": true}, "cooldown_minutes": 15, "proof": "peer_near", "proof_minutes": 5
+    },
+    "service": {
+      "label": "сходить по делам (продать, сдать, докупить)", "modes": ["town"],
+      "satisfies": {"supply": 1.0, "wealth": 0.2},
+      "requires": {"supply_min": 0.3}, "cooldown_minutes": 30, "proof": "supply_better", "proof_minutes": 15
+    },
+    "hunt_early": {
+      "label": "пойти на охоту раньше", "modes": ["town"],
+      "satisfies": {"progress": 0.8, "wealth": 0.5},
+      "requires": {"day": true, "hp_ok": true, "budget_left": true, "no_leader": true},
+      "cooldown_minutes": 30, "proof": "on_hunt_map", "proof_minutes": 15
+    },
+    "keep_hunting": {
+      "label": "продолжать охоту", "modes": ["hunt"],
+      "satisfies": {"progress": 0.7, "wealth": 0.5}, "requires": {}, "cooldown_minutes": 0, "proof": "none"
+    },
+    "end_hunt": {
+      "label": "закончить охоту и отдохнуть", "modes": ["hunt"],
+      "satisfies": {"rest": 1.0, "safety": 0.6, "supply": 0.5, "social": 0.3},
+      "requires": {"no_leader": true}, "cooldown_minutes": 30, "proof": "in_town", "proof_minutes": 20
+    },
+    "change_map": {
+      "label": "сменить место охоты", "modes": ["hunt"],
+      "satisfies": {"curiosity": 0.8, "progress": 0.3},
+      "requires": {"other_maps": true, "no_leader": true}, "cooldown_minutes": 60, "proof": "map_changed", "proof_minutes": 15
+    }
+  }
+}

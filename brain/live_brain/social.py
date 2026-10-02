@@ -348,6 +348,23 @@ class Social:
                         f"общение: иду {p.get('label', name)} ({why})")
         self.mind.mem.add_event("social_walk", {"point": name, "why": why})
 
+    async def visit(self, map_, x, y, label):
+        """Подойти к месту (каталог занятий: «навестить жителя»): как прогулка, но к заданной клетке."""
+        r = getattr(self.mind, "routine", None)
+        if not r or not r.in_town_mode or not self.may_walk(r):
+            return False
+        self.spot, self.sat = None, False
+        r.town = {"map": map_, "x": int(x), "y": int(y), "radius": 2}
+        r.last_sent = self.clock()
+        await self.send([{"action": "stand"}, {"action": "meet_point", "map": map_, "x": int(x), "y": int(y)}],
+                        f"общение: иду {label}")
+        self.next_walk = self.clock() + self.interval()
+        return True
+
+    def walk_now(self):
+        """Каталог занятий выбрал прогулку — следующая прогулка сразу (ночью и при запретах walk сам откажет)."""
+        self.next_walk = self.clock()
+
     # ---------- разговоры ----------
 
     async def chat(self, now, state):
@@ -388,6 +405,7 @@ class Social:
         self.st["pairs"][peer] = now
         await self.mind.execute([{"action": "whisper", "to": peer, "text": f"{text} {tag}"}],
                                 source="social", reason=f"общение: {topic} жителю {peer}")
+        self.mind.mem.add_event("social_said", {"peer": peer, "topic": topic, "fact": topic in FACT_TOPICS})
         await self.emote(topic, now)
         self.save()
         return True

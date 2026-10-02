@@ -17,6 +17,7 @@ import re
 import time
 
 from . import llm
+from .activity import Activities
 from .career import Career
 from .economy import TAG as ECON_TAG, Economy
 from .gate import GateContext, JevGate
@@ -125,6 +126,7 @@ class Mind:
         if self.routine and self.routine.cfg.get("auto_hunt_maps"):
             for m in self.mem.get("learned_hunt_maps", []):      # выученные места охоты (атлас) — после рестарта тоже
                 self.learn_hunt_map(m, save=False)
+        self.activities = Activities(self) if self.routine and settings.feature("activity") else None
         # social: городской распорядок, разговоры жителей, реакции (social.py)
         self.social = (Social(self, world) if world and (world.get("social") or {}).get("enabled", True)
                        and self.ctx.peers and feat("social") else None)
@@ -488,6 +490,8 @@ class Mind:
                 await self.party.tick()
             if self.career:
                 await self.career.tick()
+            if self.activities:
+                await self.activities.tick()
             if self.social:                                    # social: тик общения
                 await self.social.tick()
             await self.read_inbox()
@@ -682,6 +686,7 @@ class Mind:
             "хозяйство": self.economy.summary() if self.economy else None,
             "мотивы": dict(self.needs.top(4)),
             "карьера": (self.mem.get("career") or {}).get("text"),
+            "занятие": self.activities.summary() if self.activities else None,
             "опасные_монстры": self.postmortem.risky_monsters(),
             "опыт_по_картам": self.maps.summary(),
             "закрытые_карты_до": {m: time.strftime("%H:%M", time.localtime(t))

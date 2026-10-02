@@ -127,6 +127,8 @@ def report(args, memory, state_dir):
     status = memory.get("status") or {}
     if status:
         print(f"   состояние: {status.get('state')} — {status.get('why')}")
+    organic = organic_metrics(memory, day)
+    print("   органичность за сутки: " + ", ".join(f"{k} {v}" for k, v in organic.items()))
     needs = memory.get("needs") or {}
     if needs:
         top = sorted(needs.items(), key=lambda kv: -kv[1])[:3]
@@ -145,6 +147,30 @@ def env_bots(env_path):
         return load_env(env_path).get("LAB_BOTS", "").strip().strip("\"'")
     except OSError:
         return ""
+
+
+def organic_metrics(memory, since):
+    """ORG-046: разнообразие жизни по фактам памяти (не по словам модели)."""
+    rows = memory.db.execute("SELECT kind, data FROM events WHERE ts >= ? AND kind IN "
+                             "('activity', 'social_walk', 'social_said')", (since,)).fetchall()
+    acts, points, said, fact_said, sleep_h = set(), set(), 0, 0, 0.0
+    for kind, data in rows:
+        d = json.loads(data)
+        if kind == "activity":
+            acts.add(d.get("name"))
+        elif kind == "social_walk":
+            points.add(d.get("point"))
+        elif kind == "social_said":
+            said += 1
+            fact_said += 1 if d.get("fact") else 0
+    diaries = memory.db.execute("SELECT COUNT(*) FROM events WHERE kind = 'diary' AND ts >= ?", (since,)).fetchone()[0]
+    calls = memory.db.execute("SELECT COUNT(*) FROM llm_calls WHERE ts >= ?", (since,)).fetchone()[0]
+    st = memory.get("routine") or {}
+    if st.get("mode") == "sleep" or st.get("sleep_hours"):
+        sleep_h = round(float(st.get("sleep_hours") or 0), 1)
+    return {"занятий": len(acts - {None}), "мест в городе": len(points - {None}),
+            "реплик без LLM": said, "из них о событиях": fact_said, "сон, ч": sleep_h,
+            "вызовов моделей": calls, "дневников": diaries}
 
 
 def peer_names(persona_path, bots=None):
