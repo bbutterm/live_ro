@@ -39,9 +39,12 @@ usage() {
   releases              список версий (режим release)
 Изменяющие:
   prepare               создать недостающие каталоги и env-файл (ничего не перезаписывает)
-  start [server|bot01|brain|live]   запустить серверы, бота, мозг или бота+мозг
-  stop  [server|bot01|brain|live|all] [--force]   остановить (по умолчанию all)
-  brain-check           один тестовый запрос к модели OpenRouter (проверка ключа)
+  start server|BOT|brain [BOT|all]|live [BOT|all]   серверы, бот, мозг, мозг+бот
+  stop  server|BOT|brain [BOT|all]|live [BOT|all]|all [--force]   (по умолчанию all)
+  brain-check [BOT]     один платный запрос к основной модели (только при BRAIN_LLM=openrouter)
+  brain-check-jev [BOT] один запрос к JEV (только при BRAIN_GATE=jev)
+  db-add-account BOT    создать игровой аккаунт BOT_USER/PASS (нужен бэкап за последние 24 ч)
+Боты: LAB_BOTS в env-файле (по умолчанию "bot01").
   db-backup             дамп основной и лог-БД в backups/
 Только режим release:
   build [DIR] | deploy <commit> | activate <release> | rollback | db-init
@@ -225,9 +228,9 @@ find_procs() {
         # cwd чужого процесса недоступен: тогда для отчёта достаточно совпадения имени.
         [[ -z "$cwd" || -z "$want_dir" || "$cwd" == "$want_dir" ]] || continue
         echo "$p $(proc_user "$p")" ;;
-      brain)
+      brain-*)
         [[ "$(basename -- "$argv0")" == python* && "$args" == *"-m live_brain"* \
-           && "$args" == *"--lab-root $LAB_ROOT "* ]] || continue
+           && "$args" == *"--bot ${name#brain-} "* && "$args" == *"--lab-root $LAB_ROOT "* ]] || continue
         echo "$p $(proc_user "$p")" ;;
       *)
         [[ "$(basename -- "$argv0")" == perl* && "$args" == *openkore.pl* ]] || continue
@@ -262,9 +265,23 @@ rotate_log() { # одна предыдущая копия, если лог бо�
   if [[ -f "$f" ]] && (( $(stat -c %s "$f") > max )); then mv -f "$f" "$f.1"; fi
 }
 
+lab_bots() { # список ботов лаборатории
+  local b
+  for b in ${LAB_BOTS:-bot01}; do
+    [[ "$b" =~ ^bot[0-9]+$ ]] || die "LAB_BOTS: неверное имя '$b' (ожидается botNN)"
+    echo "$b"
+  done
+}
+
+bots_arg() { # bots_arg [BOT|all] -> список ботов
+  if [[ -z "${1:-}" || "$1" == all ]]; then lab_bots
+  elif [[ "$1" =~ ^bot[0-9]+$ ]]; then echo "$1"
+  else die "ожидается botNN или all, получено '$1'"; fi
+}
+
 stack_running() {
   local n
-  for n in "${SERVERS[@]}" bot01; do [[ -n "$(running_pid "$n")" ]] && return 0; done
+  for n in "${SERVERS[@]}" $(lab_bots); do [[ -n "$(running_pid "$n")" ]] && return 0; done
   return 1
 }
 
@@ -309,7 +326,9 @@ cmd_doctor() {
     note "conf/import rAthena НЕ перезаписывается (RENDER_SERVER_CONF=0)"
   fi
   local v
-  for v in INTER_USER INTER_PASS BOT01_USER BOT01_PASS; do
+  local bu=()
+  for v in $(lab_bots); do bu+=("${v^^}_USER" "${v^^}_PASS"); done
+  for v in INTER_USER INTER_PASS "${bu[@]}"; do
     is_set "$v" || continue
     if cred_ok "$v"; then ok "$v: формат допустим"; else bad "$v: нужно 1-23 ASCII без пробелов"; fi
   done
@@ -329,11 +348,26 @@ cmd_doctor() {
   local od pr; od=$(openkore_dir); pr=$(profile_root)
   if [[ -f "$od/openkore.pl" ]]; then ok "openkore.pl в $od"; else bad "нет $od/openkore.pl"; fi
   if [[ -e "$od/src/auto/XSTools/XSTools.so" ]]; then ok "XSTools.so собран"; else bad "нет XSTools.so"; fi
-  if [[ -f "$pr/bots/bot01/control/config.txt" ]]; then ok "профиль bot01 из $pr"; else bad "нет профиля bot01"; fi
-  if [[ -f "$pr/bots/plugins/lowHpGuard/lowHpGuard.pl" ]]; then ok "плагин lowHpGuard"; else bad "нет плагина lowHpGuard"; fi
-  if is_set BOT01_CONTROL_DIR; then
-    note "bot01 использует готовый control: $BOT01_CONTROL_DIR (профиль и fallback из Git НЕ применяются)"
-  fi
+  local b p
+  for b in $(lab_bots); do
+    if [[ -f "$pr/bots/$b/control/config.txt" ]]; then ok "профиль $b из $pr"; else bad "нет профиля bots/$b"; fi
+    if [[ -f "$pr/brain/personas/$b.json" ]]; then ok "характер brain/personas/$b.json"; else note "нет характера $b.json (мозг для $b не запустится)"; fi
+    v="${b^^}_CONTROL_DIR"
+    if is_set "$v"; then note "$b использует готовый control: ${!v} (профиль и плагины из Git НЕ применяются)"; fi
+  done
+  for p in lowHpGuard gracefulStop brainBridge; do
+    if [[ -f "$pr/bots/plugins/$p/$p.pl" ]]; then ok "плагин $p"; else bad "нет плагина $p"; fi
+  done
+  echo "== мозг"
+  if command -v python3 >/dev/null; then ok "python3 $(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"; else bad "нет python3"; fi
+  if [[ "${BRAIN_LLM:-off}" == openrouter ]]; then
+    if is_set OPENROUTER_API_KEY; then ok "BRAIN_LLM=openrouter, модель ${OPENROUTER_MODEL:-deepseek/deepseek-chat}, лимит ${BRAIN_DAILY_LIMIT:-300}/сутки на бота"
+    else bad "BRAIN_LLM=openrouter, но OPENROUTER_API_KEY пуст"; fi
+  else note "BRAIN_LLM=off: платные вызовы выключены"; fi
+  if [[ "${BRAIN_GATE:-rules}" == jev ]]; then
+    if is_set JEV_API_KEY && is_set JEV_API_BASE && is_set JEV_MODEL; then ok "JEV: $JEV_MODEL @ $JEV_API_BASE, лимит ${JEV_DAILY_LIMIT:-2000}/сутки на бота"
+    else bad "BRAIN_GATE=jev, но JEV_API_BASE/JEV_API_KEY/JEV_MODEL не заполнены"; fi
+  else note "BRAIN_GATE=rules: JEV не используется"; fi
 
   echo "== БД (только SELECT)"
   if ( resolve_db ) 2>/dev/null; then
@@ -343,9 +377,16 @@ cmd_doctor() {
       ok "подключение к $DB_NAME"
       # shellcheck disable=SC2016
       note "аккаунтов: $(sql "$DB_NAME" -N -e 'SELECT COUNT(*) FROM login'), персонажей: $(sql "$DB_NAME" -N -e 'SELECT COUNT(*) FROM `char`')"
-      if is_set BOT01_USER; then
-        sql "$DB_NAME" -N -e "SELECT CONCAT('  [INFO] bot01: ', c.name, ' slot ', c.char_num, ' lv ', c.base_level, ' map ', c.last_map) FROM \`char\` c JOIN login l USING (account_id) WHERE l.userid=$(sql_quote "$BOT01_USER")" || true
-      fi
+      for b in $(lab_bots); do
+        v="${b^^}_USER"
+        is_set "$v" || { note "$b: ${v} не задан"; continue; }
+        local found
+        found=$(sql "$DB_NAME" -N -e "SELECT CONCAT(c.name, ' slot ', c.char_num, ' lv ', c.base_level, ' map ', c.last_map, ' online ', c.online) FROM \`char\` c JOIN login l USING (account_id) WHERE l.userid=$(sql_quote "${!v}")" 2>/dev/null || true)
+        if [[ -n "$found" ]]; then note "$b: $found"
+        elif [[ -n "$(sql "$DB_NAME" -N -e "SELECT account_id FROM login WHERE userid=$(sql_quote "${!v}")" 2>/dev/null)" ]]; then
+          note "$b: аккаунт есть, персонажа нет (создать через консоль OpenKore в tmux)"
+        else note "$b: аккаунта нет (scripts/lab db-add-account $b после db-backup)"; fi
+      done
     else
       bad "нет подключения к $DB_NAME"
     fi
@@ -604,7 +645,8 @@ start_bot() {
   local log="$LAB_ROOT/logs/$bot/console.log"
   rotate_log "$log"
   log_mark "$bot" START
-  if [[ "${BOT_RUNNER:-tmux}" == tmux ]] && command -v tmux >/dev/null; then
+  local rv="${bot^^}_RUNNER"
+  if [[ "${!rv:-${BOT_RUNNER:-tmux}}" == tmux ]] && command -v tmux >/dev/null; then
     local sess="live_ro_$bot" q
     tmux has-session -t "$sess" 2>/dev/null && die "tmux-сессия $sess уже существует"
     q=$(printf '%q ' "${cmd[@]}")
@@ -618,25 +660,46 @@ start_bot() {
   fi
 }
 
-# Мозг bot01 (brain/live_brain): решения и общение через OpenRouter, память в state/bot01.
+# Мозг бота (brain/live_brain): решения и общение, память в state/<bot>. Процесс brain-<bot>.
 start_brain() {
-  local pr; pr=$(profile_root)
+  local bot="$1" pr; pr=$(profile_root)
   command -v python3 >/dev/null || die "нет python3"
   [[ -d "$pr/brain/live_brain" ]] || die "нет $pr/brain/live_brain"
-  if ! is_set OPENROUTER_API_KEY; then
-    warn "OPENROUTER_API_KEY не задан: мозг запустится без LLM (только память и журнал)"
+  [[ -f "$pr/brain/personas/$bot.json" ]] || die "нет характера brain/personas/$bot.json"
+  if [[ "${BRAIN_LLM:-off}" != openrouter ]]; then
+    info "$bot: BRAIN_LLM=off — мозг на правилах, без платных вызовов"
   fi
-  mkdir -p "$LAB_ROOT/logs/bot01"
-  ( umask 077; mkdir -p "$LAB_ROOT/run/brain" "$LAB_ROOT/state/bot01" )
-  start_proc brain "$pr/brain" "$LAB_ROOT/logs/bot01/brain.log" \
-    python3 -m live_brain --env "$LAB_ENV" --bot bot01 --lab-root "$LAB_ROOT"
-  info "журнал решений: $LAB_ROOT/state/bot01/decisions.jsonl; бот должен быть запущен с этим commit (плагин brainBridge)"
+  mkdir -p "$LAB_ROOT/logs/$bot"
+  ( umask 077; mkdir -p "$LAB_ROOT/run/brain" "$LAB_ROOT/state/$bot" )
+  start_proc "brain-$bot" "$pr/brain" "$LAB_ROOT/logs/$bot/brain.log" \
+    python3 -m live_brain --env "$LAB_ENV" --bot "$bot" --lab-root "$LAB_ROOT"
+  info "$bot: журнал решений $LAB_ROOT/state/$bot/decisions.jsonl"
 }
 
-cmd_brain_check() {
+cmd_brain_check() { # cmd_brain_check --check|--check-jev [BOT]
   load_env
+  local flag="$1" bot; bot=$(bots_arg "${2:-bot01}" | head -n1)
   local pr; pr=$(profile_root)
-  ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot bot01 --lab-root "$LAB_ROOT" --check )
+  ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot "$bot" --lab-root "$LAB_ROOT" "$flag" )
+}
+
+# Новый игровой аккаунт для бота. Пишет в БД игры, поэтому требует бэкап не старше 24 ч.
+cmd_db_add_account() {
+  local bot="${1:-}"; [[ "$bot" =~ ^bot[0-9]+$ ]] || die "укажите бота: scripts/lab db-add-account bot02"
+  load_env
+  local u="${bot^^}_USER" p="${bot^^}_PASS" sx="${bot^^}_SEX"
+  need_var "$u" "$p"; check_cred "$u"; check_cred "$p"
+  [[ "${!sx:-M}" =~ ^[MF]$ ]] || die "$sx должен быть M или F"
+  resolve_db
+  local recent
+  recent=$(find "$LAB_ROOT/backups" -maxdepth 1 -name "${DB_NAME}-*.sql.gz" -mmin -1440 2>/dev/null | head -n1)
+  [[ -n "$recent" ]] || die "нет бэкапа $DB_NAME за последние 24 ч: сначала scripts/lab db-backup"
+  [[ -z "$(sql "$DB_NAME" -N -e "SELECT account_id FROM login WHERE userid=$(sql_quote "${!u}")")" ]] \
+    || die "аккаунт ${!u} уже существует — ничего не меняю"
+  # SQL через stdin: при ошибке клиент не печатает запрос (а в нём пароль).
+  sql "$DB_NAME" <<<"INSERT INTO login (userid, user_pass, sex, email) VALUES ($(sql_quote "${!u}"), $(sql_quote "${!p}"), $(sql_quote "${!sx:-M}"), '$bot@lab.local');"
+  info "аккаунт $bot создан: account_id $(sql "$DB_NAME" -N -e "SELECT account_id FROM login WHERE userid=$(sql_quote "${!u}")"); бэкап до изменения: $recent"
+  info "персонаж создаётся при первом входе через консоль OpenKore: BOT_RUNNER=tmux, tmux attach -t live_ro_$bot"
 }
 
 cmd_start() {
@@ -646,10 +709,10 @@ cmd_start() {
   case "$what" in
     server) start_server ;;
     bot[0-9]*) start_bot "$what" ;;
-    brain) start_brain ;;
+    brain) for b in $(bots_arg "${2:-}"); do start_brain "$b"; done ;;
     # Сначала мозг: иначе событие входа в игру может прийти раньше, чем мозг слушает сокет.
-    live) start_brain; start_bot bot01 ;;
-    *) die "start server|bot01|brain|live" ;;
+    live) for b in $(bots_arg "${2:-}"); do start_brain "$b"; start_bot "$b"; done ;;
+    *) die "start server|botNN|brain [BOT|all]|live [BOT|all]" ;;
   esac
 }
 
@@ -687,30 +750,38 @@ stop_bot() {
 }
 
 cmd_stop() {
-  local what="all" force=0 a
-  for a in "$@"; do if [[ "$a" == --force ]]; then force=1; else what="$a"; fi; done
+  local what="" which="" force=0 a
+  for a in "$@"; do
+    if [[ "$a" == --force ]]; then force=1
+    elif [[ -z "$what" ]]; then what="$a"
+    else which="$a"; fi
+  done
+  what=${what:-all}
   if [[ -f "$LAB_ENV" ]]; then load_env; fi
-  local bots=(bot01) f n
+  local bots f n
+  mapfile -t bots < <(lab_bots)
   for f in "$PIDS"/bot*.pid; do
     [[ -e "$f" ]] || continue
-    n=$(basename "$f" .pid); [[ "$n" == bot01 ]] || bots+=("$n")
+    n=$(basename "$f" .pid); [[ " ${bots[*]} " == *" $n "* ]] || bots+=("$n")
   done
   case "$what" in
-    all)    stop_proc brain "$force"
+    all)    for n in "${bots[@]}"; do stop_proc "brain-$n" "$force"; done
             for n in "${bots[@]}"; do stop_bot "$n" "$force"; done
             for n in map char login; do stop_proc "$n" "$force"; done ;;
     server) for n in map char login; do stop_proc "$n" "$force"; done ;;
     bot[0-9]*) stop_bot "$what" "$force" ;;
-    brain) stop_proc brain "$force" ;;
-    live) stop_proc brain "$force"; stop_bot bot01 "$force" ;;
-    *) die "stop server|bot01|brain|live|all" ;;
+    brain) for n in $(bots_arg "$which"); do stop_proc "brain-$n" "$force"; done ;;
+    live) for n in $(bots_arg "$which"); do stop_proc "brain-$n" "$force"; stop_bot "$n" "$force"; done ;;
+    *) die "stop server|botNN|brain [BOT|all]|live [BOT|all]|all" ;;
   esac
   info "остановлено: $what"
 }
 
 cmd_status_body() {
   local s line pid owner extra port
-  for s in "${SERVERS[@]}" bot01 brain; do
+  local procs=("${SERVERS[@]}") b
+  for b in $(lab_bots); do procs+=("$b" "brain-$b"); done
+  for s in "${procs[@]}"; do
     line=$(first_proc "$s")
     if [[ -n "$line" ]]; then
       read -r pid owner extra <<<"$line"
@@ -723,7 +794,7 @@ cmd_status_body() {
     if [[ -n "$port" ]]; then
       if port_open "$port"; then line+=", порт $port открыт"; else line+=", порт $port закрыт"; fi
     fi
-    printf '  %-6s %s\n' "$s" "$line"
+    printf '  %-12s %s\n' "$s" "$line"
   done
   echo "  (процессы и порты — не доказательство входа и игры бота)"
 }
@@ -755,7 +826,9 @@ main() {
     start)     cmd_start "$@" ;;
     stop)      cmd_stop "$@" ;;
     db-backup) load_env; cmd_db_backup ;;
-    brain-check) cmd_brain_check ;;
+    brain-check) cmd_brain_check --check "${1:-}" ;;
+    brain-check-jev) cmd_brain_check --check-jev "${1:-}" ;;
+    db-add-account) cmd_db_add_account "$@" ;;
     build|deploy|activate|rollback)
       if [[ -f "$LAB_ENV" ]]; then load_env; fi
       require_release_mode "$sub"
