@@ -308,6 +308,8 @@ class Mind:
                 why = await self.plans.propose(str(cmd.get("with", "")), "operator")
             elif cmd.get("cmd") == "cancel":
                 why = await self.plans.cancel("operator")
+            elif cmd.get("cmd") in ("rest", "hunt") and self.routine:
+                why = await self.routine.force(cmd["cmd"])
             else:
                 why = "неизвестная команда"
             self.write_decision({"type": "operator", "cmd": cmd, "result": why or "ok"})

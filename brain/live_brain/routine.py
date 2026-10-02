@@ -194,6 +194,29 @@ class Routine:
                                   "hunted_min": int(self.st["hunted"] / 60), "mode": self.st["mode"]})
         log.info("распорядок: %s", text)
 
+    # ---------- оператор ----------
+
+    async def force(self, what):
+        """Команда оператора для быстрой проверки: rest — в город сейчас, hunt — на охоту сейчас."""
+        now = self.clock()
+        if not self.st:
+            self.new_day(now)
+        if what == "rest":
+            if self.st["mode"] == "town":
+                return "уже отдыхает"
+            await self.to_town(now)
+        elif what == "hunt":
+            if self.st["mode"] == "hunt":
+                return "уже охотится"
+            if self.st["hunted"] >= self.st["budget"]:
+                self.st["budget"] = self.st["hunted"] + self.minutes("session_minutes")
+            self.st["rest_until"] = now
+            await self.in_town(now, self.mind.state)
+        else:
+            return "rest или hunt"
+        self.save()
+        return None
+
     # ---------- модель ----------
 
     def prefer(self, hunt_map):

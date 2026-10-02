@@ -154,6 +154,19 @@ class RoutineTest(unittest.TestCase):
         self.assertEqual(goals[0]["сейчас"], 41)
         self.assertEqual(goals[0]["нужно"], 60)
 
+    def test_operator_rest_and_hunt(self):
+        self.run_for(2)
+        self.assertIsNone(asyncio.run(self.r.force("rest")))
+        self.assertEqual(self.r.st["mode"], "town")
+        self.run_for(61, on_tick=self.walk_to_town)
+        self.assertEqual(self.mind.state["lock_map"], "prontera")
+        self.assertIsNone(asyncio.run(self.r.force("hunt")))
+        self.assertEqual(self.r.st["mode"], "hunt")
+        self.run_for(61)
+        self.assertEqual((self.mind.state["lock_map"], self.mind.state["lock_x"]), ("prt_fild08", None))
+        self.assertEqual(asyncio.run(self.r.force("hunt")), "уже охотится")
+
 
 if __name__ == "__main__":
     unittest.main()
+

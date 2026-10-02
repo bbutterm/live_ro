@@ -776,3 +776,80 @@ grep 'память:' $LAB_ROOT/logs/bot01/brain.log | tail -1; mem bot01; script
 
 ### Что прислать
 Вывод шагов 0–4 и `history` обоих планов в `docs/qa/HERMES-<sha7>.md`.
+
+---
+
+## Задание №9: распорядок дня и боевые профили — быстрая проверка
+
+**Ветка:** `claude/brain-routine` (поверх `claude/brain-v2`, включает задания №7–8)
+**Commit:** указан в сообщении разработчика (последний commit ветки, менявший этот файл).
+Каждый шаг ограничен по времени, без пассивного наблюдения. login/char/map не трогать.
+
+### Что изменилось
+- `brain/world/goals.json`: глобальные цели и распорядок — норма охоты 4–5 ч/сутки, сессии 60–100 мин,
+  перерывы 30–90 мин в `prontera 156,185` (дойти, сесть, общаться). Исполнитель — правила без LLM.
+- `bots/combat/classes.json` + плагин `combatProfile`: боевые настройки по профессии для 24 классов
+  (только изученные навыки). Ручные блоки лечения Vera заменены профилем Acolyte.
+- `scripts/lab routine BOT rest|hunt|show` — досрочный переход для проверки.
+
+### Шаг 0 — код и перезапуск (3 мин)
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py
+(cd brain && python3 -m unittest tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine)  # OK, 48
+perl -Ibots/tests/stubs bots/tests/combat_profile.t | tail -1      # 1..29, без "not ok"
+scripts/lab stop live all && scripts/lab start live all && sleep 90 && scripts/lab status
+```
+
+### Шаг 1 — боевые профили (2 мин)
+```sh
+grep -h '\[combatProfile\]' $LAB_ROOT/logs/bot0*/console.log | tail -4
+```
+Ожидание: Arkady — `Swordsman (Swordsman)`, атака из изученных (`SM_BASH`/`SM_MAGNUM`), Vera — `Acolyte (Acolyte)`,
+группе `AL_HEAL`, себе `AL_HEAL`; в «не изучено» — то, чего у них нет. Если профессия в игре другая (например,
+уже Knight) — так и написать. В консоли нет ошибок про `attackSkillSlot`/`partySkill`.
+
+### Шаг 2 — распорядок: охота (1 мин)
+```sh
+scripts/lab routine bot01 show; scripts/lab routine bot02 show
+```
+Ожидание: `mode: hunt`, `budget` 14400–18000 (с), `hunted` растёт между двумя вызовами с паузой 60 с.
+
+### Шаг 3 — отдых в городе (до 10 мин)
+```sh
+scripts/lab routine bot01 rest
+for i in $(seq 1 20); do python3 -c "import sqlite3,json;d=sqlite3.connect('$LAB_ROOT/state/bot01/memory.sqlite');s=json.loads(d.execute(\"select value from kv where key='last_state'\").fetchone()[0]);print(s.get('map'),s.get('x'),s.get('y'),s.get('lock_map'),s.get('lock_x'),s.get('activity'))"; sleep 30; done
+grep '"type": "routine"' $LAB_ROOT/state/bot01/decisions.jsonl | tail -3
+grep -nE 'conf lockMap prontera|\bsit\b|Invalid coordinates|unwalkable' $LAB_ROOT/logs/bot01/console.log | tail -5
+```
+Ожидание: Arkady идёт в `prontera`, доходит до ~156,185, в журнале `routine_town` → `routine_arrived`, команда `sit`.
+Если в консоли `Invalid coordinates`/`unwalkable` — точка в городе непроходима: прислать вывод (поправлю `goals.json`).
+
+### Шаг 4 — перезапуск мозга в городе (1 мин)
+```sh
+scripts/lab stop brain bot01; scripts/lab start brain bot01; sleep 70
+scripts/lab routine bot01 show
+grep '"source": "routine"' $LAB_ROOT/state/bot01/decisions.jsonl | tail -2
+```
+Ожидание: режим `town` сохранён; новых команд распорядка после перезапуска нет (настройка OpenKore совпадает).
+
+### Шаг 5 — обратно на охоту (до 10 мин)
+```sh
+scripts/lab routine bot01 hunt; sleep 60
+grep '"type": "routine"' $LAB_ROOT/state/bot01/decisions.jsonl | tail -1
+grep -nE 'conf lockMap prt_fild08|stand' $LAB_ROOT/logs/bot01/console.log | tail -3
+```
+Ожидание: `routine_hunt`, `conf lockMap prt_fild08`, `lockMap_x none`, `stand`; Arkady уходит на поле и снова дерётся.
+
+### Риски
+- Путь prt_fild08 ↔ prontera прокладывает OpenKore по таблицам порталов; в городе бот не атакует (`attackAuto_notInTown`).
+- Профиль может изменить дистанцию/слоты навыков бота; откат — ниже.
+- LLM-расходы не меняются: распорядок и бой — правила.
+
+### Откат
+`scripts/lab routine bot01 hunt`, `scripts/lab stop live all`,
+`git checkout --detach 00579291aa407080beccf3d432f09fecffac7dfa`, `scripts/lab start live all`.
+
+### Что прислать
+Вывод шагов 0–5 в `docs/qa/HERMES-<sha7>.md`.

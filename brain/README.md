@@ -45,6 +45,17 @@ OpenKore + плагин brainBridge  ⇄  Unix-сокет $LAB_ROOT/run/brain/bo
 с жителями. Приглашение в группу жителя принимает правило. Лечение партнёра (Vera, `AL_HEAL`)
 делает OpenKore по `partySkill` в профиле, без LLM.
 
+## Глобальные цели и распорядок дня
+`brain/world/goals.json` — общие для всех жителей цели (уровень, профессия, друзья, выживание) и распорядок:
+норма охоты **4–5 часов в сутки**, сессии по 60–100 минут, между ними и после нормы — отдых в городе
+(`prontera 156,185`): дойти, сесть, общаться (разговор с жителем раз в 10 минут, а не 30).
+Персональные отличия — `routine` / `goals_extra` в `brain/personas/<bot>.json`.
+- Исполнитель `routine.py` — правила без LLM: усталость = фактическое время на карте охоты (жив);
+  состояние в SQLite (`kv routine`); каждый тик сверка настройки OpenKore с режимом.
+- Модель видит распорядок и цели с прогрессом; `set_hunt_map` выбирает карту (в городе — на следующую сессию).
+- Встреча важнее распорядка: пока план встречи активен, распорядок не переключает режим.
+- Оператор: `scripts/lab routine BOT rest|hunt|show`.
+
 ## Исполняемые планы: встреча
 `plans.py` превращает разговор в действие. Модель выбирает цель (`propose_meeting`, `accept_meeting`,
 `decline_meeting`, `cancel_plan`), исполняет и проверяет — правило без LLM (тик 1 с):
@@ -110,7 +121,7 @@ tail -n 20 $LAB_ROOT/state/bot01/decisions.jsonl
 
 ## Тесты
 ```sh
-cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans
+cd brain && python3 -m unittest -v tests.test_brain tests.test_rules tests.test_typesafe tests.test_limits tests.test_plans tests.test_routine
 ```
 Сквозной тест без сети: фейковый OpenRouter, настоящий процесс мозга, фейковый плагин.
 Проверяет решение, исполнение, память после перезапуска, работу без ключа, `--check` и то,

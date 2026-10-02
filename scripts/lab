@@ -47,6 +47,8 @@ usage() {
   plan BOT meet ИМЯ     поручить мозгу BOT предложить встречу жителю ИМЯ (исполняет план мозг)
   plan BOT cancel       отменить активный план BOT
   plan BOT show         последние планы BOT из памяти (только чтение)
+  routine BOT rest|hunt досрочно отправить BOT отдыхать в город / на охоту (проверка распорядка)
+  routine BOT show      распорядок BOT из памяти (только чтение)
 Боты: LAB_BOTS в env-файле (по умолчанию "bot01").
   db-backup             дамп основной и лог-БД в backups/
 Только режим release:
@@ -695,7 +697,7 @@ cmd_plan() {
   case "$sub" in
     show)
       ( cd "$pr/brain" && python3 -m live_brain --env "$LAB_ENV" --bot "$bot" --lab-root "$LAB_ROOT" --plans ) ;;
-    meet|cancel)
+    meet|cancel|rest|hunt)
       [[ -n "$(running_pid "brain-$bot")" ]] || die "мозг $bot не запущен: scripts/lab start brain $bot"
       if [[ "$sub" == meet ]]; then
         [[ "$who" =~ ^[^\"[:cntrl:]]{1,23}$ ]] || die "укажите имя жителя: scripts/lab plan $bot meet Arkady"
@@ -854,6 +856,12 @@ main() {
     brain-check-jev) cmd_brain_check --check-jev "${1:-}" ;;
     db-add-account) cmd_db_add_account "$@" ;;
     plan) cmd_plan "$@" ;;
+    routine)
+      case "${2:-}" in
+        rest|hunt) cmd_plan "$1" "$2" ;;
+        show) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain --env "$LAB_ENV" --bot "$1" --lab-root "$LAB_ROOT" --routine ) ;;
+        *) die "scripts/lab routine botNN rest|hunt|show" ;;
+      esac ;;
     build|deploy|activate|rollback)
       if [[ -f "$LAB_ENV" ]]; then load_env; fi
       require_release_mode "$sub"

@@ -34,6 +34,7 @@ def parse_args(argv):
     p.add_argument("--check-jev", action="store_true", help="один тестовый запрос к JEV и выход")
     p.add_argument("--plans", action="store_true", help="показать последние планы из памяти и выйти")
     p.add_argument("--world", help="глобальные цели и распорядок (по умолчанию brain/world/goals.json)")
+    p.add_argument("--routine", action="store_true", help="показать распорядок из памяти и выйти")
     a = p.parse_args(argv)
     a.persona = a.persona or str(here / "personas" / f"{a.bot}.json")
     a.world = a.world or str(here / "world" / "goals.json")
@@ -145,6 +146,9 @@ def main(argv=None):
             return check(settings, persona, memory)
         if args.check_jev:
             return check_jev(settings, persona, memory)
+        if args.routine:
+            print(json.dumps(memory.get("routine"), ensure_ascii=False, default=str))
+            return 0
         if args.plans:
             from .plans import PlanStore
             for plan in PlanStore(memory.db).recent(10):
