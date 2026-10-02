@@ -436,6 +436,19 @@ class NewModulesJointsTest(BodyMixin, unittest.TestCase):
         asyncio.run(self.mind.party.tick())
         self.assertIn("pause", [a["action"] for a in self.sent], "после приручения — ждать отставшего")
 
+    def test_foreign_tags_ignored(self):
+        """Метки [explore:]/[crew:]/[party:]/[chat:] от постороннего — не протокол; [explore:] от не-лидера — тоже."""
+        self.town_rest()
+        self.state(party="LR_Arkady", party_members=[{"name": "Vera", "online": True, "map": "prontera",
+                                                      "x": 157, "y": 186}])
+        ev = lambda frm, text: asyncio.run(self.mind.on_message(
+            {"type": "event", "kind": "chat_private", "from": frm, "text": text, "ts": self.clock.t}))
+        ev("Stranger", "[explore:trip:prt_fild01] [crew:pref:prt_fild01:1] [party:recover:] [chat:sorry:4]")
+        ev("Vera", "[explore:trip:prt_fild01]")                   # Arkady — сам лидер: участник не ведёт
+        self.assertIsNone(self.mind.explorer.trip)
+        self.assertEqual(self.mind.crew.st.get("prefs", {}), {})
+        self.assertFalse([a for a in self.sent if a.get("to") == "Stranger" or a["action"] in replay.MOVES])
+
     def test_nap_waits_for_expedition(self):
         """Сторож просит уснуть раньше посреди экспедиции: сначала вернуться (экспедиция прервана), не relog в поле."""
         r = self.town_rest()
