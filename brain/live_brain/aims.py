@@ -43,6 +43,11 @@ TEMPLATES = {
 
 
 class Aims:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE = "aims", "aims"
+    TICK_ORDER = 150
+    PROMPT = [("цели_недели", "summary", 220)]
+
     def __init__(self, mind, clock=None, rng=None):
         self.mind = mind
         self.clock = clock or (lambda: time.time())   # review: время при вызове — реплей подменяет time.time

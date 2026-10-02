@@ -42,6 +42,12 @@ def dist(ax, ay, bx, by):
 
 
 class Party:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "party", "party", "party", True, ("world", "peers"), "config"
+    TICK_ORDER = 30
+    TAGS, TAG_ORDER = [(TAG, "on_tag")], 70
+    EVENTS, EVENT_ORDER = {"support": {"call": "on_support", "consume": True}, "danger": "on_danger"}, 30
+
     def __init__(self, mind, cfg=None, clock=None):
         self.mind = mind
         self.cfg = cfg or {}

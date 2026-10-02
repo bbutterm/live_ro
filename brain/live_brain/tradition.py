@@ -55,6 +55,15 @@ def dist(ax, ay, bx, by):
 
 
 class Tradition:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES = "tradition", "tradition", "tradition", True, ("world",)
+    TICK_ORDER = 170
+    PROMPT = [("традиция", "summary", 180)]
+
+    @classmethod
+    def brain_create(cls, mind, world):
+        return cls(mind, world.get("tradition"), world=world)
+
     def __init__(self, mind, cfg, clock=None, world=None):
         self.mind = mind
         self.cfg = dict(DEFAULTS, **(cfg or {}))

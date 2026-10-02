@@ -50,6 +50,10 @@ def plural_days(n):
 
 
 class Episodes:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES = "episodes", "episodes", "episodes", True, ("peers",)
+    TICK_ORDER = 210
+
     def __init__(self, mind, clock=None):
         self.mind = mind
         self.clock = clock or (lambda: time.time())

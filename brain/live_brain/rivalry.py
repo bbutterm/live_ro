@@ -48,6 +48,11 @@ PHRASES = {
 
 
 class Rivalry:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "rivalry", "rivalry", "rivalry", True, ("peers",), "world"
+    TICK_ORDER = 190
+    PROMPT = [("соперник", "summary", 230)]
+
     def __init__(self, mind, world=None, clock=None, rng=None):
         self.mind = mind
         self.cfg = dict(DEFAULTS, **((world or {}).get("rivalry") or {}))

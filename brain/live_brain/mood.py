@@ -35,6 +35,10 @@ def times(n):
 
 
 class Mood:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED = "mood", "mood", "mood", True
+    PROMPT = [("настроение", "summary", 160)]   # ключ уже стоит на месте 60 (ядро) — значение отсюда
+
     def __init__(self, mind, clock=None):
         self.mind = mind
         self.clock = clock or (lambda: time.time())

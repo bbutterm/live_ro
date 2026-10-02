@@ -100,6 +100,12 @@ def diary_only(decision, facts):
 
 
 class Routine:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, REQUIRES, ARGS = "routine", "routine", ("world",), "world"
+    CREATED = "restore_learned_maps"
+    TICK_ORDER = 10             # on_combat/on_death/on_escape — явно в mind (стык выживания)
+    PROMPT = [("распорядок", "summary", 110), ("глобальные_цели", "goals", 120)]
+
     def __init__(self, mind, world, rng=None, clock=None):
         self.mind = mind
         self.world = world
@@ -183,6 +189,12 @@ class Routine:
         """Исключённые карты (смерти, застревания) — общее хранилище kv map_bans."""
         now = self.clock()
         return {m: t for m, t in (self.mind.mem.get("map_bans") or {}).items() if t > now}
+
+    def restore_learned_maps(self):
+        """Выученные места охоты (атлас) — снова свои после рестарта (реестр: CREATED, сразу после создания)."""
+        if self.cfg.get("auto_hunt_maps"):
+            for m in self.mind.mem.get("learned_hunt_maps", []):
+                self.mind.learn_hunt_map(m, save=False)
 
     def summary(self, now=None):
         now = now or self.clock()

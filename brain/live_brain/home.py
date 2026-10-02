@@ -50,6 +50,10 @@ def home_town(persona, roster_path=WORLD / "roster.json"):
 
 
 class Home:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, REQUIRES, EARLY = "home", "home", ("world",), True   # до SafetyPolicy: точка отдыха
+    TICK_ORDER = 100            # job_change_result(path=home) и on_death — явно в mind (стык с карьерой и смертью)
+
     def __init__(self, mind, path=HOMES, roster_path=WORLD / "roster.json", clock=None):
         self.mind = mind
         self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)

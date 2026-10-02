@@ -136,6 +136,10 @@ def header_for(date, tz_hours, cal=None, roster=None):
 class WorldCalendar:
     """Календарь для жителя: день мира с кешем по дате, множители мотивов и темы разговора."""
 
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "calendar", "calendar", "calendar", True, ("world",), "world"
+    PROMPT = [("день_мира", "summary", 170)]
+
     def __init__(self, mind, world=None, cal=None, roster=None, clock=None):
         self.mind = mind
         self.tz_hours = (world or {}).get("timezone_offset_hours", 0)

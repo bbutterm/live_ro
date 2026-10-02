@@ -111,6 +111,11 @@ def fit_title(text, limit=TITLE_MAX):
 
 
 class Society:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "society", "society", "society", True, ("peers",), "world"
+    TICK_ORDER = 130
+    PROMPT = [("в_ссоре", "summary", 310)]
+
     def __init__(self, mind, world=None, clock=None, rng=None):
         self.mind = mind
         self.cfg = dict(DEFAULTS, **((world or {}).get("society") or {}))

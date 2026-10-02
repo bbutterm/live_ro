@@ -74,6 +74,12 @@ def parse(text):
 
 
 class Rumors:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR = "rumors"             # всегда включён; world_msg — явно в mind (до всех)
+    TICK_ORDER = 120
+    TAGS, TAG_ORDER = [(TAG, "on_tag")], 30
+    PROMPT = [("слухи_не_факты", "summary", 240)]
+
     def __init__(self, mind, clock=None):
         self.mind = mind
         self.clock = clock or (lambda: time.time())   # review: время при вызове — реплей подменяет time.time

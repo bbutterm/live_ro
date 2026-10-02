@@ -377,6 +377,65 @@ ttl)`. Мозг каждого жителя читает новые событи
 в памяти есть реплики людей. Секретов нет (env, пароли, IP не читаются). Модуль `brain/live_brain/dashboard.py`,
 тест `brain/tests/test_dashboard.py`.
 
+### 4.16. Как добавить модуль (реестр модулей, W8)
+Раньше каждый модуль правил `mind.py` в четырёх местах: блок создания в `__init__`, звено цепочки `if` в `on_event`
+(метки шёпота и виды событий), строку в `step()` и поле в `build_prompt()`. Параллельные агенты конфликтовали там при
+слиянии. Теперь модуль описывает себя **атрибутами своего класса**, а `brain/live_brain/modules.py` собирает из них
+диспетчер. Подробный контракт и таблица мест — в docstring `modules.py`.
+
+**Шаги.**
+1. Класс модуля с конструктором `(mind)`, `(mind, world)` или `(mind, cfg)` и атрибутами реестра:
+   ```python
+   class Fishing:
+       ATTR, FEATURE, CONFIG, ENABLED = "fishing", "fishing", "fishing", True   # mind.fishing, BRAIN_DISABLE, goals.json
+       REQUIRES, ARGS = ("world", "routine"), "config"   # нужен мир и распорядок; Fishing(mind, world["fishing"])
+       TICK_ORDER = 85                                    # тик после pets (80), до crew (90)
+       TAGS, TAG_ORDER = [(TAG, "on_tag")], 75            # [fish:...] в шёпоте жителя: on_tag(sender, text)
+       EVENTS, EVENT_ORDER = {"level_up": "on_level_up"}, 25   # on_level_up(event), после social (20)
+       PROMPT = [("рыбалка", "summary", 205)]             # поле промпта после «занятие» (200)
+   ```
+2. Одна строка в `modules.MODULES` — место в порядке СОЗДАНИЯ (ниже модулей из `REQUIRES`).
+3. `mind.py` не трогать. Тест порядка `brain/tests/test_mind_order.py` покажет новые вызовы: обновить его таблицу
+   (`cd brain && python3 -m tests.test_mind_order dump`) и проверить глазами, что старые строки не сдвинулись.
+
+**Атрибуты.**
+- Включение: `REQUIRES` (`"world"`, `"peers"`, `"config"` — непустой `world[CONFIG]`, или `ATTR` другого модуля),
+  `FEATURE` (`BRAIN_DISABLE`), `ENABLED` — значение `goals.json → CONFIG.enabled` по умолчанию (`None` — не проверять).
+  Выключенный модуль — `mind.<ATTR> = None`. Особое создание — `classmethod brain_create(mind, world)` (шина мира,
+  традиция); действие сразу после создания — `CREATED = "метод"` (распорядок: выученные места охоты).
+- `TICK_ORDER` — место в `step()`; `tick()` может быть обычным или `async`.
+- `TAGS` — метки в шёпоте **жителя** (не незнакомца); первая совпавшая по `TAG_ORDER` забирает шёпот: дальше в
+  gate/LLM он не идёт. `ECHO = [("party", regex, "метод", порядок)]` — отклик на метку, которую забрал другой модуль
+  (на `[party:dead:]` social сочувствует, crew пишет в чат группы).
+- `EVENTS` — `{вид: "метод"}` или `{вид: {"call": ..., "kind": True, "consume": True, "own": True}}`: `kind` — метод
+  получает `(kind, event)`; `consume` — после вызова событие поглощено (party на `support`); `own` — вид принадлежит
+  модулю и поглощается даже при выключенном модуле (пакеты гильдии, питомца, почты — не повод для LLM).
+- `PROMPT = [("поле", "метод", место)]` — места общие с полями ядра (`build_prompt`, шаг 10).
+
+**Таблица мест (не менялась при переносе).**
+
+| Что | Порядок |
+|---|---|
+| Метки шёпота | `[meet:]` plans (ядро, всегда первая) · 20 economy `[need:]`, `[offer:]` · 30 rumors `[info:]` · 40 explorer `[explore:]` · 50 crew `[crew:]` · 60 guild `[guild:]` · 70 party `[party:]` (эхо `[party:dead:]`: social, затем crew) · 80 social `[chat:]` |
+| События | 10 crew (`level_up`, `support`, `danger`) · 20 social (`support`, `level_up`) · 30 party (`support` — поглощает, `danger`) · 40 guild (5 видов, own) · 50 pets (3 вида, own) · 60 economy (сделки, почта, покупки, own) |
+| Тик | ядро: life → safety → plans; затем 10 routine · 20 economy · 30 party · 40 career · 50 activities · 60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 120 rumors · 130 society · 140 strangers · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd · 210 episodes |
+| Промпт | ядро 10–100 · 110/120 routine · 130/140 economy · 150 мотивы · 160 mood · 170 calendar · 180 tradition · 190 карьера · 200 activities · 210 explorer · 220 aims · 230 rivalry · 240 rumors · 250 world · 260–300 ядро · 310 society · 320 guild |
+
+**Что осталось явным в `mind.py` и почему.**
+- **Стык выживания** (`attack`/`kill`/`died`/`escape`): life → explorer.on_event → postmortem/maps → слух об опасной
+  карте (`share_rumor`) → party.on_my_death → routine.on_death → home.on_death → routine.on_escape. Ядро и модули
+  перемешаны, порядок и `await`-ы важны для смерти — одна точка вызова реестра его бы сломала.
+- `world_msg` → rumors (до всего, сразу return); метка встречи `[meet:]` → plans (протокол встречи, ядро).
+- `job_change_result`: один вид у двух модулей, развилка по `path` (home — этап «сохраниться у Kafra», иначе career).
+- strangers: `private()` до записи в память и `on_whisper()` после gate (зависит от результата gate и LLM).
+- Сохранение настроения в отчёт (`mood.snapshot`), поле промпта «группа» (нужен `state` тела), economy/routine/party
+  в `reconnected`, `execute`, `on_ack`, `read_inbox`, `apply` — это стыки с ядром, а не подписки.
+- Порядок СОЗДАНИЯ важен (Routine читает дом, Crew — группу, Activities/Explorer — распорядок, `topics.install` — social
+  и episodes), поэтому он задан списком `MODULES`, а не числами.
+
+Тест `brain/tests/test_mind_order.py` прогоняет 45 событий × 10 наборов модулей, тик, промпт и 42 варианта настроек
+создания через настоящий `Mind` со шпионами вместо модулей; таблица в нём снята с `mind.py` до рефакторинга.
+
 ---
 
 ## 5. Зависимости от параллельных работ

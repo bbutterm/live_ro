@@ -23,6 +23,10 @@ MAX_FAILS = 3
 
 
 class Career:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, REQUIRES, ARGS = "career", "career", "progression", ("world",), "config"
+    TICK_ORDER = 40             # job_change_result — явно в mind (общий вид с домом)
+
     def __init__(self, mind, cfg=None, clock=None):
         self.mind = mind
         self.cfg = cfg or {}

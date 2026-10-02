@@ -73,6 +73,20 @@ def dist(ax, ay, bx, by):
 
 
 class Economy:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, REQUIRES, ARGS = "economy", "economy", "economy", ("world", "config"), "config"
+    TICK_ORDER = 20
+    TAGS, TAG_ORDER = [(TAG, "on_tag"), (OFFER_TAG, "on_tag")], 20    # [need:] просьба, [offer:] рынок
+    EVENT_ORDER = 60
+    EVENTS = {"deal_complete": {"call": "on_deal_complete", "own": True},
+              "give_result": {"call": "on_give_result", "own": True},
+              "buy_result": {"call": "on_buy_result", "own": True},
+              "mail_result": {"call": "on_mail_result", "own": True},
+              "mail_taken": {"call": "on_mail_taken", "own": True},
+              "mail_received": {"call": "on_mail_received", "own": True},
+              "npc_sold": {"own": True}, "vend_sold": {"own": True}}       # только память, не в gate
+    PROMPT = [("хозяйство", "summary", 130), ("рынок", "market_summary", 140)]
+
     def __init__(self, mind, cfg, clock=None):
         self.mind = mind
         self.cfg = cfg

@@ -8,6 +8,8 @@
 Если порядок меняется НАМЕРЕННО (новый модуль, новая подписка) — обновите таблицу:
   cd brain && python3 -m tests.test_mind_order dump   # печатает текущие таблицы для вставки ниже
 
+RegistryTest — новый модуль подключается к реестру без правки mind.py (метка, событие, тик, промпт, выключатели).
+
 Запуск: cd brain && python3 -m unittest -v tests.test_mind_order
 """
 import asyncio
@@ -1364,6 +1366,87 @@ class MindOrderTest(unittest.TestCase):
 
     def test_creation(self):
         self.assertEqual(creation_table(), EXPECTED_CREATE)
+
+
+class Fishing:
+    """Новый модуль «из будущего»: подключается строкой в реестре, mind.py не меняется."""
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "fishing", "fishing", "fishing", True, ("world", "routine"), "config"
+    TICK_ORDER = 85
+    TAGS, TAG_ORDER = [(r"\[fish:[a-z]+\]", "on_tag")], 75
+    EVENTS, EVENT_ORDER = {"level_up": "on_level_up", "fish_caught": {"call": "on_caught", "own": True}}, 25
+    PROMPT = [("рыбалка", "summary", 205)]
+
+    def __init__(self, mind, cfg):
+        self.mind, self.cfg = mind, cfg
+
+    def _log(self, what):
+        self.mind.fishing_log.append(f"fishing.{what}")
+
+    async def tick(self):
+        self._log("tick")
+
+    async def on_tag(self, sender, text):
+        self._log("on_tag")
+
+    def on_level_up(self, event):
+        self._log("on_level_up")
+
+    def on_caught(self, event):
+        self._log("on_caught")
+
+    def summary(self):
+        return "клюёт"
+
+
+class RegistryTest(unittest.TestCase):
+    def lab(self, env=None):
+        from live_brain import modules
+        lab = Lab(env=env)
+        self.addCleanup(lab.close)
+        lab.mind.fishing_log = lab.log
+        lab.mind.registry = modules.Registry(modules.MODULES + (Fishing,))
+        modules.Registry((Fishing,)).build(lab.mind, WORLD)        # то же, что сделал бы Mind.__init__
+        return lab
+
+    def test_new_module_without_mind_edit(self):
+        lab = self.lab()
+        self.assertIsInstance(lab.mind.fishing, Fishing)
+        lab.spy()                                     # остальные модули — шпионы, fishing остаётся настоящим
+        run = lambda ev: asyncio.run(lab.mind.on_event(dict(ev, type="event", ts=1)))
+        run(V("[fish:carp]"))
+        self.assertEqual(lab.log[-1], "fishing.on_tag", "метка нового модуля забирает шёпот (до social [chat:])")
+        lab.log.clear()
+        run(EVENTS["level_up"])
+        self.assertEqual(lab.log[-4:], ["crew.on_event", "social.on_level_up", "fishing.on_level_up", "gate"])
+        lab.log.clear()
+        run({"kind": "fish_caught"})
+        self.assertNotIn("gate", lab.log, "own: вид нового модуля не уходит в gate")
+        lab.log.clear()
+        asyncio.run(lab.mind.step())
+        self.assertEqual(lab.log[lab.log.index("pets.tick") + 1], "fishing.tick", "TICK_ORDER 85: после pets")
+        user = json.loads(lab.mind.build_prompt("повод", {})[1]["content"])
+        keys = list(user)
+        self.assertEqual(user["рыбалка"], "клюёт")
+        self.assertEqual(keys[keys.index("занятие") + 1], "рыбалка")
+
+    def test_new_module_switches(self):
+        self.assertIsNone(self.lab(env={"BRAIN_DISABLE": "fishing"}).mind.fishing, "BRAIN_DISABLE")
+        lab = self.lab(env={"BRAIN_DISABLE": "routine"})
+        self.assertIsNone(lab.mind.fishing, "REQUIRES routine")
+        lab = self.lab().spy()
+        lab.mind.fishing = None
+        asyncio.run(lab.mind.on_event({"type": "event", "kind": "fish_caught"}))
+        self.assertNotIn("gate", lab.log, "own поглощает вид и при выключенном модуле")
+
+    def test_registry_checks(self):
+        from live_brain import modules
+
+        class NoMethod:
+            ATTR, TICK_ORDER = "nomethod", 1
+        with self.assertRaises(ValueError):
+            modules.Registry((NoMethod,))
+        with self.assertRaises(ValueError):
+            modules.Registry((Fishing, Fishing))
 
 
 def dump():

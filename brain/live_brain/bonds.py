@@ -24,6 +24,10 @@ MISS_HOURS = 24
 
 
 class Bonds:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, REQUIRES = "bonds", "bonds", ("peers",)
+    TICK_ORDER = 60
+
     def __init__(self, mind, clock=None):
         self.mind = mind
         self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)

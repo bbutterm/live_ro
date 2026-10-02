@@ -52,6 +52,14 @@ PHRASES = {
 
 
 class Crew:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, REQUIRES, ARGS = "crew", "crew", "crew", ("party",), "config"
+    TICK_ORDER = 90
+    TAGS, TAG_ORDER = [(TAG, "on_tag")], 50
+    ECHO = [("party", r"\[party:dead:", "on_mate_dead", 20)]          # смерть в группе — в чат группы
+    EVENT_ORDER = 10
+    EVENTS = dict.fromkeys(("level_up", "support", "danger"), {"call": "on_event", "kind": True})
+
     def __init__(self, mind, cfg=None, clock=None, rng=None):
         self.mind = mind
         self.cfg = cfg or {}

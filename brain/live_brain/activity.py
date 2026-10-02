@@ -47,6 +47,11 @@ def dist(ax, ay, bx, by):
 
 
 class Activities:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, REQUIRES = "activities", "activity", ("routine",)
+    TICK_ORDER = 50
+    PROMPT = [("занятие", "summary", 200)]
+
     def __init__(self, mind, path=CATALOG, clock=None, rng=None):
         self.mind = mind
         self.cfg = json.loads(Path(path).read_text(encoding="utf-8"))

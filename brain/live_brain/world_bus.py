@@ -186,6 +186,20 @@ def read_period(path, start, end):
 class Feed:
     """Связь жителя с шиной: публикация важных событий памяти и чтение новостей других жителей."""
 
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR = "world"              # mind.world; создание — brain_create (шина передаётся в Mind или по раскладке лаборатории)
+    TICK_ORDER = 180
+    PROMPT = [("новости_мира", "summary", 250)]
+
+    @classmethod
+    def brain_create(cls, mind, world):
+        bus = getattr(mind, "world_bus_db", None)
+        if bus is None:
+            path = lab_path(mind.decisions_path)
+            if path and mind.s.feature("world_bus"):
+                bus = WorldBus(path, mind.persona["name"])
+        return cls(mind, bus) if bus else None
+
     def __init__(self, mind, bus, clock=None):
         self.mind = mind
         self.bus = bus

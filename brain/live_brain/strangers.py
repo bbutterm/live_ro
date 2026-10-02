@@ -74,6 +74,10 @@ def clean_name(name):
 
 
 class Strangers:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, ARGS = "strangers", "strangers", "strangers", True, "world"
+    TICK_ORDER = 140            # private() и on_whisper() — явно в mind (стык с памятью и gate)
+
     def __init__(self, mind, world=None, cfg=None, clock=None, rng=None):
         self.mind = mind
         self.cfg = dict(DEFAULTS, **((world or {}).get("strangers") or {}), **(cfg or {}))

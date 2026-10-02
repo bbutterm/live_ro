@@ -102,6 +102,13 @@ def fields(template):
 
 
 class Social:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "social", "social", "social", True, ("world", "peers"), "world"
+    TICK_ORDER = 70
+    TAGS, TAG_ORDER = [(TAG, "on_tag")], 80
+    ECHO = [("party", r"\[party:dead:", "on_peer_dead", 10)]          # сочувствие
+    EVENTS, EVENT_ORDER = {"support": "on_support", "level_up": "on_level_up"}, 20
+
     def __init__(self, mind, world, clock=None, rng=None):
         self.mind = mind
         self.cfg = merged_social(world, mind.persona)

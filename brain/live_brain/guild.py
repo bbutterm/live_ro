@@ -101,6 +101,15 @@ def resident_traits(base=None):
 
 
 class Guild:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "guild", "guild", "guild", False, ("world", "peers"), "world"
+    TICK_ORDER = 160
+    TAGS, TAG_ORDER = [(TAG, "on_tag")], 60
+    EVENT_ORDER = 40            # пакеты гильдии — не в gate/LLM, даже если модуль выключен
+    EVENTS = dict.fromkeys(("guild_create_result", "guild_invite_result", "guild_invite", "guild_joined_auto",
+                            "chat_guild"), {"call": "on_event", "kind": True, "own": True})
+    PROMPT = [("гильдия", "summary", 320)]
+
     def __init__(self, mind, world=None, clock=None, rng=None, traits=None):
         self.mind = mind
         world = world or {}

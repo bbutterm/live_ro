@@ -43,6 +43,12 @@ def load(path=PETS_PATH):
 
 
 class Pets:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "pets", "pets", "pets", True, ("world",), "config"
+    TICK_ORDER = 80
+    EVENT_ORDER = 50
+    EVENTS = dict.fromkeys(("pet_tame_result", "pet_hatched", "pet_fed"), {"call": "on_event", "own": True})
+
     def __init__(self, mind, cfg=None, clock=None, data=None, atlas_maps=None):
         self.mind = mind
         self.cfg = cfg or {}

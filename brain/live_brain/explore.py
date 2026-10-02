@@ -85,6 +85,12 @@ def load_reach(path=REACH_PATH):
 
 
 class Explorer:
+    # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
+    ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "explorer", "explore", "explore", False, ("routine",), "config"
+    TICK_ORDER = 110            # on_event(любое событие) — явно в mind (стык выживания)
+    TAGS, TAG_ORDER = [(TAG, "on_tag")], 40
+    PROMPT = [("экспедиция", "summary", 210)]
+
     def __init__(self, mind, cfg=None, clock=None, rng=None, reach=None, atlas_obj=None):
         self.mind = mind
         self.cfg = dict(DEFAULTS, **(cfg or {}))
