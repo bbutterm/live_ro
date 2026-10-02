@@ -396,6 +396,46 @@ class NewModulesJointsTest(BodyMixin, unittest.TestCase):
         asyncio.run(soc.rooms(self.clock.t, self.mind.state))
         self.assertIn("chat_room", [a["action"] for a in self.sent], "без экспедиции — можно")
 
+    def tame_ready(self, **kw):
+        """Охота, рядом монстр любимца и предмет приручения (state.pet от плагина pets)."""
+        pets = self.mind.pets
+        pets.caring = lambda: True
+        self.state(map="prt_fild08", lock_map="prt_fild08", lock_x=None, lock_y=None, x=100, y=100)
+        fav = pets.favorites()
+        self.assertTrue(fav, "у Arkady есть любимцы на картах охоты")
+        pet = {"has": False, "running": None, "items": {str(fav[0]["tame"]): 1}, "eggs": [],
+               "near": {str(fav[0]["id"]): 3}}
+        self.state(map="prt_fild08", lock_map="prt_fild08", lock_x=None, lock_y=None, x=100, y=100, pet=pet, **kw)
+        r = self.mind.routine
+        r.new_day(self.clock.t)                                    # режим hunt
+        pets.setup_epoch = self.mind.epoch
+        return pets
+
+    def test_no_tame_during_pause(self):
+        """Пауза (поводок группы) и приручение оба сохраняют/возвращают attackAuto: приручение посреди паузы
+        вернуло бы attackAuto 1 после resume навсегда (conf пишет config.txt) — тело перестаёт охотиться."""
+        pets = self.tame_ready(paused=True)
+        asyncio.run(pets.tick())
+        self.assertNotIn("pet_tame", [a["action"] for a in self.sent], "приручение во время паузы")
+        self.clock.t += 60
+        self.state(**{k: v for k, v in self.mind.state.items() if k not in ("paused", "goal")}, paused=False)
+        asyncio.run(pets.tick())
+        self.assertIn("pet_tame", [a["action"] for a in self.sent], "без паузы — можно")
+
+    def test_no_pause_during_tame(self):
+        """Обратный порядок: идёт приручение (state.pet.running) — лидер не ставит паузу поводка, ждёт конца."""
+        far = {"name": "Vera", "online": True, "map": "prt_fild07", "x": 50, "y": 50, "hp_pct": 90}
+        me = {"name": "Arkady", "online": True, "map": "prt_fild08", "x": 100, "y": 100}
+        kw = dict(map="prt_fild08", lock_map="prt_fild08", lock_x=None, lock_y=None, x=100, y=100,
+                  party="LR_Arkady", party_members=[me, far], players=[])
+        self.state(pet={"has": False, "running": "tame"}, **kw)
+        self.mind.routine.new_day(self.clock.t)
+        asyncio.run(self.mind.party.tick())
+        self.assertNotIn("pause", [a["action"] for a in self.sent], "пауза посреди приручения")
+        self.state(pet={"has": False, "running": None}, **kw)
+        asyncio.run(self.mind.party.tick())
+        self.assertIn("pause", [a["action"] for a in self.sent], "после приручения — ждать отставшего")
+
     def test_nap_waits_for_expedition(self):
         """Сторож просит уснуть раньше посреди экспедиции: сначала вернуться (экспедиция прервана), не relog в поле."""
         r = self.town_rest()

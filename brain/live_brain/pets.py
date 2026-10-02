@@ -161,6 +161,8 @@ class Pets:
         r = self.mind.routine
         if r and r.st.get("mode") != "hunt":
             return
+        if state.get("paused"):                       # review2: pause и pet_tame оба сохраняют/возвращают attackAuto —
+            return                                    # review2: вперемешку вернут 1 навсегда (тело не охотится)
         near = {str(k): v for k, v in (pet.get("near") or {}).items()}
         for p in self.favorites():
             if items.get(str(p["tame"])) and near.get(str(p["id"]), 99) <= TAME_DIST:

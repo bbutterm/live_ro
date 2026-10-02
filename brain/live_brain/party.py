@@ -209,6 +209,8 @@ class Party:
 
     async def leash(self, now, state, mode):
         who = self.lagging(state) if mode == "hunt" else None
+        if who and self.waiting_since is None and (state.get("pet") or {}).get("running") == "tame":
+            return                                    # review2: идёт приручение (pets.pl держит attackAuto) — пауза позже
         if who and self.waiting_since is None:
             self.waiting_since = now
             await self.act([{"action": "pause"}], f"группа: жду {who} — отстал")
