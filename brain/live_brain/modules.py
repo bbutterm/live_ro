@@ -35,7 +35,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
   тик:     (ядро: life, safety, plans) · 10 routine · 20 economy · 30 party · 40 career · 50 activities ·
            60 bonds · 70 social · 80 pets · 90 crew · 100 home · 110 explorer · 120 rumors · 130 society ·
            140 strangers · 150 aims · 160 guild · 170 tradition · 180 world · 190 rivalry · 200 crowd ·
-           210 episodes
+           210 episodes · 220 collection · 230 director
 Свободные числа между ними — для новых модулей (например, 85 — после pets, до crew).
 """
 import inspect
@@ -63,6 +63,7 @@ from .society import Society
 from .strangers import Strangers
 from .tradition import Tradition
 from .collection import Collection
+from .director import Director          # director: ORG-086 рассказчик мира
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -93,6 +94,7 @@ MODULES = (
     Episodes,
     Tradition,
     Collection,        # после social: регистрирует тему card
+    Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
 

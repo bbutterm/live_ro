@@ -95,6 +95,19 @@
     "scenes_max": 5
   },
 
+  "director": {
+    "_comment": "ORG-086 рассказчик мира (brain/live_brain/director.py, docs/WORLD_EVENTS.md): один житель (минимальное имя онлайн) раз в check_minutes смотрит шину мира. Напряжение (смерти + исключённые карты + 0.5·слухи danger за window_hours) ≥ danger_threshold → «день осторожности»; тишина quiet_hours днём → один повод (помочь, вечерний сбор, правдивый слух rich, экспедиция, соперничество, мини-босс при boss.enabled). Только множители мотивов и допуск риска, без приказов телу; поводов не больше max_per_day, не чаще gap_hours. Решения — в шине как director (дашборд, не летопись). Выключить — enabled: false или BRAIN_DISABLE=director.",
+    "enabled": true,
+    "check_minutes": 30,
+    "window_hours": 12,
+    "quiet_hours": 3,
+    "danger_threshold": 3,
+    "max_per_day": 2,
+    "gap_hours": 3,
+    "incident_hours": 3,
+    "caution_hours": 6
+  },
+
   "explore": {
     "_comment": "ORG-054 экспедиции (brain/live_brain/explore.py, docs/EXPLORE.md). Цель — известная (слух, дорога с посещённой карты), но не посещённая карта не дальше max_hops переходов, достижимая для OpenKore (brain/world/explore_reach.json, scripts/gen_explore_reach.py), с риском atlas.danger_for ниже min(max_risk, смелость) для слабейшего. Не чаще gap_hours, днём, HP >= min_hp; на месте stay_minutes; прервать при тревоге или HP < abort_hp. deny/deny_prefix — полигон новичков, перестроенный izlude, гильдии.",
     "enabled": true,
