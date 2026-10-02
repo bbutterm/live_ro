@@ -287,5 +287,11 @@
     "enabled": false,
     "check_hours": 24, "elder_level": 90, "elder_days": 90, "long_dream_days": 30,
     "heir_min": 4, "keep_zeny": 20000, "max_zeny": 100000, "max_parcels": 3
+  },
+  "fest": {
+    "_comment": "ORG-087 реакция жителей на штатные ивенты rAthena (brain/live_brain/fest.py, docs/WORLD_EVENTS.md). Сами ивенты на сервере НЕ включены: готовый конфиг server/conf/optional/events_custom.txt (грибная охота каждый час, маскарад каждые 2 ч) — решение владельца. Объявление сервера -> fest_seen и тема fest; gather — идти к месту ивента в своём городе, если тело свободно, HP >= min_hp и по характеру (chance_min + chance_trait * max(curiosity, sociability)); опасные и GM-ивенты (devil_square, cluckers, mvp_ladder) — только разговор.",
+    "enabled": true,
+    "gather": true,
+    "min_hp": 60, "chance_min": 0.3, "chance_trait": 0.6
   }
 }

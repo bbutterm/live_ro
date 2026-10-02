@@ -37,6 +37,7 @@ from .arrows import CHRONICLE_LINES as ARROW_LINES       # arrows: Arrow Craftin
 from .trek import CHRONICLE_LINES as TREK_LINES          # trek: дальний поход группой (ORG-078)
 from .wed import CHRONICLE_LINES as WED_LINES            # wed: помолвка и свадьба (ORG-062)
 from .legacy import CHRONICLE_LINES as LEGACY_LINES      # legacy: наследие и уход на покой (ORG-083)
+from .fest import CHRONICLE_LINES as FEST_LINES          # events2: ивенты rAthena (ORG-087)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
@@ -77,6 +78,7 @@ LINES = {
     **TREK_LINES,                                         # trek: ORG-078
     **WED_LINES,                                          # wed: ORG-062
     **LEGACY_LINES,                                       # legacy: ORG-083
+    **FEST_LINES,                                         # events2: ORG-087
     **places.CHRONICLE_LINES,                             # places: ORG-084
     **MARKET_LINES,                                       # market: ORG-071
     **REFINE_LINES,                                       # refine: ORG-072

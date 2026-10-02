@@ -61,6 +61,7 @@ arrows (ORG-075) — события job_change_result 16 (consume "result", path
 trek (ORG-078) — метка [trek:] 45, событие job_change_result 17 (consume "result", path trek), тик 112, промпт 212.  # trek:
 wed (ORG-062) — метка [wed:] 57, тик 143, промпт 227; объявление о браке — из rumors.on_world_msg.  # wed:
 legacy (ORG-083) — тик 232 (после memoir), без поля промпта; по умолчанию выключен.  # legacy:
+fest (ORG-087) — тик 122, событие kill 76; объявление — из rumors.on_world_msg (on_announce).  # events2:
 """
 import inspect
 import re
@@ -110,6 +111,7 @@ from .arrows import Arrows           # arrows: ORG-075 Arrow Crafting — рем
 from .trek import Trek               # trek: ORG-078 дальний поход группой
 from .wed import Wed                 # wed: ORG-062 помолвка и свадьба
 from .legacy import Legacy           # legacy: ORG-083 наследие и уход на покой (по умолчанию выключен)
+from .fest import Fest               # events2: ORG-087 реакция на ивенты rAthena
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -149,6 +151,7 @@ MODULES = (
     MarketDay,         # market: ORG-071 после calendar, economy, orders, society, social (тик 15 — до economy)
     Refine,            # refine: ORG-072 (тик 105, событие refine_result 65 own; по умолчанию выключен)
     Gaze,              # look: ORG-067 после social (тик 75, эхо [chat:] 20)
+    Fest,              # events2: ORG-087 после rumors, social (тема fest), routine, economy
     Wed,               # wed: ORG-062 после social (тема wed), society, episodes; до dream (мечта wedding)
     Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты

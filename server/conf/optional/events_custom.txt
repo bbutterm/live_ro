@@ -1,0 +1,33 @@
+// live_ro (ORG-087): штатные ивенты rAthena по расписанию — «Найди гриб» и «Маскарад» (угадай монстра).
+// НЕ ВКЛЮЧЕНО. Это изменение сервера (новые NPC и монстры в городах), включает владелец (docs/WORLD_EVENTS.md,
+// «Ивенты rAthena по расписанию»).
+//
+// Что это. Готовые скрипты rAthena из npc/custom/events/ (в npc/scripts_custom.conf:85-89 все закомментированы):
+//  - mushroom_event.txt — NPC «Find the Mushroom» prontera 142,228. OnMinute10 (:47): каждый час в :10 появляются
+//    1-10 Black Mushroom (1084: ур. 1, HP 5, не атакует) в случайных клетках одного из izlude, geffen, morocc,
+//    prontera; за каждый гриб — 10 × Apple (512). Объявления всему миру (:55, :68) и на карте ивента (:66).
+//  - disguise.txt — NPC «Disguise Event» prontera 160,155. OnClock0000…2200 (:150-161): каждые 2 ч по часам
+//    сервера NPC принимает облик случайного монстра, первый, кто напишет его имя в общем чате рядом, получает
+//    1 × Apple (512); 10 раундов. Объявления всему миру (:166, :200) и на карте (:236).
+// Не включаем: devil_square.txt (арена ordeal_1-1 с сильными монстрами — жителям опасно), cluckers.txt (запускает
+// только GM, курица убивает нажавших — unitkill :29), mvp_ladder.txt (MVP подряд для групп высокого уровня).
+// Праздничные npc/events/*.txt привязаны к датам и почти все закомментированы в npc/scripts_athena.conf:66-117.
+//
+// Как жители реагируют (brain/live_brain/fest.py): объявление сервера — тема разговора и строка летописи; если ивент
+// в их городе и тело свободно — идут к месту (грибы — фонтан города, маскарад — prontera 160,151). Бьют грибы
+// штатные настройки тела OpenKore; угадывать облик маскарада жители не умеют (мост не передаёт облик NPC).
+//
+// Как включить (одно из двух, затем перезапуск map-server):
+//  - рендер conf/import (release или RENDER_SERVER_CONF=1): дописать две строки ниже в конец
+//    server/conf/import-tmpl/map_conf.txt (map-server читает «npc:» в любом файле своего конфига —
+//    src/map/map.cpp:4170; conf/import/map_conf.txt импортируется последним — conf/map_athena.conf:128),
+//    commit, доставка, scripts/lab start;
+//  - existing (conf/import не рендерится): дописать строки в $RATHENA/conf/import/map_conf.txt вручную.
+// Отдельным файлом в import-tmpl их не положить: map_athena.conf импортирует только conf/import/map_conf.txt.
+// Оговорка: GM-команда @reloadscript перечитывает только npc/re/scripts_main.conf (src/map/map.cpp:4258-4266) —
+// после неё ивенты пропадут до перезапуска map-server.
+// Как выключить: удалить строки, перезапустить map-server. Схема БД не меняется. Данные: победитель получает Apple
+// в рюкзак (getitem); маскарад хранит имя облика в постоянной глобальной переменной $MonsterName$ (таблица mapreg,
+// disguise.txt:211, :216) — одна строка, остаётся после выключения (удалить можно GM-скриптом, не обязательно).
+npc: npc/custom/events/mushroom_event.txt
+npc: npc/custom/events/disguise.txt
