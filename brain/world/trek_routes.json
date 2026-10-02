@@ -1,0 +1,158 @@
+{
+ "_comment": "Сгенерировано scripts/gen_trek_routes.py (ORG-078): плечи «город -> город» дальних походов, которые OpenKore пройдёт пешком по portals.txt, подтверждённым варпами сервера, и вернётся. Не править руками.",
+ "atlas_sha": "4313fe2cac3c0a48",
+ "max_hops": 7,
+ "towns": {
+  "alberta": {
+   "legs": {
+    "payon": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "alberta",
+      "pay_fild03",
+      "pay_fild02",
+      "pay_fild01",
+      "payon"
+     ],
+     "x": 122,
+     "y": 27
+    }
+   },
+   "x": 117,
+   "y": 57
+  },
+  "aldebaran": {
+   "legs": {
+    "prontera": {
+     "back": 7,
+     "hops": 7,
+     "path": [
+      "aldebaran",
+      "mjolnir_12",
+      "mjolnir_05",
+      "mjolnir_04",
+      "mjolnir_08",
+      "mjolnir_09",
+      "prt_fild05",
+      "prontera"
+     ],
+     "x": 22,
+     "y": 203
+    }
+   },
+   "x": 143,
+   "y": 109
+  },
+  "geffen": {
+   "legs": {
+    "prontera": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "geffen",
+      "gef_fild00",
+      "prt_fild00",
+      "prt_fild04",
+      "prt_fild05",
+      "prontera"
+     ],
+     "x": 22,
+     "y": 203
+    }
+   },
+   "x": 119,
+   "y": 40
+  },
+  "morocc": {
+   "legs": {},
+   "x": 156,
+   "y": 46
+  },
+  "payon": {
+   "legs": {
+    "alberta": {
+     "back": 4,
+     "hops": 4,
+     "path": [
+      "payon",
+      "pay_fild08",
+      "pay_fild07",
+      "pay_fild03",
+      "alberta"
+     ],
+     "x": 15,
+     "y": 234
+    },
+    "prontera": {
+     "back": 6,
+     "hops": 6,
+     "path": [
+      "payon",
+      "pay_gld",
+      "moc_fild02",
+      "pay_fild04",
+      "moc_fild01",
+      "prt_fild08",
+      "prontera"
+     ],
+     "x": 156,
+     "y": 22
+    }
+   },
+   "x": 160,
+   "y": 58
+  },
+  "prontera": {
+   "legs": {
+    "aldebaran": {
+     "back": 7,
+     "hops": 7,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "mjolnir_09",
+      "mjolnir_08",
+      "mjolnir_10",
+      "mjolnir_05",
+      "mjolnir_12",
+      "aldebaran"
+     ],
+     "x": 138,
+     "y": 34
+    },
+    "geffen": {
+     "back": 5,
+     "hops": 5,
+     "path": [
+      "prontera",
+      "prt_fild05",
+      "prt_fild04",
+      "prt_fild00",
+      "gef_fild00",
+      "geffen"
+     ],
+     "x": 217,
+     "y": 119
+    },
+    "payon": {
+     "back": 6,
+     "hops": 6,
+     "path": [
+      "prontera",
+      "prt_fild08",
+      "moc_fild01",
+      "pay_fild04",
+      "moc_fild02",
+      "pay_gld",
+      "payon"
+     ],
+     "x": 16,
+     "y": 143
+    }
+   },
+   "x": 116,
+   "y": 73
+  }
+ }
+}

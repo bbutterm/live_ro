@@ -30,6 +30,7 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
               метод(event) или метод(kind, event) при "kind"; "consume" — после вызова событие поглощено
               (если модуль включён); "own" — вид принадлежит модулю: поглощается ВСЕГДА, даже если модуль
               выключен (не уходит в gate/LLM). EVENT_ORDER — место модуля среди подписчиков одного вида.
+              "consume": "result" — поглощено, только если метод вернул истину (свой path у job_change_result).
   PROMPT      [("поле", "метод", порядок)] — поле промпта LLM = метод() или None, если модуль выключен.
               Порядок — общий с полями ядра (mind.CORE_PROMPT), шаг 10.
 
@@ -53,6 +54,11 @@ refine (ORG-072) — тик 105, событие refine_result 65 (own).  # refin
 gaze (ORG-067) — тик 75, эхо social [chat:] 20.  # look:
 achieve (ORG-080) — события achievement/achievement_list/achievement_reward 80 (own), тик 227, промпт 237.  # achieve:
 spar (ORG-061) — метка [spar:] 47, события spar_step/spar_result 85 (own), тик 195 (без поля промпта).  # spar:
+herbal (ORG-076) — событие job_change_result 15 (consume "result": поглощает только свой path herbal), тик 103,
+промпт 207.  # herbal:
+arrows (ORG-075) — события job_change_result 16 (consume "result", path arrows), arrowcraft_result 16 (own), тик 104,
+промпт 208.  # arrows:
+trek (ORG-078) — метка [trek:] 45, событие job_change_result 17 (consume "result", path trek), тик 112, промпт 212.  # trek:
 """
 import inspect
 import re
@@ -97,6 +103,9 @@ from .refine import Refine           # refine: ORG-072 заточка у куз�
 from .gaze import Gaze               # look: ORG-067 взгляд на собеседника
 from .spar import Spar               # spar: ORG-061 спарринг на арене (по умолчанию выключен)
 from .achieve import Achieve         # achieve: ORG-080 достижения сервера
+from .herbal import Herbal           # herbal: ORG-076 травник у старого фармацевта
+from .arrows import Arrows           # arrows: ORG-075 Arrow Crafting — ремесло лучника
+from .trek import Trek               # trek: ORG-078 дальний поход группой
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -143,6 +152,9 @@ MODULES = (
     Bestiary,          # bestiary: ORG-077 после social (тема bestiary); тик 225, событие kill 75, промпт 235
     Spar,              # spar: ORG-061 после rivalry и society (соперник, ссоры); тик 195, метка [spar:] 47
     Achieve,           # achieve: ORG-080 после social (тема achieve) и rivalry; тик 227, события 80, промпт 237
+    Herbal,            # herbal: ORG-076 после social (тема herbal) и routine; job_change_result path herbal
+    Arrows,            # arrows: ORG-075 после social (тема arrows); спит без жителя-лучника
+    Trek,              # trek: ORG-078 после explorer, party, crew (REQUIRES), social (тема trek)
     Director,          # director: после всех — читает шину (world), crowd, tradition, rumors, explorer
 )
 
@@ -158,7 +170,9 @@ async def call(fn, *args):
 def _sub(spec):
     if isinstance(spec, str) or spec is None:
         spec = {"call": spec}
-    return {"call": spec.get("call"), "kind": bool(spec.get("kind")), "consume": bool(spec.get("consume")),
+    consume = spec.get("consume")
+    consume = consume if consume == "result" else bool(consume)          # herbal: поглотить по ответу метода
+    return {"call": spec.get("call"), "kind": bool(spec.get("kind")), "consume": consume,
             "own": bool(spec.get("own"))}
 
 
@@ -297,8 +311,8 @@ class Registry:
             module = getattr(mind, attr, None)
             if module and sub["call"]:
                 fn = getattr(module, sub["call"])
-                await call(fn, *((kind, event) if sub["kind"] else (event,)))
-                if sub["consume"]:
+                res = await call(fn, *((kind, event) if sub["kind"] else (event,)))
+                if (bool(res) if sub["consume"] == "result" else sub["consume"]):   # herbal: "result"
                     return True
             if sub["own"]:
                 return True

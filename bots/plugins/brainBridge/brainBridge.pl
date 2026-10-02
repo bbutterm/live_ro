@@ -84,6 +84,15 @@
 #   награды; achievement_list {points, rank, done: [[id, at, reward], ...]} (≤ 300); 0A26 -> achievement_reward {id, ok}.
 #   В state — achievements {points, rank, done}. Действие achieve_reward {id} -> «achieve reward <id>» (Commands.pm:59):
 #   только выполненное и ещё не полученное по $achievementList.
+#   craft_setup {keep:[id], bottles:N} -> ремесло (ORG-076/075): keep — %items_control{id} «не продавать, не   # herbal:
+#                            складывать» (до перезагрузки таблиц; своя строка профиля по ИМЕНИ важнее — так ищет   # herbal:
+#                            Misc::items_control); bottles — блок buyAuto «Empty Bottle»/713 профиля: maxAmount N,   # herbal:
+#                            minAmount N-1, disabled 0 (N=0 — disabled 1). В state — craft {items {id: n} по          # herbal:
+#                            @CRAFT_IDS и keep, kept [id], weight_free, skills {AC_MAKINGARROW: ур.}}.                # herbal:
+#   arrowcraft {item}     -> Arrow Crafting (ORG-075): навык AC_MAKINGARROW выучен, предмет в рюкзаке ->           # arrows:
+#                            «arrowcraft use»; сервер присылает список (01AD, хук packet/arrowcraft_list) — предмет  # arrows:
+#                            в нём -> sendArrowCraft(ID); событие arrowcraft_result {item, ok, reason} (ok — отправил;  # arrows:
+#                            сделал ли — мозг видит по craft.items). Нет списка за $ARROW_WAIT с — ok=false.          # arrows:
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
 # partyAuto 1 успевает отказать раньше, чем ответит мозг. Жители: config residents (через запятую),
 # иначе dealAuto_names. В state: party_members [{name, online, hp_pct, map, x, y, leader}], party_leader.
@@ -108,6 +117,7 @@ use Globals qw($char $field $net $monstersList $playersList %config %jobs_lut %s
 use Globals qw(%guild $charID);                                     # guild: состав гильдии (ORG-052)
 use Globals qw($messageSender %currentDeal %outgoingDeal %incomingDeal $shopstarted);   # dreams: банк (ORG-073)
 use Globals qw($achievementList %achievements);                    # achieve: достижения сервера (ORG-080)
+use Globals qw(%items_control);                                     # herbal: ремесло — не продавать материалы
 use Log qw(message warning);
 use Commands;
 use Network;
@@ -151,6 +161,7 @@ my $hooks = Plugins::addHooks(
 	['packet/achievement_update',  \&onAchievementUpdate],                   # achieve: 0A24 одно достижение
 	['packet/achievement_reward_ack', sub { event('achievement_reward', id => ($_[1]{achievementID} // 0) + 0,   # achieve: 0A26
 	                                              ok => ($_[1]{received} ? JSON::PP::true : JSON::PP::false)) }],   # achieve: 1 — выдана
+	['packet/arrowcraft_list',     \&onArrowList],                           # arrows: 01AD список для Arrow Crafting
 );
 
 my %SUPPORT = (28 => 'AL_HEAL', 29 => 'AL_INCAGI', 34 => 'AL_BLESSING', 35 => 'AL_CURE');
@@ -261,6 +272,7 @@ sub sendState {
 		guild     => guildState(), emperium => emperiumCount(),                   # guild: ORG-052
 		support_skills => supportSkills(),                                        # healer: ORG-069
 		achievements => achState(),                                               # achieve: ORG-080
+		craft     => craftStatus(),                                               # herbal: ремесло (ORG-076/075)
 	});
 }
 
@@ -738,6 +750,10 @@ sub actionToCommand {
 		return (0, 'плагин economy не загружен') unless defined &economy::startMailTake;          # market:
 		my ($ok, $desc) = economy::startMailTake($a);                                             # market:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'craft_setup') {                                    # herbal: ремесло (ORG-076/075)
+		return craftSetup($a);                                                # herbal:
+	} elsif ($kind eq 'arrowcraft') {                                     # arrows: Arrow Crafting (ORG-075)
+		return arrowcraftStart($a);                                           # arrows:
 	} elsif ($kind eq 'bank_check' || $kind eq 'bank_deposit' || $kind eq 'bank_withdraw') {   # dreams: ORG-073
 		my ($ok, $desc) = bankAction($kind, $a);                                               # dreams:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                       # dreams:
@@ -887,6 +903,115 @@ sub onBank {   # dreams: аргументы пакета (Receive/kRO/Sakexe_0.p
 	      vault => $vault + 0, zeny => ($args->{balance} // 0) + 0);
 }
 
+# herbal: ремесло (ORG-076 травник, ORG-075 стрелы). Счётчики материалов для мозга и «не продавать» без правки
+# items_control.txt профиля: запись в %items_control живёт до перезагрузки таблиц — мозг видит это по craft.kept
+# и присылает keep снова.
+our @CRAFT_IDS = (507 .. 511, 713, 902, 906, 907, 909, 921, 1019, 1750, 1770);   # травы, бутылка, материалы и стрелы
+our %craftKept;
+my $CRAFT_KEEP_MAX = 40;
+my $CRAFT_BOTTLES_MAX = 100;
+
+sub craftStatus {
+	return undef unless $char;
+	my %n = map { $_ => 0 } (@CRAFT_IDS, keys %craftKept);
+	my $inv = (ref $char ne 'HASH' && $char->can('inventory')) ? $char->inventory : $char->{inv};
+	for my $item (@{$inv || []}) {
+		next if $item->{equipped};
+		$n{$item->{nameID}} += $item->{amount} if exists $n{$item->{nameID}};
+	}
+	my $sk = $char->{skills} || {};
+	return {items => \%n,
+	        kept => [sort { $a <=> $b } grep { ($items_control{$_} || {})->{_craft} } keys %craftKept],
+	        weight_free => (defined $char->{weight_max} ? ($char->{weight_max} - ($char->{weight} // 0)) + 0 : undef),
+	        skills => {AC_MAKINGARROW => ($sk->{AC_MAKINGARROW} && $sk->{AC_MAKINGARROW}{lv} ? $sk->{AC_MAKINGARROW}{lv} + 0 : 0)}};
+}
+
+sub bottleBlock {
+	for (my $i = 0; exists $config{"buyAuto_$i"}; $i++) {
+		return $i if ($config{"buyAuto_$i"} // '') =~ /^(Empty Bottle|713)$/i;
+	}
+	return;
+}
+
+# Возвращает (1, [команды]) или (0, причина).
+sub craftSetup {
+	my ($a) = @_;
+	my @cmds;
+	return (0, 'пустая настройка ремесла') unless exists $a->{keep} || exists $a->{bottles};
+	if (exists $a->{keep}) {
+		my $keep = $a->{keep};
+		return (0, "keep: до $CRAFT_KEEP_MAX ID предметов")
+			unless ref $keep eq 'ARRAY' && @$keep <= $CRAFT_KEEP_MAX && !grep { !defined $_ || $_ !~ /^\d{1,6}$/ } @$keep;
+		for my $id (@$keep) {
+			$items_control{$id + 0} = {keep => 0, storage => 0, sell => 0, cart_add => 0, cart_get => 0, _craft => 1};
+			$craftKept{$id + 0} = 1;
+		}
+	}
+	if (exists $a->{bottles}) {
+		my $n = $a->{bottles} // '';
+		return (0, "bottles: 0..$CRAFT_BOTTLES_MAX") unless $n =~ /^\d{1,3}$/ && $n <= $CRAFT_BOTTLES_MAX;
+		my $i = bottleBlock();
+		return (0, 'нет блока buyAuto Empty Bottle в config.txt') unless defined $i;
+		@cmds = $n > 0 ? ("conf buyAuto_${i}_maxAmount $n", "conf buyAuto_${i}_minAmount " . ($n - 1), "conf buyAuto_${i}_disabled 0")
+		               : ("conf buyAuto_${i}_disabled 1");
+	}
+	return (1, \@cmds);
+}
+
+# arrows: Arrow Crafting (ORG-075). «arrowcraft use» (Commands.pm cmdArrowCraft) кастует AC_MAKINGARROW; сервер
+# отвечает списком предметов (01AD, Receive.pm arrowcraft_list: ID по 2 байта с 4-го) — выбираем наш.
+our %arrowWant;               # item, since
+our $ARROW_WAIT = 15;
+
+sub invCount {
+	my ($id) = @_;
+	my $inv = (ref $char ne 'HASH' && $char->can('inventory')) ? $char->inventory : $char->{inv};
+	my $n = 0;
+	for my $item (@{$inv || []}) {
+		$n += $item->{amount} if $item->{nameID} == $id && !$item->{equipped};
+	}
+	return $n;
+}
+
+sub arrowcraftStart {
+	my ($a) = @_;
+	my $id = $a->{item} // '';
+	return (0, 'неверный предмет') unless $id =~ /^\d{1,6}$/;
+	return (0, 'персонаж мёртв') if $char->{dead};
+	return (0, 'навык AC_MAKINGARROW не выучен') unless craftStatus()->{skills}{AC_MAKINGARROW};
+	return (0, "нет предмета $id в рюкзаке") unless invCount($id) > 0;
+	return (0, 'уже жду список Arrow Crafting') if %arrowWant && time - $arrowWant{since} < $ARROW_WAIT;
+	%arrowWant = (item => $id + 0, since => time);
+	return (1, 'arrowcraft use');
+}
+
+sub onArrowList {
+	my (undef, $args) = @_;
+	return unless %arrowWant;
+	my ($msg, $size) = ($args->{RAW_MSG} // '', $args->{RAW_MSG_SIZE} // length($args->{RAW_MSG} // ''));
+	my @ids;
+	for (my $i = 4; $i + 2 <= $size; $i += 2) {
+		push @ids, unpack('v', substr($msg, $i, 2));
+	}
+	my $want = $arrowWant{item};
+	%arrowWant = ();
+	if (grep { $_ == $want } @ids) {
+		$messageSender->sendArrowCraft($want);
+		$char->{selected_craft} = 1;
+		event('arrowcraft_result', item => $want, ok => JSON::PP::true);
+	} else {
+		$messageSender->sendArrowCraft(-1);                                  # закрыть окно, как processAutoMakeArrow
+		event('arrowcraft_result', item => $want, ok => JSON::PP::false, reason => 'предмета нет в списке сервера');
+	}
+}
+
+sub arrowWatch {
+	return unless %arrowWant && time - $arrowWant{since} > $ARROW_WAIT;
+	my $want = $arrowWant{item};
+	%arrowWant = ();
+	event('arrowcraft_result', item => $want, ok => JSON::PP::false, reason => 'сервер не прислал список');
+}
+
 sub handleLine {
 	my ($line) = @_;
 	my $msg = eval { $json->decode($line) };
@@ -959,6 +1084,7 @@ sub deadWatch {
 sub onTick {
 	deadWatch();
 	chatGuard();                                                                  # society: комната не держит AI
+	arrowWatch();                                                                 # arrows: нет списка — итог
 	tryConnect();
 	return unless $sock;
 	readIncoming();

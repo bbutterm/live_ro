@@ -47,6 +47,10 @@ PLAN_ACTIONS += ("spar", "spar_stop")   # spar: спарринг жителей 
 PLAN_ACTIONS += ("achieve_reward",)     # achieve: награда достижения сервера (achieve.py, ORG-080)
 SPAR_ROOMS = ("Prontera", "Izlude", "Payon", "Alberta", "Morocc")   # spar: пункты приёмной #8 (npc/other/pvp.txt:297)
 SPAR_MIN_LEVEL = 31              # spar: Gate Keeper — BaseLevel > 30 (npc/other/pvp.txt:202)
+PLAN_ACTIONS += ("craft_setup",)   # herbal: не продавать материалы ремесла, докупка бутылок (herbal.py, ORG-076)
+CRAFT_KEEP_MAX = 40                # herbal: ID в списке keep (тот же предел в brainBridge.pl)
+CRAFT_BOTTLES_MAX = 100            # herbal: бутылок к докупке
+PLAN_ACTIONS += ("arrowcraft",)    # arrows: Arrow Crafting из лута (arrows.py, ORG-075)
 MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
 PLAN_ACTIONS += ("refine",)      # refine: заточка своего оружия до безопасного уровня (refine.py, ORG-072)
 REFINE_ORES = (1010, 1011)       # refine: Phracon, Emveretarcon — продаёт Vurewell (тот же список в refine.pl)
@@ -199,6 +203,13 @@ class SafetyPolicy:
             return self.check_look(action, state, now)                                               # look:
         if kind == "refine":                                                                          # refine:
             return self.check_refine(action, state)                                                  # refine:
+        if kind == "craft_setup":                                                                     # herbal:
+            return self.check_craft_setup(action)                                                    # herbal:
+        if kind == "arrowcraft":                                                                      # arrows:
+            item = action.get("item")                                                                # arrows:
+            if isinstance(item, bool) or not isinstance(item, int) or not 0 < item < 1000000:       # arrows:
+                return None, "неверный предмет"                                                      # arrows:
+            return {"action": "arrowcraft", "item": item}, None                                      # arrows:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
             return self.check_pet(kind, action)                                                      # pets:
         if kind == "hunt":
@@ -516,3 +527,21 @@ class SafetyPolicy:
     def pause_expired(self, now=None):
         now = now or time.time()
         return self.paused_at is not None and now - self.paused_at >= self.max_pause
+
+    # herbal: настройка ремесла (ORG-076/075) — только от правил; списки ID, не текст
+    def check_craft_setup(self, action):                                                          # herbal:
+        out = {"action": "craft_setup"}
+        if "keep" in action:
+            keep = action.get("keep")
+            if not (isinstance(keep, list) and len(keep) <= CRAFT_KEEP_MAX
+                    and all(isinstance(i, int) and not isinstance(i, bool) and 0 < i < 1000000 for i in keep)):
+                return None, f"keep: до {CRAFT_KEEP_MAX} ID предметов"
+            out["keep"] = keep
+        if "bottles" in action:
+            n = action.get("bottles")
+            if isinstance(n, bool) or not isinstance(n, int) or not 0 <= n <= CRAFT_BOTTLES_MAX:
+                return None, f"bottles: 0..{CRAFT_BOTTLES_MAX}"
+            out["bottles"] = n
+        if len(out) == 1:
+            return None, "пустая настройка ремесла"
+        return out, None

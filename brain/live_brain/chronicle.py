@@ -32,6 +32,9 @@ from .market import CHRONICLE_LINES as MARKET_LINES     # market: рыночны
 from .refine import CHRONICLE_LINES as REFINE_LINES     # refine: заточка (ORG-072)
 from .spar import CHRONICLE_LINES as SPAR_LINES          # spar: спарринг на арене (ORG-061)
 from .achieve import CHRONICLE_LINES as ACHIEVE_LINES    # achieve: достижения сервера (ORG-080)
+from .herbal import CHRONICLE_LINES as HERBAL_LINES      # herbal: травник у фармацевта (ORG-076)
+from .arrows import CHRONICLE_LINES as ARROW_LINES       # arrows: Arrow Crafting (ORG-075)
+from .trek import CHRONICLE_LINES as TREK_LINES          # trek: дальний поход группой (ORG-078)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
@@ -67,6 +70,9 @@ LINES = {
     **BESTIARY_LINES,                                     # bestiary: ORG-077
     **SPAR_LINES,                                         # spar: ORG-061
     **ACHIEVE_LINES,                                      # achieve: ORG-080
+    **HERBAL_LINES,                                       # herbal: ORG-076
+    **ARROW_LINES,                                        # arrows: ORG-075
+    **TREK_LINES,                                         # trek: ORG-078
     **places.CHRONICLE_LINES,                             # places: ORG-084
     **MARKET_LINES,                                       # market: ORG-071
     **REFINE_LINES,                                       # refine: ORG-072

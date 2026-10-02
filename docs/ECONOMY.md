@@ -234,6 +234,86 @@ Safety: только от правил, руда 1010/1011, цель 1..10, до
 скрипт дошёл до `refineui()`), формат 0AA2 для PACKETVER 20180620 (2-байтный ID руды), `uneq`/`eq` по индексу,
 ввод количества у Vurewell (`d<N>`). Броня (Elunium) и оружие ур. 3–4 не точатся: руду не продают.
 
+## Травник у старого фармацевта (ORG-076) — `brain/live_brain/herbal.py`
+
+Житель-травник (`goals.json → herbal.residents` или `persona.herbalist: true`) не продаёт травы, копит их и иногда
+едет в Альберту к Old Pharmacist: тот варит зелья из трав за плату. Ремесло без Alchemist. **Выключено по умолчанию**
+(`herbal.enabled: false`): дорога в Альберту в игре не проверена. ТЗ — `docs/IDEAS.md` Т-32.
+
+**Данные** — `brain/world/crafts.json`, генератор `scripts/gen_crafts.py` (ссылки file:line, тест сверяет с upstream):
+
+| Что | Откуда |
+|---|---|
+| NPC `alberta_in,16,28` | `npc/merchants/old_pharmacist.txt:27` |
+| меню по тексту: «Make Potion» → «White Potion.» → «Make as many as I can.» | :40, :55, :81/:205 |
+| итог «Here you go» | :130, :251 |
+| свободный вес ≥ 500 (`MaxWeight - Weight < 5000`, вес ×10) | :42 |
+| рецепты из КОДА: 2 травы + Empty Bottle 713 + плата (Red 3z — в тексте 2z; Orange — Red+Yellow Herb, 5z; Yellow 10z; White 20z; Blue 30z; Green 3z) | :57–139, подпрограмма `L_Making` |
+| бутылки: Tool Dealer `prt_in,126,76`, 400z | `npc/re/merchants/Dealer_Update.txt:169` |
+| путь `prontera 156,185` → клетка 15,28 у NPC: 11 переходов, обратно 11 | `portals.txt` профиля, подтверждённые варпами сервера (как `explore_reach.json`); внутренний варп комнаты `alberta_in 64,31 → 24,29` — по скрипту `npc/warps/cities/alberta.txt:49` (атлас переходы внутри карты не хранит) |
+
+Клетки шагов `move` — клетки прибытия на каждой карте пути не ближе 4 клеток к входу любого перехода (иначе тело
+унесёт варпом обратно).
+
+**Как едет.** Действие `job_change {path: herbal, stage: pharmacist}` плагину jobChange (как дом у Kafra): шаги `move`
+по клеткам пути (у каждого свой таймаут 900 с), `move` к NPC, `talk` с ответами по тексту (по одному на рецепт,
+`ordered`), `success {text: "Here you go", map: alberta_in}`. Итог `job_change_result` с `path: herbal` забирает
+модуль (реестр: `consume: "result"`) — в career он не попадает. **Верит только факту**: зелий рецепта в `state.items`
+стало больше, чем перед поездкой (`herbal_brewed`); «Here you go» без зелий — провал. Возвращение — как после любого
+этапа jobChange: плагин возвращает lockMap города, распорядок ведёт домой (`herbal_returned`).
+
+**Когда.** Травник; путь есть и не опасен для своего уровня (риск `atlas.danger_for` каждой карты пути <
+`max_risk` 0.35: `moc_fild03` с агрессивным Argos ур. 47 закрывает путь до ~46 уровня, `pay_fild04` с боссом
+Ghostring даёт 0.3); не чаще `gap_hours` (96); трав на ≥ `min_potions` (5) **выгодных** зелий; бутылок
+хватает; зени ≥ плата + `reserve_zeny` (2000); свободный вес ≥ 500 + `weight_margin`; в городе отдыха, HP ≥ 80, не ночь,
+сон не ближе 3 ч; нет плана встречи, этапа jobChange, экспедиции, сделки, лавки; арбитр разрешает `plan`.
+
+**Выгода** зелья = цена NPC зелья − плата − бутылка − продажная цена трав (`prices.json`). По ценам renewal выгодны
+только White (1200 − 20 − 400 − 120 = 660z) и Blue; Red/Orange/Yellow/Green дешевле купить в лавке — их травник не
+варит. Экономия поездки — в событии `herbal_brewed {potions, saved}`, kv `herbal.saved`, теме разговора `herbal`
+(«Сварил(а) у фармацевта 6 White Potion, сберёг(ла) 3960z!») и строке летописи.
+
+**Тело (brainBridge).** `state.craft {items, kept, weight_free, skills}` — счётчики трав, бутылки и материалов стрел.
+`craft_setup {keep}` — запись «не продавать, не складывать» в `%items_control` (до перезагрузки таблиц; мозг видит
+это по `craft.kept` и шлёт снова); `craft_setup {bottles: N}` — блок `buyAuto Empty Bottle` профиля
+(`bots/bot0*/control/config.txt`, `disabled 1`): maxAmount N, minAmount N−1, включить; затем `service` — OpenKore
+после продажи докупает. После поездки — `bottles: 0`.
+
+**Не проверено и риски.** Поездка не проходилась в игре: маршрут OpenKore может отличаться от нашего (он строит свой),
+11 переходов через поля Морокка и Пайона — смерть в пути даёт провал этапа; переход между комнатами `alberta_in`
+OpenKore должен найти сам (`move` в другую компоненту карты). Белые/синие травы на полях Пронтеры почти не падают —
+травник наберёт их только на картах Геффена/Мьёльнира (охоту модуль не меняет). Строка профиля по ИМЕНИ в
+`items_control.txt` важнее записи по ID (так ищет `Misc::items_control`) — для трав таких строк нет. Подарки/продажа
+зелий жителям — следующий шаг (рынок ORG-033 продаёт их как обычный лут).
+
+## Arrow Crafting — ремесло лучника (ORG-075) — `brain/live_brain/arrows.py`
+
+Только для жителя ветки Archer (`state.job`: Archer, Hunter, Bard, Dancer и их высшие, детские и третьи формы;
+шаблон `bots/templates/archer`, Ilsa). **Пока лучника нет, модуль спит**: такт ничего не делает и не пишет. ТЗ —
+`docs/IDEAS.md` Т-33.
+
+**Квест навыка** — Roberto `moc_ruins,118,99` (`npc/quests/skills/archer_skills.txt:18`): `JobLevel >= 30` (:37;
+Hunter/Bard/Dancer — без условия), предметы (:43) 20 Resin 907, 7 Mushroom Spore 921, 41 Pointed Scale 906, 13 Trunk
+1019, 1 Red Potion 501; при всех предметах меню нет, итог — «as I promised, I will teach you the skill» (:47), навык
+`AC_MAKINGARROW` (:54). Данные — `crafts.json` (`scripts/gen_crafts.py`). Этап progression в kv `arrows.stage`:
+`exp` (копить опыт профессии) → `items` (не хватает — список в промпте; материалы держит `craft_setup keep`, сбор —
+лут) → `no_route` / `ready` → `skill`. **Пути до `moc_ruins` по таблицам OpenKore нет** (Морокк закрыт до патча
+порталов): `routes.prontera.roberto = null`, стадия `no_route` записывается один раз и ждёт. С путём и
+`arrows.quest_auto: true` — этап jobChange `{path: arrows, stage: roberto}` (шаги `move` по пути, `talk` без ответов,
+`success {text: "as I promised", map: moc_ruins}`); навык подтверждается только `state.craft.skills.AC_MAKINGARROW`.
+
+**Ремесло** (навык есть): не чаще `craft_minutes` (20), не в бою, не во время этапа, сделки или лавки, HP ≥ 50 %;
+источник — первый из `sources` (Trunk 1019 → 40 Arrow, Jellopy 909 → 4 Arrow, Tree Root 902 → 7 Arrow; рецепты
+`db/create_arrow_db.yml`), который есть в рюкзаке. Действие `arrowcraft {item}`: мост — `arrowcraft use` (навык),
+сервер присылает список (пакет 01AD, хук `packet/arrowcraft_list`), мост выбирает предмет (`sendArrowCraft`), событие
+`arrowcraft_result` — только «отправил». **Итог — по факту**: стрел в `state.craft.items` стало больше →
+`arrows_crafted {source, arrow, n}`, тема `arrows` («Наделал(а) 40 стрел из Trunk своими руками.»), строка летописи.
+
+**Не проверено и риски.** Не проходилось в игре: ни квест (нет пути), ни `arrowcraft use` на нашем сервере. Стрелы
+OpenKore надевает сам только при настройке экипировки — модуль их лишь делает. Trunk у шаблона archer уходит на склад
+(`economy_storeIds`): `craft_setup keep` перекрывает это для лучника. Подарки/продажа стрел другим лучникам и
+«заказы самому себе» (ORG-070) для материалов — следующий шаг.
+
 ## Метрики (ORG-037)
 
 `economy.economy_metrics(memory, since)` → dict (для report; `__main__.py` не изменён):

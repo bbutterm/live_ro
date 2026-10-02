@@ -797,6 +797,27 @@ buyAuto Pet Food {
 	disabled 1
 }
 
+# live_ro (ORG-076): Empty Bottle (713) для старого фармацевта Альберты — у Tool Dealer Пронтеры (rAthena
+# npc/re/merchants/Dealer_Update.txt:169: prt_in,126,76; 400z). Выключен: травник (brain/live_brain/herbal.py) включает его
+# действием craft_setup {bottles: N} (maxAmount N, minAmount N-1) и выключает после поездки. В игре не проверено.
+buyAuto Empty Bottle {
+	npc prt_in 126 76
+	npc_steps b
+	isMarket 0
+	standpoint
+	distance 5
+	price
+	minAmount 0
+	maxAmount 0
+	batchSize
+	onlyIdentified
+	zeny > 3000
+	minDistance
+	maxDistance
+	dcOnEmpty 0
+	disabled 1
+}
+
 # live_ro: продавать лут, когда рюкзак заполнен на itemsMaxWeight_sellOrStore (48%).
 sellAuto 1
 sellAuto_npc prt_in 126 76
