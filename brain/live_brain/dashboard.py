@@ -21,12 +21,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import world_bus
+from . import episode as episode_mod                    # serial: серия недели (ORG-091)
 from .chronicle import LINES, day_bounds
 from .economy import metrics_from_rows
 
 WORLD = Path(__file__).resolve().parents[1] / "world"
 KV_KEYS = ("last_state", "status", "needs", "aims", "activity", "mood", "pets", "party", "crew", "society",
-           "career", "resources", "routine")
+           "career", "resources", "routine", "collection")   # collect: альбом карт (ORG-074) для метрик
 MAX_EVENTS = 400            # лента дня: последние N строк (файл остаётся < 1 МБ)
 MAX_CARD_TEXT = 160
 STATUS_RU = {"SLEEPING": "спит", "OFFLINE": "не в сети", "DEAD": "погиб", "ESCAPING": "спасается",
@@ -181,7 +182,11 @@ def collect(lab_root, bots, day=None, tz_hours=0, now=None):
     cut = max(0, len(events) - MAX_EVENTS)
     for e in events:
         e["time"] = datetime.fromtimestamp(e["ts"], tz).strftime("%H:%M")
-    return {"day": day, "tz_hours": tz_hours, "generated": datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d %H:%M"),
+    try:                                                                  # serial: серия недели с этим днём
+        ep = episode_mod.build(lab_root, bots, day, tz_hours, now=now)    # serial: только правила, без LLM
+    except (sqlite3.Error, ValueError, OSError):                          # serial:
+        ep = None                                                         # serial:
+    return {"day": day, "tz_hours": tz_hours, "episode": ep, "generated": datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d %H:%M"),
             "today": day == datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d"),
             "residents": residents, "missing": missing, "relations": relations(residents),
             "events": events[cut:], "events_cut": cut}
@@ -337,6 +342,23 @@ def _resources(residents):
             f'</thead><tbody>{"".join(rows)}</tbody></table></div>')
 
 
+def _episode(ep):
+    """ORG-091: «Серия недели» — заголовок, сцены со ссылками на факты, незавершённые линии."""
+    if not ep:
+        return '<div class="feed"><div class="empty">Серия недели недоступна.</div></div>'
+    if not ep["scenes"]:
+        return f'<div class="feed"><div class="empty">Серия {ep["number"]}: тихая неделя — сюжетных линий нет.</div></div>'
+    scenes = "".join(
+        f'<div class="ev"><span class="t">{i}</span><span><span class="who">{esc(s["title"])}</span> '
+        f'{esc(s["text"], 600)} <span class="src">· '
+        + esc("; ".join(f"{r['when'][5:]} {r['who']} {r['kind']}" for r in s["refs"]), 300)
+        + '</span></span></div>' for i, s in enumerate(ep["scenes"], 1))
+    nxt = (f'<div class="ev"><span class="t">→</span><span class="k">в следующей серии: '
+           f'{esc("; ".join(ep["next"]), 400)}</span></div>' if ep["next"] else "")
+    return (f'<div class="sub">Серия {ep["number"]}. {esc(ep["title"])} · неделя {esc(ep["week"])}</div>'
+            f'<div class="feed">{scenes}{nxt}</div>')
+
+
 def render(data):
     res = data["residents"]
     cards = "".join(_card(r) for r in res) or '<div class="empty">Нет ни одной памяти жителя.</div>'
@@ -359,6 +381,8 @@ def render(data):
 {_graph(res, data['relations'])}
 <h2>События дня</h2>
 {_feed(data['events'], data['events_cut'])}
+<h2>Серия недели</h2>
+{_episode(data.get('episode'))}
 <h2>Органичность <span class="sub">({esc(since)})</span></h2>
 {_table(res, 'organic', 'метрика')}
 <h2>Экономика <span class="sub">(за день)</span></h2>

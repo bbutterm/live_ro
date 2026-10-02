@@ -62,6 +62,7 @@ from .social import Social
 from .society import Society
 from .strangers import Strangers
 from .tradition import Tradition
+from .collection import Collection
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -91,6 +92,7 @@ MODULES = (
     Crowd,
     Episodes,
     Tradition,
+    Collection,        # после social: регистрирует тему card
 )
 
 

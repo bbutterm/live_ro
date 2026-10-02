@@ -469,7 +469,9 @@ class Economy:
         """Ценные лоты рюкзака, которые можно продать: не share, не из своего списка желаний."""
         state = state or self.state
         keep = set(self.share) | set(self.wishlist(state))
-        return self.prices.valuables(state.get("items") or {}, keep=keep)
+        coll = getattr(self.mind, "collection", None)                      # collect: ORG-074 карта альбома
+        items = coll.sellable(state.get("items") or {}) if coll else state.get("items") or {}   # collect: дубли — можно
+        return self.prices.valuables(items, keep=keep)
 
     def declined(self, item, now):
         ts = (self.mind.mem.get("market_declined") or {}).get(str(item), 0)

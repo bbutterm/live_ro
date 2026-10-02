@@ -87,6 +87,14 @@
     "min_level": 1
   },
 
+  "episode": {
+    "_comment": "Серия недели для владельца (live_brain/episode.py, ORG-091, scripts/lab episode): только чтение памяти и шины. llm=true — окраска одним вызовом в неделю (нужен BRAIN_LLM и общий бюджет); по умолчанию выкл.",
+    "enabled": true,
+    "llm": false,
+    "scenes_min": 3,
+    "scenes_max": 5
+  },
+
   "explore": {
     "_comment": "ORG-054 экспедиции (brain/live_brain/explore.py, docs/EXPLORE.md). Цель — известная (слух, дорога с посещённой карты), но не посещённая карта не дальше max_hops переходов, достижимая для OpenKore (brain/world/explore_reach.json, scripts/gen_explore_reach.py), с риском atlas.danger_for ниже min(max_risk, смелость) для слабейшего. Не чаще gap_hours, днём, HP >= min_hp; на месте stay_minutes; прервать при тревоге или HP < abort_hp. deny/deny_prefix — полигон новичков, перестроенный izlude, гильдии.",
     "enabled": true,
