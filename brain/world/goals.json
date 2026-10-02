@@ -55,6 +55,13 @@
     "max_steps": 3,
     "spare_share": 0.25
   },
+  "gaze": {
+    "_comment": "ORG-067 взгляд на собеседника (brain/live_brain/gaze.py, docs/SOCIETY.md): при разговоре и встрече житель поворачивается к собеседнику (действие моста look_at -> lookp), в городе, не чаще gap_seconds, к одному — не чаще peer_gap_seconds. Выключить — enabled: false или BRAIN_DISABLE=gaze.",
+    "enabled": true,
+    "near": 9,
+    "gap_seconds": 20,
+    "peer_gap_seconds": 60
+  },
   "tradition": {
     "_comment": "ORG-058 вечерний круг (brain/live_brain/tradition.py, docs/SOCIETY.md): point — точка social.points, hours — окно [с, до) по часовому поясу мира, minutes — сколько стоять в круге. Выключить — enabled: false или BRAIN_DISABLE=tradition.",
     "enabled": true,

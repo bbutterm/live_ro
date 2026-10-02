@@ -18,6 +18,8 @@
   имя по правилам rAthena, приглашение — только жителю (guild:).
 - навык на игрока (skill_on_player) — только от исполнителей правил (healer.py): только поддержка из
   SUPPORT_CASTS, живому, SP ≥ CAST_MIN_SP %, не больше CAST_LIMIT за 10 минут (healer:).
+- взгляд (look_at) — только от правил (gaze.py): имя игрока, в городе, не чаще LOOK_GAP (look:);
+  заточка (refine) — только от правил (refine.py): руда, цель, точки NPC (refine:).
 - банк (bank_check/bank_deposit/bank_withdraw) — только от правил (savings.py): сумма 1..MAX_BANK_OP, вклад
   не больше зени в кармане, не больше BANK_PER_DAY в сутки (dreams:).
 """
@@ -44,6 +46,8 @@ PLAN_ACTIONS += ("bank_check", "bank_deposit", "bank_withdraw")   # dreams: ба
 MAX_BANK_OP = 10_000_000         # dreams: сумма одной операции банка (тот же предел в brainBridge.pl)
 PLAN_ACTIONS += ("refine",)      # refine: заточка своего оружия до безопасного уровня (refine.py, ORG-072)
 REFINE_ORES = (1010, 1011)       # refine: Phracon, Emveretarcon — продаёт Vurewell (тот же список в refine.pl)
+PLAN_ACTIONS += ("look_at",)     # look: повернуться к собеседнику (gaze.py, ORG-067)
+LOOK_GAP = 20                    # look: не чаще раза в 20 с
 BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
@@ -95,6 +99,7 @@ class SafetyPolicy:
         self.emoted = []             # время эмоций: не больше EMOTE_LIMIT за WINDOW
         self.chat_maps = set(extra_point_maps)   # society: чат-комната — только в городе отдыха
         self.room_opened = 0.0                   # society: когда открывал комнату
+        self.looked = 0.0                        # look: когда поворачивался к собеседнику
 
     def _recent(self, items, now):
         return [x for x in items if now - (x[0] if isinstance(x, tuple) else x) < WINDOW]
@@ -177,6 +182,8 @@ class SafetyPolicy:
             return self.check_explore(action, state)                                                 # explore:
         if kind in ("bank_check", "bank_deposit", "bank_withdraw"):                                  # dreams:
             return self.check_bank(kind, action, state, now)                                         # dreams:
+        if kind == "look_at":                                                                         # look:
+            return self.check_look(action, state, now)                                               # look:
         if kind == "refine":                                                                          # refine:
             return self.check_refine(action, state)                                                  # refine:
         if kind in ("pet_setup", "pet_tame", "pet_hatch"):                                           # pets:
@@ -274,6 +281,19 @@ class SafetyPolicy:
             return None, f"лимит кастов {CAST_LIMIT}/10 мин"
         self.casts.append(now)
         return {"action": "skill_on_player", "skill": skill, "to": to}, None
+
+    def check_look(self, action, state, now):                                                   # look:
+        """look: повернуться к собеседнику (ORG-067) — только от правил, имя ≤ 23 без '"', в городе отдыха,
+        не чаще LOOK_GAP. Видимость и дальность проверяет мост."""
+        name = " ".join(str(action.get("name", "")).split())
+        if not name or len(name) > 23 or '"' in name:
+            return None, "неверное имя"
+        if self.chat_maps and state.get("map") not in self.chat_maps:
+            return None, "поворот к собеседнику — только в городе"
+        if now - self.looked < LOOK_GAP:
+            return None, f"поворот не чаще раза в {LOOK_GAP} с"
+        self.looked = now
+        return {"action": "look_at", "name": name}, None
 
     def check_refine(self, action, state):                                                      # refine:
         """refine: заточка (ORG-072) — ID и индекс целые, руда из REFINE_ORES, цель 1..10, докупка 0..20, точки —

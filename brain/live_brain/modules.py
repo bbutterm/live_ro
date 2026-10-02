@@ -44,6 +44,7 @@ mentor (ORG-057) — метка [mentor:] 55, тик 95, промпт 215.  # me
 bestiary (ORG-077) — событие kill 75, тик 225, промпт 235.  # bestiary:
 market_day (ORG-071) — тик 15 (пороги дня до economy).  # market:
 refine (ORG-072) — тик 105, событие refine_result 65 (own).  # refine:
+gaze (ORG-067) — тик 75, эхо social [chat:] 20.  # look:
 """
 import inspect
 import re
@@ -84,6 +85,7 @@ from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и �
 from .places import Places           # places: ORG-084 имена мест
 from .market import MarketDay        # market: ORG-071 рыночный день
 from .refine import Refine           # refine: ORG-072 заточка у кузнеца
+from .gaze import Gaze               # look: ORG-067 взгляд на собеседника
 from .world_bus import Feed
 from .world_calendar import WorldCalendar
 
@@ -122,6 +124,7 @@ MODULES = (
     Orders,            # orders: ORG-070 после economy и шины (тик 25, метка [order:] 25)
     MarketDay,         # market: ORG-071 после calendar, economy, orders, society, social (тик 15 — до economy)
     Refine,            # refine: ORG-072 (тик 105, событие refine_result 65 own; по умолчанию выключен)
+    Gaze,              # look: ORG-067 после social (тик 75, эхо [chat:] 20)
     Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)

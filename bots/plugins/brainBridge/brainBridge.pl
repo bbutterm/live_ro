@@ -37,6 +37,9 @@
 #   party_say {text} -> «p <текст>»: чат группы (crew.py, ORG-053)
 #   pet_tame {item,mob} / pet_hatch {egg} / pet_setup {food_on,items,mobs} -> плагин pets: питомец (ORG-051)
 #   job_change {path,stage,steps,success} -> плагин jobChange: этап квеста смены профессии (шаги из progression.json)
+#   look_at {name}        -> lookp <номер игрока> (Commands.pm cmdLookPlayer): повернуться к жителю/игроку рядом  # look:
+#                            (виден, не я, не дальше $LOOK_RANGE клеток); в state — dir (0..7, $char->{look}{body})  # look:
+#                            и dir у players (look.body актёра: пакет смены направления соседа, actor_look_at)  # look:
 #   refine {item,inv,target,ore,buy,shop,smith} -> плагин refine: заточка своего оружия у Hollgrehenn только при  # refine:
 #                            шансе 100 (Refine UI); в state — refine {running, phase, weapon, ores}; итог refine_result  # refine:
 #   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
@@ -231,6 +234,7 @@ sub sendState {
 		players   => nearbyPlayers(),
 		(defined &jobChange::status ? (job_change => jobChange::status()) : ()),
 		(defined &refine::status ? (refine => refine::status()) : ()),             # refine: заточка (ORG-072)
+		dir       => ($char->{look} && defined $char->{look}{body} ? $char->{look}{body} + 0 : undef),   # look: ORG-067
 		(defined &pets::status ? (pet => pets::status()) : ()),                  # pets: питомец (ORG-051)
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
@@ -260,6 +264,24 @@ sub castTarget {                                                              # 
 	return (undef, "не знаю, где $to") unless defined $me->{x} && defined $at->{x};
 	my $d = abs($me->{x} - $at->{x}) > abs($me->{y} - $at->{y}) ? abs($me->{x} - $at->{x}) : abs($me->{y} - $at->{y});
 	return (undef, "$to дальше $CAST_RANGE клеток") if $d > $CAST_RANGE;
+	my $idx = $playersList->can('find') ? $playersList->find($p) : $p->{binID};
+	return (undef, "$to: нет номера в списке игроков") unless defined $idx && $idx >= 0;
+	return ($idx, undef);
+}
+
+our $LOOK_RANGE = 14;                                                         # look: дальше — не «собеседник»
+sub lookTarget {                                                              # look: номер игрока для lookp
+	my ($to) = @_;
+	return (undef, 'неверное имя') unless defined $to && $to =~ /^[^"]{1,23}$/;
+	return (undef, 'на себя не смотрят') if $char->{name} eq $to;
+	my @all = $playersList ? @{$playersList->getItems() || []} : ();
+	my ($p) = grep { defined $_->{name} && $_->{name} eq $to } @all;
+	return (undef, "$to не виден рядом") unless $p;
+	my ($me, $at) = ($char->{pos_to} || {}, $p->{pos_to} || {});
+	return (undef, "не знаю, где $to") unless defined $me->{x} && defined $at->{x};
+	my $d = abs($me->{x} - $at->{x}) > abs($me->{y} - $at->{y}) ? abs($me->{x} - $at->{x}) : abs($me->{y} - $at->{y});
+	return (undef, "$to дальше $LOOK_RANGE клеток") if $d > $LOOK_RANGE;
+	return (undef, "$to на той же клетке") if $d == 0;
 	my $idx = $playersList->can('find') ? $playersList->find($p) : $p->{binID};
 	return (undef, "$to: нет номера в списке игроков") unless defined $idx && $idx >= 0;
 	return ($idx, undef);
@@ -353,7 +375,8 @@ sub nearbyPlayers {
 	my @players = grep { defined $_->{name} && length $_->{name} } @{$playersList->getItems() || []};
 	@players = @players[0 .. 9] if @players > 10;
 	return [map { {name => $_->{name}, %{identity($_)},
-	               x => ($_->{pos_to} ? $_->{pos_to}{x} : undef), y => ($_->{pos_to} ? $_->{pos_to}{y} : undef)} } @players];
+	               x => ($_->{pos_to} ? $_->{pos_to}{x} : undef), y => ($_->{pos_to} ? $_->{pos_to}{y} : undef),
+	               dir => ($_->{look} && defined $_->{look}{body} ? $_->{look}{body} + 0 : undef)} } @players];   # look:
 }
 
 # ---------- подтверждение доставки сервером ----------
@@ -712,6 +735,10 @@ sub actionToCommand {
 		return (0, 'плагин jobChange не загружен') unless defined &jobChange::start;
 		my ($ok, $desc) = jobChange::start($a);
 		return $ok ? (1, {note => $desc}) : (0, $desc);
+	} elsif ($kind eq 'look_at') {                                         # look: взгляд на собеседника (ORG-067)
+		my ($idx, $why) = lookTarget(cleanText($a->{name} // $a->{to}));     # look:
+		return (0, $why) unless defined $idx;                                 # look:
+		return (1, "lookp $idx");                                             # look:
 	} elsif ($kind eq 'refine') {                                          # refine: заточка (ORG-072)
 		return (0, 'плагин refine не загружен') unless defined &refine::start;   # refine:
 		return (0, 'идёт сделка') if %currentDeal || %outgoingDeal || %incomingDeal;   # refine:

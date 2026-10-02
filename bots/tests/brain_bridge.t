@@ -360,6 +360,28 @@ package main;
 	$Globals::playersList = $savedPlayers;
 }
 
+# ---- look: взгляд на собеседника (ORG-067) — lookp с номером игрока по имени, dir в state ----  # look:
+{
+	my $savedPlayers = $Globals::playersList;
+	my $savedPos = $Globals::char->{pos_to};
+	$Globals::char->{pos_to} = {x => 156, y => 185};
+	$Globals::playersList = FakeList->new({name => 'Somebody', pos_to => {x => 1, y => 1}},
+		{name => 'Ilsa', pos_to => {x => 158, y => 185}, look => {body => 2}},
+		{name => 'Far Away', pos_to => {x => 156, y => 205}});
+	my ($okl, $cmd) = brainBridge::actionToCommand({action => 'look_at', name => 'Ilsa'});
+	ok($okl, 'look: к видимому жителю — принято');
+	is($cmd, 'lookp 1', 'look: lookp <номер игрока> (Commands.pm cmdLookPlayer)');
+	for my $c (['Nobody', qr/не виден/], ['Far Away', qr/дальше 14/], [$Globals::char->{name}, qr/себя/],
+	           ['Il"sa', qr/неверное/]) {
+		my ($okn, $why) = brainBridge::actionToCommand({action => 'look_at', name => $c->[0]});
+		ok(!$okn && $why =~ $c->[1], "look: отказ — $c->[0]");
+	}
+	my ($arkady) = grep { $_->{name} eq 'Ilsa' } @{brainBridge::nearbyPlayers()};
+	is($arkady->{dir}, 2, 'look: направление соседа в players (look.body)');
+	$Globals::playersList = $savedPlayers;
+	$Globals::char->{pos_to} = $savedPos;
+}
+
 # ---- refine: заточка (ORG-072) — действие передаётся плагину refine, при сделке и лавке — отказ ----  # refine:
 {
 	my ($okr, $whyr) = brainBridge::actionToCommand({action => 'refine', item => 1201, inv => 3, target => 7});
