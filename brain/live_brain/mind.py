@@ -44,6 +44,9 @@ from . import world_bus                                 # events: шина со�
 from .explore import TAG as EXPLORE_TAG, Explorer       # explore: экспедиции (ORG-054)
 from .rivalry import Rivalry                            # rivalry: соперничество (ORG-060)
 from .crowd import Crowd                                # crowd: стигмергия занятий и карт (ORG-089)
+from . import topics                                    # talk: темы разговора из жизни мира (ORG-066)
+from .episodes import Episodes                          # talk: «помнишь?» — эпизоды пары (ORG-055)
+from .mood import Mood                                  # talk: настроение (ORG-064)
 
 log = logging.getLogger("mind")
 
@@ -136,6 +139,8 @@ class Mind:
         self.life = Lifecycle(self)
         self.maps = MapStats(self)
         self.needs = Needs(self)
+        self.mood = (Mood(self) if settings.feature("mood")                                  # talk: ORG-064
+                     and ((world or {}).get("mood") or {}).get("enabled", True) else None)  # talk:
         self.career = Career(self, (world or {}).get("progression")) if world and settings.feature("career") else None
         feat = settings.feature
         self.routine = Routine(self, world) if world and feat("routine") else None
@@ -173,6 +178,10 @@ class Mind:
                         and ((world or {}).get("rivalry") or {}).get("enabled", True) else None)  # rivalry:
         self.crowd = (Crowd(self, world) if feat("crowd")                             # crowd: ORG-089
                       and ((world or {}).get("crowd") or {}).get("enabled", True) else None)  # crowd:
+        self.episodes = (Episodes(self) if self.ctx.peers and feat("episodes")                 # talk: ORG-055
+                         and ((world or {}).get("episodes") or {}).get("enabled", True) else None)  # talk:
+        if self.social:                                                               # talk: ORG-066 реестр тем
+            topics.install(self.social, self, world)                                  # talk:
 
     # ---------- входящие сообщения плагина ----------
 
@@ -598,6 +607,8 @@ class Mind:
         if self.fresh_state and time.time() - self.ctx.last.get("needs_saved", 0) >= 60:
             self.ctx.last["needs_saved"] = time.time()            # ORG-015: мотивы видны в отчёте
             self.mem.set("needs", self.needs.weighted())
+            if self.mood:                                         # talk: ORG-064 настроение — в отчёт
+                self.mem.set("mood", self.mood.snapshot())        # talk:
         if time.time() - self.last_prune >= 6 * 3600:           # AUT-100: память не растёт без предела
             self.last_prune = time.time()
             self.mem.prune()
@@ -627,6 +638,8 @@ class Mind:
             await self.rivalry.tick()                          # rivalry:
         if self.crowd:                                         # crowd: ORG-089 «где я и чем занят» в шину
             self.crowd.tick()                                  # crowd:
+        if self.episodes:                                      # talk: ORG-055 эпизоды пары из событий памяти
+            self.episodes.tick()                               # talk:
         await self.read_inbox()
         now = time.time()
         self.peer_smalltalk(now)
@@ -827,6 +840,7 @@ class Mind:
             "хозяйство": self.economy.summary() if self.economy else None,
             "рынок": self.economy.market_summary() if self.economy else None,   # market: оценка рюкзака, сделка
             "мотивы": dict(self.needs.top(4)),
+            "настроение": self.mood.summary() if self.mood else None,           # talk: ORG-064
             "карьера": (self.mem.get("career") or {}).get("text"),
             "занятие": self.activities.summary() if self.activities else None,
             "экспедиция": self.explorer.summary() if self.explorer else None,         # explore:
