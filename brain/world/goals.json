@@ -101,6 +101,11 @@
     "bank_gap_minutes": 10,
     "min_deposit": 5000
   },
+  "memoir": {
+    "_comment": "dreams: ORG-082 мемуары (live_brain/memoir.py, docs/LIFE.md, scripts/lab memoir БОТ): раз в неделю книга жизни от первого лица по фактам памяти -> state/<bot>/memoir.md. llm=true — окраска глав (один вызов на главу, фильтр дневника diary_only, кэш); по умолчанию выкл.",
+    "enabled": true,
+    "llm": false
+  },
   "episode": {
     "_comment": "Серия недели для владельца (live_brain/episode.py, ORG-091, scripts/lab episode): только чтение памяти и шины. llm=true — окраска одним вызовом в неделю (нужен BRAIN_LLM и общий бюджет); по умолчанию выкл.",
     "enabled": true,
