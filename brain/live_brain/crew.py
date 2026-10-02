@@ -218,16 +218,18 @@ class Crew:
         if p.is_leader:
             return
         explorer = getattr(self.mind, "explorer", None)            # explore: в экспедиции за лидером по городу не гуляем
-        if explorer and explorer.busy():                           # explore:
-            return                                                 # explore:
-        if self.walk_until and (now >= self.walk_until or mode == "hunt"):
+        busy = bool(explorer and explorer.busy())                  # review2: и начатую прогулку закончить (follow
+        lead = p.member(p.leader)                                  # review2: в очереди AI — lockMap не работает)
+        gone = not (lead and lead.get("online") and lead.get("map") == state.get("map"))   # review2: лидер ушёл
+        if self.walk_until and (now >= self.walk_until or mode == "hunt" or gone or busy):  # review2:
             self.walk_until = 0.0
             if state.get("follow") == p.leader and mode != "hunt":
                 await self.mind.execute([{"action": "unfollow"}], source="crew", reason="группа: прогулка окончена")
             return
+        if busy:                                                   # explore:
+            return                                                 # explore:
         if self.walk_until or mode == "hunt" or now - self.last_walk < WALK_GAP:
             return
-        lead = p.member(p.leader)
         if not (lead and lead.get("online") and lead.get("map") == state.get("map")
                 and None not in (lead.get("x"), state.get("x"))
                 and max(abs(int(lead["x"]) - int(state["x"])), abs(int(lead["y"]) - int(state["y"]))) <= WALK_DIST):
