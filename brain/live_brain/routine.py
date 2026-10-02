@@ -70,14 +70,14 @@ def merged_routine(world, persona):
 
 
 class Routine:
-    def __init__(self, mind, world, rng=None, clock=time.time):
+    def __init__(self, mind, world, rng=None, clock=None):
         self.mind = mind
         self.world = world
         self.cfg = merged_routine(world, mind.persona)
         self.town = self.cfg["town"]
         self.tz = timezone(timedelta(hours=world.get("timezone_offset_hours", 0)))
         self.rng = rng or random.Random()
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.last_tick = None
         self.last_sent = 0.0
         self.anchor = None          # (map, x, y, время) — где стоял в последний раз
@@ -372,9 +372,13 @@ class Routine:
         deaths = self.mind.mem.count_events("died", now - DEATH_WINDOW)
         if deaths < DEATH_LIMIT:
             # AUT-008: после респауна не идти сразу в бой с 1 HP — город, отдых, восстановление.
+            rest = self.cfg.get("after_death_rest_minutes", 10)
+            self.note("routine_recover", "Погиб — после возрождения отдохну в городе и восстановлюсь.", 2)
             if self.st.get("mode") == "hunt":
-                self.note("routine_recover", "Погиб — после возрождения отдохну в городе и восстановлюсь.", 2)
-                await self.to_town(now, rest_minutes=self.cfg.get("after_death_rest_minutes", 10), recover=True)
+                await self.to_town(now, rest_minutes=rest, recover=True)
+            elif self.st.get("rest_until") != float("inf"):
+                # погиб по дороге/в городе — отдых не короче rest минут (реплей ORG-050 нашёл этот случай)
+                self.st["rest_until"] = max(self.st.get("rest_until", 0), now + rest * 60)
             self.st["recover"] = True
             self.save()
             return

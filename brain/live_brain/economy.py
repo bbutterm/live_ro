@@ -38,10 +38,10 @@ def dist(ax, ay, bx, by):
 
 
 class Economy:
-    def __init__(self, mind, cfg, clock=time.time):
+    def __init__(self, mind, cfg, clock=None):
         self.mind = mind
         self.cfg = cfg
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.share = {str(k): v for k, v in (cfg.get("share") or {}).items()}
         self.zeny = cfg.get("zeny") or {}
         self.gap = cfg.get("ask_gap_minutes", 20) * 60

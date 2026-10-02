@@ -23,9 +23,9 @@ MISS_HOURS = 24
 
 
 class Bonds:
-    def __init__(self, mind, clock=time.time):
+    def __init__(self, mind, clock=None):
         self.mind = mind
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.st = mind.mem.get("bonds") or {"friend_req": {}, "missed": {}, "jobs": {}}
         self.together = None            # (житель, до когда, карта)
 

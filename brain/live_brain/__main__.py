@@ -142,6 +142,13 @@ def report(args, memory, state_dir):
     return 0
 
 
+def env_flag(env_path, key):
+    try:
+        return load_env(env_path).get(key, "").strip() in ("1", "yes", "true")
+    except OSError:
+        return False
+
+
 def env_bots(env_path):
     try:
         return load_env(env_path).get("LAB_BOTS", "").strip().strip("\"'")
@@ -204,6 +211,9 @@ async def main_async(args, settings, persona, memory, state_dir):
                 inbox_path=os.path.join(args.lab_root, "run", "brain", f"{args.bot}.inbox"),
                 world=load_world(args.world) if os.path.exists(args.world) else None,
                 shared_budget=shared, alerts_path=os.path.join(args.lab_root, "run", "alerts.log"))
+    if env_flag(args.env, "BRAIN_RECORD"):           # ORG-050: поток тела для реплея
+        from .replay import Recorder
+        mind.recorder = Recorder(state_dir / "replay.jsonl", peers)
     await bridge.start()
     memory.add_event("brain_started", {"model": settings.model, "llm": settings.llm_enabled})
     log.info("мозг %s запущен: gate %s, жители %s, модель %s, LLM %s, лимит %d/сутки, план раз в %d с; "

@@ -34,9 +34,9 @@ PRIORITY = ("survival", "plan", "economy", "party", "routine")
 
 
 class Lifecycle:
-    def __init__(self, mind, clock=time.time):
+    def __init__(self, mind, clock=None):
         self.mind = mind
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.current = mind.mem.get("status", {}).get("state")
         self.last_alarm = 0.0       # survival/danger/escape
         self.last_fight = 0.0

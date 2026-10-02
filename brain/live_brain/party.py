@@ -40,10 +40,10 @@ def dist(ax, ay, bx, by):
 
 
 class Party:
-    def __init__(self, mind, cfg=None, clock=time.time):
+    def __init__(self, mind, cfg=None, clock=None):
         self.mind = mind
         self.cfg = cfg or {}
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.st = mind.mem.get("party") or {}
         self.last = {}                    # отметки времени действий (не в БД: после перезапуска можно повторить)
         self.waiting_since = None

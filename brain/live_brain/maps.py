@@ -22,9 +22,9 @@ MAX_GAP = 5
 
 
 class MapStats:
-    def __init__(self, mind, clock=time.time):
+    def __init__(self, mind, clock=None):
         self.mind = mind
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.last = None            # (ts, map, exp_pct, zeny)
         self.cache = None
         self.saved = 0.0

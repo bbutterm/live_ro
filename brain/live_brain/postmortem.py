@@ -34,9 +34,9 @@ def monster_info(name):
 
 
 class Postmortem:
-    def __init__(self, mind, clock=time.time):
+    def __init__(self, mind, clock=None):
         self.mind = mind
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.ring = collections.deque()          # (ts, kind, data)
 
     def observe(self, kind, data):

@@ -90,11 +90,11 @@ def fields(template):
 
 
 class Social:
-    def __init__(self, mind, world, clock=time.time, rng=None):
+    def __init__(self, mind, world, clock=None, rng=None):
         self.mind = mind
         self.cfg = merged_social(world, mind.persona)
         self.tz = timezone(timedelta(hours=(world or {}).get("timezone_offset_hours", 0)))
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.rng = rng or random.Random()
         self.phrases = mind.persona.get("phrases") or {}
         self.st = mind.mem.get("social") or {}

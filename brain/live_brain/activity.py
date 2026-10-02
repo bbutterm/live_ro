@@ -35,11 +35,11 @@ def dist(ax, ay, bx, by):
 
 
 class Activities:
-    def __init__(self, mind, path=CATALOG, clock=time.time, rng=None):
+    def __init__(self, mind, path=CATALOG, clock=None, rng=None):
         self.mind = mind
         self.cfg = json.loads(Path(path).read_text(encoding="utf-8"))
         self.catalog = self.cfg["activities"]
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.rng = rng or random.Random()
         self.st = mind.mem.get("activity") or {}
         self.next_decide = 0.0

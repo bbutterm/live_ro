@@ -20,10 +20,10 @@ MAX_FAILS = 3
 
 
 class Career:
-    def __init__(self, mind, cfg=None, clock=time.time):
+    def __init__(self, mind, cfg=None, clock=None):
         self.mind = mind
         self.cfg = cfg or {}
-        self.clock = clock
+        self.clock = clock or (lambda: time.time())   # время читается при вызове (реплей подменяет)
         self.data = None
         self.last_summary = 0.0
         self.st = mind.mem.get("career_state") or {"done": [], "fails": 0, "next_try": 0}

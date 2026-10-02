@@ -83,6 +83,7 @@ class Mind:
         self.shared = shared_budget        # общий бюджет всех жителей (budget.py) или None
         self.alerts_path = alerts_path     # оповещения владельцу (AUT-118)
         self.decision_writes = 0
+        self.recorder = None              # replay.Recorder при BRAIN_RECORD=1 (__main__)
         self.last_prune = time.time()
         self.persona = persona
         self.mem = memory
@@ -136,6 +137,8 @@ class Mind:
     # ---------- входящие сообщения плагина ----------
 
     async def on_message(self, msg):
+        if self.recorder:
+            self.recorder(msg)                    # ORG-050: поток тела для реплея (BRAIN_RECORD=1)
         kind = msg.get("type")
         if kind == "hello":
             log.info("тело на связи: %s", msg.get("char") or "ещё не в игре")
@@ -474,44 +477,38 @@ class Mind:
             await asyncio.sleep(1)
             if not connected() or not self.state:
                 continue
-            self.fresh_state = bool(self.state_received) and time.time() - self.state_received < STALE_SEC
-            if self.fresh_state and time.time() - self.ctx.last.get("needs_saved", 0) >= 60:
-                self.ctx.last["needs_saved"] = time.time()            # ORG-015: мотивы видны в отчёте
-                self.mem.set("needs", self.needs.weighted())
-            if time.time() - self.last_prune >= 6 * 3600:           # AUT-100: память не растёт без предела
-                self.last_prune = time.time()
-                self.mem.prune()
-            self.life.tick()
-            await self.safety_tick()
-            await self.plans.tick()
-            if self.routine:
-                await self.routine.tick()
-            if self.economy:
-                await self.economy.tick()
-            if self.party:
-                await self.party.tick()
-            if self.career:
-                await self.career.tick()
-            if self.activities:
-                await self.activities.tick()
-            if self.bonds:
-                await self.bonds.tick()
-            if self.social:                                    # social: тик общения
-                await self.social.tick()
-            await self.read_inbox()
-            now = time.time()
-            self.peer_smalltalk(now)
-            if (self.pending is None and self.s.llm_enabled
-                    and now - self.last_decision >= self.s.decide_interval):
-                self.pending = ("плановое размышление", {}, "timer")
-            if self.pending is None or self.lock.locked():
-                continue
-            reason, context, kind = self.pending
-            if kind == "chat" and now - self.last_chat_decision < self.s.chat_min_gap:
-                continue
-            self.pending = None
-            async with self.lock:
-                await self.decide(reason, context, kind)
+            await self.step()
+
+    async def step(self):
+        """Один тик мозга (1 с): правила, модули, повод для модели. Реплей (replay.py) зовёт его напрямую."""
+        self.fresh_state = bool(self.state_received) and time.time() - self.state_received < STALE_SEC
+        if self.fresh_state and time.time() - self.ctx.last.get("needs_saved", 0) >= 60:
+            self.ctx.last["needs_saved"] = time.time()            # ORG-015: мотивы видны в отчёте
+            self.mem.set("needs", self.needs.weighted())
+        if time.time() - self.last_prune >= 6 * 3600:           # AUT-100: память не растёт без предела
+            self.last_prune = time.time()
+            self.mem.prune()
+        self.life.tick()
+        await self.safety_tick()
+        await self.plans.tick()
+        for module in (self.routine, self.economy, self.party, self.career, self.activities, self.bonds,
+                       self.social):
+            if module:
+                await module.tick()
+        await self.read_inbox()
+        now = time.time()
+        self.peer_smalltalk(now)
+        if (self.pending is None and self.s.llm_enabled
+                and now - self.last_decision >= self.s.decide_interval):
+            self.pending = ("плановое размышление", {}, "timer")
+        if self.pending is None or self.lock.locked():
+            return
+        reason, context, kind = self.pending
+        if kind == "chat" and now - self.last_chat_decision < self.s.chat_min_gap:
+            return
+        self.pending = None
+        async with self.lock:
+            await self.decide(reason, context, kind)
 
     async def read_inbox(self):
         """Команды оператора из run/brain/<bot>.inbox (JSON-строки): meet, cancel, rest, hunt, ask.

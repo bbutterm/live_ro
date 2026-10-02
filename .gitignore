@@ -16,3 +16,4 @@ run/
 *.log
 live_ro.env
 decisions.jsonl
+replay*.jsonl
