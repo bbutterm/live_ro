@@ -290,6 +290,10 @@ TEXTS = {
     "tradition": lambda d: d.get("text") or f"вечерний круг: {d.get('label')}",   # tradition: ORG-058
     "healer_post_start": lambda d: "лечит у собора",                                 # healer: ORG-069
     "healer_shift": lambda d: f"лечил(а) у собора: Heal {d.get('heals')}, людей {d.get('patients')}",   # healer:
+    "order": lambda d: f"ищет {d.get('name')} x{d.get('n')}, платит {d.get('reward')}z",            # orders: ORG-070
+    "order_taken": lambda d: f"заказ взял(а) {d.get('by')}",                                       # orders:
+    "order_closed": lambda d: f"заказ закрыт ({d.get('why')})",                                    # orders:
+    "order_done": lambda d: f"выполнил(а) заказ {d.get('for')}: {d.get('name')} x{d.get('n')}",   # orders:
     "tradition_strength": lambda d: (f"вечерний круг у фонтана: {'собрались' if d.get('met') else 'никто не пришёл'}"
                                      f" (сила {d.get('strength')})"),     # tradition: общая сила (важность 1)
     "level_up": lambda d: f"достиг {d.get('level')} уровня",

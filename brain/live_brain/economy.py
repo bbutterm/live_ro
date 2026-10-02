@@ -469,6 +469,8 @@ class Economy:
         """Ценные лоты рюкзака, которые можно продать: не share, не из своего списка желаний."""
         state = state or self.state
         keep = set(self.share) | set(self.wishlist(state))
+        orders = getattr(self.mind, "orders", None)                        # orders: ORG-070 взятый заказ —
+        keep |= set(orders.reserved()) if orders else set()                # orders: не продаю другим
         coll = getattr(self.mind, "collection", None)                      # collect: ORG-074 карта альбома
         items = coll.sellable(state.get("items") or {}) if coll else state.get("items") or {}   # collect: дубли — можно
         return self.prices.valuables(items, keep=keep)
@@ -508,9 +510,9 @@ class Economy:
             return
         await self.offer_lot(peer, *lots[0][:2])
 
-    async def offer_lot(self, peer, item, amount):
+    async def offer_lot(self, peer, item, amount, price=None):           # orders: price — награда заказа ORG-070
         now = self.clock()
-        price = self.prices.resident_price(item, amount, self.greed(), self.affinity(peer), self.overcharge())
+        price = price or self.prices.resident_price(item, amount, self.greed(), self.affinity(peer), self.overcharge())
         rid = secrets.token_hex(3)
         self.offer = {"id": rid, "peer": peer, "item": str(item), "amount": int(amount), "price": price,
                       "status": "offered", "since": now}

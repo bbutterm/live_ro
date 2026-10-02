@@ -35,6 +35,7 @@ import re
 import time
 
 from .safety import CHAT_ROOM_GAP, fit_text
+from .world_bus import WorldBus
 
 log = logging.getLogger("healer")
 
@@ -122,8 +123,8 @@ class Healer:
         log.info("%s", text or kind)
 
     def bus(self):
-        feed = getattr(self.mind, "world", None)
-        return getattr(feed, "bus", None) if feed else None
+        bus = getattr(getattr(self.mind, "world", None), "bus", None)
+        return bus if isinstance(bus, WorldBus) else None          # только настоящая шина мира (world_bus.Feed)
 
     def town(self):
         r = getattr(self.mind, "routine", None)
