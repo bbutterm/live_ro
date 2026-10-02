@@ -36,6 +36,10 @@
 #   sleep {seconds}       -> relog <seconds> (600..43200): выйти из игры и войти через seconds — сон жителя (ORG-012)
 #   service {}            -> autostorage (если есть что сдать на склад) или autosell — продать/сдать/докупить
 #   shop_open / shop_close -> openshop / closeshop (лавка Merchant: навык MC_VENDING и тележка)
+#   offer_sell {to,item,amount,price} -> economy: как give, но в той же сделке ждёт price зени от покупателя  # market:
+#   offer_buy {from,item,amount,price} -> economy: в сделку продавца положить price зени (deal add z)  # market:
+#   offer_shop {title,items:[{id,price,amount}]} -> economy: тележка (cart_add) и %shop для openshop  # market:
+#   mail_send {to,title,body,zeny?,item?,amount?} / mail_check {} / mail_take {mail_id} -> economy: RODEX  # market:
 #   emote {id}            -> e <команда> (Commands.pm cmdEmotion, tables/emotions.txt); только номера
 #                            из %EMOTES (приветствие, смех, сердце, вопрос, спасибо...), как safety.EMOTES
 # Группа (AUT-055): приглашение в группу LR_<житель> плагин принимает сразу в хуке — иначе
@@ -187,6 +191,7 @@ sub sendState {
 		(defined &jobChange::status ? (job_change => jobChange::status()) : ()),
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
+		(defined &economy::buyStatus ? (buy => economy::buyStatus()) : ()),   # market: жду продавца
 		(defined &survival::status ? (survival => survival::status()) : ()),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 	});
@@ -467,6 +472,31 @@ sub actionToCommand {
 		my $v = defined &economy::vendStatus ? economy::vendStatus() : undef;
 		return (0, 'лавка не открыта') unless $v && $v->{open};
 		return (1, 'closeshop');
+	} elsif ($kind eq 'offer_sell') {                                     # market: продать жителю (предмет за зени, одна сделка)
+		return (0, 'плагин economy не загружен') unless defined &economy::startGive;              # market:
+		return (0, 'нет цены') unless defined $a->{price};                                       # market:
+		my ($ok, $desc) = economy::startGive($a);                                                 # market:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'offer_buy') {                                      # market: купить у жителя: положить зени в его сделку
+		return (0, 'плагин economy не загружен') unless defined &economy::startBuy;               # market:
+		my ($ok, $desc) = economy::startBuy($a);                                                  # market:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'offer_shop') {                                     # market: товары лавки (тележка + %shop)
+		return (0, 'плагин economy не загружен') unless defined &economy::setupShop;              # market:
+		my ($ok, $desc) = economy::setupShop($a);                                                 # market:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'mail_send') {                                      # market: письмо RODEX жителю
+		return (0, 'плагин economy не загружен') unless defined &economy::startMail;              # market:
+		my ($ok, $desc) = economy::startMail($a);                                                 # market:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'mail_check') {                                     # market: открыть ящик -> mail_received
+		return (0, 'плагин economy не загружен') unless defined &economy::startMailCheck;         # market:
+		my ($ok, $desc) = economy::startMailCheck();                                              # market:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'mail_take') {                                      # market: забрать вложение письма
+		return (0, 'плагин economy не загружен') unless defined &economy::startMailTake;          # market:
+		my ($ok, $desc) = economy::startMailTake($a);                                             # market:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
 	} elsif ($kind eq 'emote') {
 		my $id = $a->{id} // '';
 		return (0, 'эмоция не из списка') unless $id =~ /^\d{1,2}$/ && exists $EMOTES{$id};

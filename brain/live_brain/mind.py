@@ -22,6 +22,7 @@ from .bonds import Bonds
 from .aims import Aims                                  # events: недельные цели (ORG-038)
 from .career import Career
 from .economy import TAG as ECON_TAG, Economy
+from .economy import OFFER_TAG   # market: метка торговли жителей
 from .gate import GateContext, JevGate
 from .lifecycle import STALE_SEC, Lifecycle
 from .maps import MapStats
@@ -263,6 +264,10 @@ class Mind:
                 and ECON_TAG.search(str(event.get("text", "")))):
             await self.economy.on_tag(str(event["from"]), str(event["text"]))  # просьба/ответ жителя
             return
+        if (self.economy and kind == "chat_private" and event.get("from") in self.ctx.peers   # market: предложение/ответ
+                and OFFER_TAG.search(str(event.get("text", "")))):                             # market:
+            await self.economy.on_tag(str(event["from"]), str(event["text"]))                  # market:
+            return                                                                             # market:
         if (kind == "chat_private" and event.get("from") in self.ctx.peers
                 and INFO_TAG.search(str(event.get("text", "")))):
             self.on_rumor(str(event["from"]), str(event["text"]))
@@ -298,6 +303,16 @@ class Mind:
             if self.economy:
                 self.economy.on_give_result(event)
             return
+        if kind in ("buy_result", "mail_result", "mail_taken", "mail_received", "npc_sold", "vend_sold"):   # market:
+            if self.economy and kind == "buy_result":                                                    # market:
+                self.economy.on_buy_result(event)                                                        # market:
+            elif self.economy and kind == "mail_result":                                                 # market:
+                self.economy.on_mail_result(event)                                                       # market:
+            elif self.economy and kind == "mail_taken":                                                  # market:
+                self.economy.on_mail_taken(event)                                                        # market:
+            elif self.economy and kind == "mail_received":                                               # market:
+                await self.economy.on_mail_received(event)                                               # market:
+            return                                                                                       # market: npc_sold/vend_sold — только память
         result = self.gate.evaluate(event, self.state, self.ctx)
         self.mem.set("gate_last", self.ctx.last)
         for text, importance in result.memory:
@@ -722,6 +737,7 @@ class Mind:
             "распорядок": self.routine.summary() if self.routine else None,
             "глобальные_цели": self.routine.goals() if self.routine else None,
             "хозяйство": self.economy.summary() if self.economy else None,
+            "рынок": self.economy.market_summary() if self.economy else None,   # market: оценка рюкзака, сделка
             "мотивы": dict(self.needs.top(4)),
             "карьера": (self.mem.get("career") or {}).get("text"),
             "занятие": self.activities.summary() if self.activities else None,
