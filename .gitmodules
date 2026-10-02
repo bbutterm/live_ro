@@ -1,0 +1,6 @@
+[submodule "upstream/rathena"]
+	path = upstream/rathena
+	url = https://github.com/rathena/rathena.git
+[submodule "upstream/openkore"]
+	path = upstream/openkore
+	url = https://github.com/OpenKore/openkore.git

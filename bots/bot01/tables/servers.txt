@@ -1,0 +1,12 @@
+[RO Bot Lab]
+ip 127.0.0.1
+port 6900
+master_version 1
+version 55
+serverType kRO_RagexeRE_2018_06_20e
+serverEncoding Western
+charBlockSize 155
+addTableFolders kRO/RagexeRE_2018_06_21a
+secureLogin 0
+gameGuard 0
+pinCode 0

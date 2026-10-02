@@ -1,0 +1,13 @@
+secrets/
+state/
+logs/
+releases/
+.env
+.env.*
+!.env.example
+*.sqlite*
+*.db
+__pycache__/
+*.pyc
+bots/*/control/config.local.txt
+server/conf/local/
