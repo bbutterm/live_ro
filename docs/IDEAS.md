@@ -1519,11 +1519,12 @@ kv `places` (`maps.seen`: `first` — время первого посещени
 
 **Протокол.**
 ```text
-kv bestiary:  {kills: {монстр: {n, first, map}}, places: {карта: first}, firsts: [{kind, what, ts, name?}],
+kv bestiary:  {kills: {монстр: {n, first, map}}, places: {карта: first}, firsts: [{what, monster|map, ts, name?}],
                told: {житель: [ключи]}, seeded}
 шина:  bestiary_known {m: [виды], p: [карты]}     тихий снимок жителя (затирание), при изменении, не чаще 10 мин
        monster_first {monster, map, level, boss}  первый из жителей победил вид; важность 3 (мини-босс/босс — 4)
-       place_first {map, kind, name}              первый из жителей на карте; важность 4, топоним «тропа Arkady»
+       place_first {map, terrain, name}           первый из жителей на карте; важность 4, топоним «тропа Arkady»
+       (в данных событий памяти нет ключей kind/ts — их занимает memory.recent_events)
 ```
 ```python
 class Bestiary:                                 # mind.bestiary, FEATURE bestiary, EVENTS kill (после boss)
