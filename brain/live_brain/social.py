@@ -27,6 +27,9 @@
 Отношения по поступкам (AUT-102): время рядом с жителем (в городе или на охоте) от
     together_minutes за сутки — affinity +1, не чаще раза в сутки. Проигнорированное сообщение —
     ничего. Отношение задаёт частоту общения и шанс пойти к другу.
+Привыкание (ORG-096, Т-41): «вместе» даёт +1 только пока affinity < together_cap (4) и не чаще раза в
+    together_every_days (3) дня на пару; выше растут только поступки (подарок, лечение, помолвка, примирение).
+    Событие social_together пишется как прежде, с полем gain 0|1; история отношений — только при gain 1.
 Ссора (society.py, ORG-027): с жителем «в ссоре» не заговаривают первым и не идут к нему на прогулке;
     ответ ему — холодная короткая реплика (тема cold, шаг 4 — без продолжения), кроме сочувствия.
 Ночь (night_hours по timezone_offset_hours мира): не гуляют, сидят, говорят в night_factor раз реже.
@@ -78,6 +81,8 @@ DEFAULTS = {
     "emote_gap_seconds": 120,
     "friend_affinity": 3,
     "together_minutes": 30,
+    "together_cap": 4,                # habit2: ORG-096 — «вместе» растит отношение только до этого значения
+    "together_every_days": 3,         # habit2: и не чаще раза в N дней на пару
     "night_hours": [1, 7],
     "night_factor": 3,
 }
@@ -760,9 +765,22 @@ class Social:
             tg[peer] = tg.get(peer, 0) + gap
             if tg[peer] >= self.cfg["together_minutes"] * 60 and self.st["bonded"].get(peer) != day:
                 self.st["bonded"][peer] = day
-                self.mind.mem.update_relation(peer, 1, "провели время вместе")
+                gain = self.together_gain(peer, now)                                   # habit2: ORG-096
+                if gain:                                                               # habit2:
+                    self.st.setdefault("gained", {})[peer] = now                       # habit2:
+                    self.mind.mem.update_relation(peer, 1, "провели время вместе")
                 self.mind.mem.remember(f"Сегодня провёл с {peer} больше {self.cfg['together_minutes']} мин рядом.", 2)
-                self.mind.mem.add_event("social_together", {"peer": peer, "minutes": int(tg[peer] / 60)})
-                self.mind.write_decision({"type": "social", "event": "together", "peer": peer})
-                log.info("время вместе с %s: отношение +1", peer)
+                self.mind.mem.add_event("social_together", {"peer": peer, "minutes": int(tg[peer] / 60),
+                                                            "gain": gain})             # habit2:
+                self.mind.write_decision({"type": "social", "event": "together", "peer": peer, "gain": gain})
+                log.info("время вместе с %s: отношение %s", peer, "+1" if gain else "без изменений (привыкание)")
                 self.save()
+
+    def together_gain(self, peer, now):                                                # habit2: ORG-096, Т-41
+        """1 — «вместе» ещё растит отношение: affinity < together_cap и прошлый +1 был ≥ together_every_days назад."""
+        if self.affinity(peer) >= self.cfg["together_cap"]:
+            return 0
+        last = (self.st.get("gained") or {}).get(peer)
+        if last is not None and now - last < self.cfg["together_every_days"] * 86400:
+            return 0
+        return 1

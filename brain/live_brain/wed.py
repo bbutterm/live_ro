@@ -2,7 +2,8 @@
 
 Ступени пары (kv wed.pairs, событие wed_stage при смене):
     friends  — affinity ≥ friend_min;
-    close    — affinity ≥ close_min и эпизодов пары (episodes.with_peer, сумма times) ≥ close_episodes;
+    close    — affinity ≥ close_min и сумма весов эпизодов пары (episodes.weight_with, с затуханием) ≥ close_weight
+               (ORG-096, Т-41: близость — итог общей истории, а не числа встреч);
     engaged  — помолвка (kv wed.engaged), married — брак (кольцо 2634/2635 в рюкзаке или объявление сервера).
 Помолвка — символический ритуал жителей, целиком в мозге (сервер о ней не знает):
     предложение шёпотом [wed:ask] жителю рядом (≤ near_cells), на ступени close, affinity ≥ engage_min, не в ссоре,
@@ -18,6 +19,8 @@
 браке. Обряд у NPC здесь только описан (ceremony_plan) — исполнителя нет, goals.json wed.ceremony: false:
 дорого и необратимо (развода для игрока нет — Divorce Staff только для GM, развод — @divorce). Достигнуты уровень
 и сумма — wed_ready один раз: «обряд — решение владельца».
+Мало жителей (ORG-096): при жителях (ctx.peers + я) < min_residents (4) модуль спит — ступени не считает, не
+предлагает, на [wed:ask] отвечает [wed:no:few]. Уже существующие помолвка и брак не разрываются из-за этого правила.
 Выключатель: BRAIN_DISABLE=wed или goals.json "wed": {"enabled": false}.
 """
 import logging
@@ -31,9 +34,9 @@ log = logging.getLogger("wed")
 
 TAG = re.compile(r"\[wed:(ask|yes|no|off)(?::([a-z]{1,12}))?\]")
 DEFAULTS = {
-    "enabled": True, "ceremony": False, "friend_min": 3, "close_min": 7, "close_episodes": 10, "engage_min": 8,
+    "enabled": True, "ceremony": False, "friend_min": 3, "close_min": 7, "close_weight": 20, "engage_min": 8,
     "break_below": 3, "check_hours": 12, "answer_seconds": 120, "ask_gap_days": 14, "max_asks": 2, "near_cells": 8,
-    "gift_zeny": 500, "keep_zeny": 5000, "tick_seconds": 30, "level": 45,
+    "gift_zeny": 500, "keep_zeny": 5000, "tick_seconds": 30, "level": 45, "min_residents": 4,   # habit2:
     "fee": {"m": 1300000, "f": 1200000}, "ring_price": 45000, "outfit_price": 43000,
 }
 STAGES = ("none", "friends", "close", "engaged", "married")
@@ -123,6 +126,20 @@ class Wed:
             return 0
         return sum(int(e.get("times") or 1) for e in ep.with_peer(peer))
 
+    def bond(self, peer):                                                         # habit2: ORG-096
+        """Вес общей истории пары: сумма весов эпизодов с затуханием (episodes.weight_with); нет модуля — 0."""
+        ep = getattr(self.mind, "episodes", None)
+        if ep is None or not hasattr(ep, "weight_with"):
+            return 0.0
+        return ep.weight_with(peer, self.clock())
+
+    def residents(self):                                                          # habit2:
+        return len(self.mind.ctx.peers) + 1
+
+    def asleep(self):                                                             # habit2: мало жителей — спит,
+        """Жителей меньше min_residents и нет помолвки/брака: при двоих каждый — единственный «другой»."""
+        return self.residents() < self.cfg["min_residents"] and not (self.fiance or self.spouse)
+
     def note(self, kind, text, importance, **data):
         self.mind.mem.remember(text, importance)
         self.mind.mem.add_event(kind, data)
@@ -162,7 +179,7 @@ class Wed:
         if peer == self.fiance:
             return "engaged"
         a = self.affinity(peer)
-        if a >= self.cfg["close_min"] and self.episodes(peer) >= self.cfg["close_episodes"]:
+        if a >= self.cfg["close_min"] and self.bond(peer) >= self.cfg["close_weight"]:    # habit2: вес, не число
             return "close"
         if a >= self.cfg["friend_min"]:
             return "friends"
@@ -191,6 +208,12 @@ class Wed:
         self.next_tick = now + self.cfg["tick_seconds"]
         state = self.mind.state or {}
         if not getattr(self.mind, "fresh_state", True) or state.get("dead") or not state.get("lv"):
+            return
+        if self.asleep():                                                         # habit2: ORG-096
+            if now - self.st.get("asleep_noted", 0) >= 3600:
+                self.st["asleep_noted"] = now
+                self.mind.write_decision({"type": "wed", "event": "wed_asleep", "residents": self.residents(),
+                                          "min": self.cfg["min_residents"]})
             return
         changed = self.update_stages(now)
         changed |= self.check_married(state, now)
@@ -302,6 +325,8 @@ class Wed:
     def refuse_why(self, sender):
         if self.spouse or (self.fiance and self.fiance != sender):
             return "taken"
+        if self.asleep():                                                         # habit2: мало жителей
+            return "few"
         if self.quarrel(sender) or self.affinity(sender) < 0:
             return "quarrel"
         if self.stage(sender) != "close" or self.affinity(sender) < self.cfg["engage_min"]:

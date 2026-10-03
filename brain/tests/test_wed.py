@@ -26,6 +26,7 @@ BRAIN_DIR = Path(__file__).resolve().parents[1]
 ROOT = BRAIN_DIR.parent
 RATHENA = Path(os.environ.get("LIVE_RO_RATHENA") or ROOT / "upstream" / "rathena")
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
+WORLD["wed"]["min_residents"] = 2          # habit2: механику пары проверяем на двоих (по умолчанию wed спит при < 4)
 
 
 class Clock:
@@ -71,7 +72,7 @@ class Resident:
         m.director = None
         if m.wed is not None:
             m.wed = Wed(m, world, clock=clock, rng=Dice(0.0))
-            m.wed.episodes = lambda peer: 12
+            m.wed.bond = lambda peer: 25
         m.routine.new_day(clock.t)
         m.routine.st.update(mode="town", arrived=True, rest_until=clock.t + 3600, mode_since=clock.t)
         self.clock = clock
@@ -156,11 +157,11 @@ class TestStages(WedBase):
         self.a.love("Vera", 4)
         self.a.tick()
         self.assertEqual(self.a.w.stage("Vera"), "friends")
-        self.a.love("Vera", 4)                                   # 8, эпизодов 12
+        self.a.love("Vera", 4)                                   # 8, вес эпизодов 25
         self.a.tick()
         self.assertEqual(self.a.w.stage("Vera"), "close")
         self.assertEqual([e["stage"] for e in self.a.events("wed_stage")], ["friends", "close"])
-        self.a.w.episodes = lambda peer: 3                       # мало общих эпизодов — только друзья
+        self.a.w.bond = lambda peer: 19                          # общей истории мало (< 20) — только друзья
         self.assertEqual(self.a.w.stage("Vera"), "friends")
 
     def test_no_ask_without_close(self):
