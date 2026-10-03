@@ -9,3 +9,6 @@ package Globals; push @EXPORT_OK, qw($currentChatRoom %chatRooms); our ($current
 package Globals; push @EXPORT_OK, qw(%guild $charID); our (%guild, $charID); 1;
 # achieve: достижения сервера (brainBridge achievement_*, ORG-080) — $achievementList (id -> запись) и %achievements (таблица)
 package Globals; push @EXPORT_OK, qw($achievementList %achievements); our ($achievementList, %achievements); 1;
+# buying: скупка (плагин buyer, ORG-036) — флаг и списки скупок OpenKore (src/Globals.pm: misc, config, state)
+package Globals; push @EXPORT_OK, qw($buyershopstarted %buyer_shop @selfBuyerItemList @buyerListsID %buyerLists $buyerPriceLimit);
+our ($buyershopstarted, %buyer_shop, @selfBuyerItemList, @buyerListsID, %buyerLists, $buyerPriceLimit); 1;

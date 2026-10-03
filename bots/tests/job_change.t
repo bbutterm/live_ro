@@ -217,4 +217,24 @@ ok(lastEvent()->{ok} && lastEvent()->{stage} eq 'first_job', 'профессия
 	ok(!grep({ /^conf / } @Commands::ran), 'второй раз не возвращает');
 }
 
+# ---- buying: ввод строки и числа в диалоге (Mr. Hugh, npc/merchants/buying_shops.txt:221, :126) ----
+{
+	%jobChange::run = ();
+	($ok, $why) = jobChange::start({id => 9, steps => [{do => 'talk', x => 58, y => 52, input_text => 'Bram; drop'}]});
+	ok(!$ok && $why =~ /ввод/, 'ввод только буквы, цифры, пробел');
+	($ok) = jobChange::start({id => 9, path => 'buying', stage => 'license', success => {text => 'approved'},
+		steps => [{do => 'talk', x => 58, y => 52, input_text => 'Bram',
+		           answers => [{text => 'Learn how to open Bulk Buyer Shop'}]}]});
+	ok($ok, 'этап с вводом начат');
+	$Globals::field = FakeField->new('alberta_in');
+	$Globals::char->{pos_to} = {x => 58, y => 50};
+	@Commands::ran = ();
+	tick();
+	is_deeply([ran()], ['talknpc 58 52'], 'к Mr. Hugh');
+	Plugins::call('packet/npc_talk_text', {ID => 9});
+	is_deeply([ran()], ['talk text Bram'], 'input .@name$ -> talk text');
+	Plugins::call('packet/npc_talk_number', {ID => 9});
+	ok(!lastEvent()->{ok} && lastEvent()->{reason} =~ /число/, 'число не из сценария — провал этапа');
+}
+
 done_testing();
