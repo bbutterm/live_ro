@@ -13,6 +13,9 @@ persona.dream (+PERSONA_BONUS) и случайности U(0, 0.25). Мечта 
               state.guild (по пакету сервера);                                            sociability; social
     rich      скопить состояние: зени в кармане + банк (kv savings.bank, ORG-073) — четверть, половина, вся цель;
                                                                                           greed; wealth
+    wedding   свадьба rAthena с женихом/невестой (ORG-062, wed.py): уровень 45, копилка на плату, кольцо и наряд,
+              обряд у епископа (брак — кольцо или объявление сервера); только помолвленным разнополой парой.
+              Помолвка один раз сбрасывает мечту другого вида, разрыв — уходит сама.  sociability; social
 Недоступный шаблон пропускается: нужен модуль (collection, pets, guild), жители (guild), или мечта уже исполнена
 (второй профессией, с питомцем, в гильдии, окрестности обойдены).
 
@@ -64,7 +67,9 @@ DREAMS = {
     "pet": {"traits": {"generosity": 0.6, "sociability": 0.4}, "need": "care", "aims": ("help",)},
     "guild": {"traits": {"sociability": 1.0}, "need": "social", "aims": ("friend",)},
     "rich": {"traits": {"greed": 1.0}, "need": "wealth", "aims": ("zeny",)},
+    "wedding": {"traits": {"sociability": 1.0}, "need": "social", "aims": ("level", "zeny")},   # wed: ORG-062
 }
+WED_BONUS = 1.0                    # wed: помолвленные выбирают свадьбу первой
 PHRASES = {   # ≤ 60 символов без метки
     "dream": ["Знаешь, о чём мечтаю? {dream}.",
               "У меня мечта: {dream}. Этап {stage} из {stages}.",
@@ -188,6 +193,9 @@ class Dream:
             return 1 if (state.get("guild") or {}).get("name") else 0
         if metric == "wealth":
             return int(state.get("zeny") or 0) + self.bank()
+        if metric == "married":                                              # wed: брак по факту (wed.py)
+            wed = getattr(self.mind, "wed", None)                            # wed:
+            return 1 if wed and wed.married(state) else 0                    # wed:
         if metric == "places_new":
             return sum(1 for v in (self.mind.mem.get("places") or {}).values() if isinstance(v, dict) and v.get("first"))
         return 0
@@ -266,6 +274,17 @@ class Dream:
                     "stages": [{"text": f"состояние {target // 4} зени", "metric": "wealth", "target": target // 4},
                                {"text": f"состояние {target // 2} зени", "metric": "wealth", "target": target // 2},
                                {"text": f"состояние {target} зени", "metric": "wealth", "target": target}]}
+        if kind == "wedding":                                                # wed: ORG-062 мечта пары
+            wed = getattr(self.mind, "wed", None)                            # wed:
+            t = wed.terms() if wed else None                                 # wed:
+            if not t:                                                        # wed:
+                return None                                                  # wed:
+            short = f"свадьба с {t['peer']}"                                 # wed:
+            return {"kind": kind, "text": f"сыграть свадьбу с {t['peer']}", "short": short, "params": t,   # wed:
+                    "stages": [{"text": f"уровень {t['level']}", "metric": "lv", "target": t["level"]},   # wed:
+                               {"text": f"скопить {t['cost']} зени на свадьбу", "metric": "wealth",       # wed:
+                                "target": t["cost"]},                                                      # wed:
+                               {"text": "обряд у епископа в соборе", "metric": "married", "target": 1}]}  # wed:
         return None
 
     def choose(self, state, exclude=()):
@@ -280,6 +299,7 @@ class Dream:
                 continue
             score = sum(w * t.get(trait, 0.5) for trait, w in tpl["traits"].items()) / sum(tpl["traits"].values())
             score += self.rng.uniform(0, 0.25) + (PERSONA_BONUS if favorite == kind else 0)
+            score += WED_BONUS if kind == "wedding" else 0                   # wed:
             scored.append((score, kind, d))
         scored.sort(key=lambda x: (-x[0], x[1]))
         return [d for _, _, d in scored]
@@ -355,6 +375,9 @@ class Dream:
             return f"путь ушёл в сторону: я {job}"
         if kind == "guild" and not [x for x in self.mind.ctx.peers if x != state.get("name")]:
             return "рядом нет жителей для гильдии"
+        why = self.wed_turn(st, state)                                       # wed: ORG-062
+        if why:                                                              # wed:
+            return why                                                       # wed:
         week = now - 7 * 86400
         if kind == "explorer" and self.mind.mem.count_events("died", max(week, st["since"])) >= DEATHS_TURN:
             return f"за неделю {DEATHS_TURN}+ смертей — дальние поля не для меня"
@@ -364,9 +387,25 @@ class Dream:
                                             (max(week, st["since"]),)).fetchall()
             if best and any(best in r[0] for r in rows):
                 return f"поссорился(ась) с лучшим другом {best}"
-        if now - st.get("moved", st["since"]) >= self.cfg["stale_days"] * 86400:
+        if kind != "wedding" and now - st.get("moved", st["since"]) >= self.cfg["stale_days"] * 86400:   # wed: копят месяцами
             return f"{self.cfg['stale_days']} дней без нового этапа"
         return None
+
+    def wed_turn(self, st, state):                                           # wed: ORG-062
+        """Свадьба: разрыв — мечта уходит; помолвка — другая мечта уступает свадьбе (один раз за помолвку)."""
+        wed = getattr(self.mind, "wed", None)
+        if st["kind"] == "wedding":
+            t = wed.terms() if wed else None
+            if wed and wed.married(state):
+                return None                                                  # последний этап засчитает брак
+            if not t or t["peer"] != (st.get("params") or {}).get("peer"):
+                return "помолвки больше нет"
+            return None
+        t = wed.terms() if wed else None
+        if not t:
+            return None
+        tried = any(h.get("kind") == "wedding" and h.get("until", 0) >= t["since"] for h in st.get("history") or [])
+        return None if tried else f"помолвка с {t['peer']} — теперь общая мечта: свадьба"
 
     def best_friend(self):
         peers = [p for p in self.mind.ctx.peers if p != (self.mind.state or {}).get("name")]
@@ -425,6 +464,8 @@ class Dream:
             text = f"отложить {step} зени на мечту"
         elif metric == "pet_days":
             return None                   # дни идут сами — не цель недели
+        elif metric == "married":         # wed: обряд — решение владельца, не цель недели
+            return None
         elif step:
             step = min(step, left)
             text = texts[metric].format(n=step)
@@ -456,6 +497,8 @@ class Dream:
             return 0, None
         if st["kind"] == "rich":
             return int(st["params"]["target"]), st["short"]
+        if st["kind"] == "wedding":                                          # wed: плата, кольцо, наряд
+            return int(st["params"]["cost"]), st["short"]
         return int(self.cfg["save"].get(st["kind"]) or 0), st["short"]
 
     # ---------- тема разговора и промпт ----------

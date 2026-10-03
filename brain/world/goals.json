@@ -272,5 +272,26 @@
     "max_members": 3,
     "gap_days": 7,
     "halt_save": true
+  },
+  "wed": {
+    "_comment": "ORG-062 помолвка и свадьба (brain/live_brain/wed.py, dream.py вид wedding, docs/LIFE.md). Ступени пары по фактам: friends (affinity >= friend_min), close (>= close_min и эпизодов пары >= close_episodes). Помолвка — символический ритуал жителей ([wed:ask] рядом в городе днём, согласие по характеру, подарок письмом gift_zeny; не больше max_asks предложений одному жителю). Ссора или affinity < break_below — разрыв. Свадьба rAthena (npc/other/marriage.txt: ур. 45, Diamond Ring, 1 300 000 / 1 200 000 z, наряд, разнополая пара) — мечта пары в dream.py с копилкой. ceremony: обряд у NPC НЕ исполняется (исполнителя нет) — дорого и необратимо, развод только GM-командой @divorce; решение владельца.",
+    "enabled": true,
+    "ceremony": false,
+    "friend_min": 3, "close_min": 7, "close_episodes": 10, "engage_min": 8, "break_below": 3,
+    "check_hours": 12, "ask_gap_days": 14, "max_asks": 2, "near_cells": 8,
+    "gift_zeny": 500, "keep_zeny": 5000,
+    "level": 45, "fee": {"m": 1300000, "f": 1200000}, "ring_price": 45000, "outfit_price": 43000
+  },
+  "legacy": {
+    "_comment": "ORG-083 наследие и уход на покой (brain/live_brain/legacy.py, docs/LIFE.md §5, docs/POPULATION.md). ВЫКЛЮЧЕНО: уход жителя — решение владельца. Условие (любое): мечта сбылась за >= long_dream_days дней, уровень >= elder_level, возраст >= elder_days (born в roster.json, иначе первое событие памяти); не во время помолвки без брака, опеки ученика, занятости тела. Наследник: ученик, затем супруг/жених, затем друг (affinity >= heir_min). Посылки почтой: карты и зени сверх keep_zeny (<= max_zeny), не больше max_parcels писем. Затем прощальная глава мемуаров, событие legacy_retired и совет в scripts/lab census: active: false в roster.json ставит владелец. Мозг процессы, реестр и БД не трогает.",
+    "enabled": false,
+    "check_hours": 24, "elder_level": 90, "elder_days": 90, "long_dream_days": 30,
+    "heir_min": 4, "keep_zeny": 20000, "max_zeny": 100000, "max_parcels": 3
+  },
+  "fest": {
+    "_comment": "ORG-087 реакция жителей на штатные ивенты rAthena (brain/live_brain/fest.py, docs/WORLD_EVENTS.md). Сами ивенты на сервере НЕ включены: готовый конфиг server/conf/optional/events_custom.txt (грибная охота каждый час, маскарад каждые 2 ч) — решение владельца. Объявление сервера -> fest_seen и тема fest; gather — идти к месту ивента в своём городе, если тело свободно, HP >= min_hp и по характеру (chance_min + chance_trait * max(curiosity, sociability)); опасные и GM-ивенты (devil_square, cluckers, mvp_ladder) — только разговор.",
+    "enabled": true,
+    "gather": true,
+    "min_hp": 60, "chance_min": 0.3, "chance_trait": 0.6
   }
 }

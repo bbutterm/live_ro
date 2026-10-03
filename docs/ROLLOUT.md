@@ -165,7 +165,7 @@ grep -h '"source": "<модуль>"' $L/state/bot0*/decisions.jsonl | tail      
 перезапускаются).
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,wed,fest
 ```
 Включены остаются: `career`, `routine`, `economy`, `party`, `activity`, `bonds`, `crew`, `pets`, `social`, `rumors`,
 `society`, `aims`, `world_bus` (база №14–16) и пассивные летописцы `collection`, `places`, `bestiary`, `achieve`,
@@ -183,7 +183,7 @@ Andrew; `achieve`: события `achievement_list`, если пакет при
 ### Этап 1 — внутренний мир без новых действий
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest
 ```
 Включаются: `mood`, `calendar`, `crowd`, `habits`, `dream`. Ни одного нового действия моста — только мотивы, выбор
 занятий и окраска фраз.
@@ -195,7 +195,7 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episod
 ### Этап 2 — речь между жителями
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,savings
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,savings,fest
 ```
 Включаются: `episodes`, `gossip`, `rivalry`, `director`, `mentor`. Всё — шёпоты жителю (или чат группы у `rivalry`).
 Смотреть: `grep -h '"action": "whisper"' …decisions.jsonl | wc -l` по дням против этапа 1; метки `[gossip:`,
@@ -291,7 +291,7 @@ BRAIN_DISABLE=
 
 Первый прогон — строка этапа 0:
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,wed,fest
 ```
 Почему так, а не «всё по умолчанию» (по умолчанию включено 38 модулей реестра из 44):
 - **Неизвестна сама база.** Отчётов по №10–16 нет; на VPS последний проверенный код — cbeb2a9. Если включить всё,
@@ -319,3 +319,9 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episod
 `goals.json` (`git diff`); по каждому включённому модулю — «подтверждено / не наблюдалось / провал» с выдержкой
 `decisions.jsonl`/`console.log`; `report`, `chronicle`, `resources` за день; число смертей, шёпотов, сделок против
 этапа 0; ручные вмешательства (цель — 0); решение «прошло / откат».
+
+### Дополнение (слияние ORG-062/083/087)
+Модули `wed` (помолвка: шёпоты, подарок 500z письмом) и `fest` (реакция на ивенты сервера: идёт к месту ивента) включены
+по умолчанию, поэтому добавлены в строки `BRAIN_DISABLE` этапов 0–1; `fest` — ещё и этапа 2. Включать `wed` — на этапе 2
+(шёпоты между жителями), `fest` — на этапе 3 (тело в городе) и только если ивенты включены на сервере
+(`server/conf/optional/events_custom.txt`, решение владельца). `legacy` выключен (`goals.json legacy.enabled: false`).
