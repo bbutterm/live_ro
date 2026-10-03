@@ -9,13 +9,10 @@
     "лучше узнать жителей Пронтеры",
     "научиться уверенно путешествовать"
   ],
-  "hunt_maps": [
-    "prt_fild08",
-    "prt_fild07",
-    "prt_fild05"
-  ],
+  "hunt_maps": ["pay_dun00"],
   "greeting": "Vera на месте. Arkady, как ты?",
   "routine": {
+    "town": {"map": "payon", "x": 161, "y": 58},
     "session_minutes": [
       50,
       80

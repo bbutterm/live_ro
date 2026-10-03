@@ -24,7 +24,8 @@ $Globals::char = FakeChar->new(jobID => 4, skills => {
 Plugins::call('mainLoop_post');
 is($combatProfile::current{class}, 'Acolyte', 'профиль по номеру профессии');
 is($c->{partySkill_0}, 'AL_HEAL', 'лечение группы — первый слот');
-is($c->{partySkill_0_target_hp}, '< 60%', 'условие HP цели');
+is($c->{partySkill_0_target_hp}, '< 80%', 'условие HP цели — политика VPS');
+is($c->{partySkill_0_aggressives}, '>= 0', 'Heal не требует атакующих лекаря врагов');
 is($c->{partySkill_0_sp}, '> 15%', 'условие SP');
 is($c->{partySkill_0_maxDist}, 9, 'дистанция');
 is($c->{partySkill_1}, 'AL_BLESSING', 'бафф группы');

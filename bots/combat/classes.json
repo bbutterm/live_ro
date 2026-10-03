@@ -147,7 +147,7 @@
         {"skill": "AL_INCAGI", "sp": "> 40%", "timeout": 10, "whenStatusInactive": "Increase AGI", "inLockOnly": 1}
       ],
       "party": [
-        {"skill": "AL_HEAL", "target_hp": "< 60%", "sp": "> 15%", "maxDist": 9, "timeout": 2},
+        {"skill": "AL_HEAL", "target_hp": "< 80%", "sp": "> 15%", "aggressives": ">= 0", "maxDist": 9, "timeout": 2},
         {"skill": "AL_BLESSING", "sp": "> 50%", "maxDist": 9, "timeout": 20, "target_whenStatusInactive": "Blessing"},
         {"skill": "AL_INCAGI", "sp": "> 50%", "maxDist": 9, "timeout": 20, "target_whenStatusInactive": "Increase AGI"}
       ]

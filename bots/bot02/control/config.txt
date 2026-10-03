@@ -215,7 +215,7 @@ cartMaxWeight 7900
 itemsTakeGreed 0
 itemsCheckWeight 1
 
-lockMap prt_fild08
+lockMap pay_dun00
 lockMap_x
 lockMap_y
 lockMap_randX
@@ -759,7 +759,7 @@ useSelf_item 506, 525 {
 
 # live_ro: экономика — докупать красные зелья у торговца Пронтеры (rAthena: prt_in,126,76 Tool Dealer).
 buyAuto Red Potion {
-	npc prt_in 126 76
+	npc payon 159 96
 	npc_steps b
 	isMarket 0
 	standpoint
@@ -801,7 +801,7 @@ buyAuto Pet Food {
 # npc/re/merchants/Dealer_Update.txt:169: prt_in,126,76; 400z). Выключен: травник (brain/live_brain/herbal.py) включает его
 # действием craft_setup {bottles: N} (maxAmount N, minAmount N-1) и выключает после поездки. В игре не проверено.
 buyAuto Empty Bottle {
-	npc prt_in 126 76
+	npc payon 159 96
 	npc_steps b
 	isMarket 0
 	standpoint
@@ -820,7 +820,7 @@ buyAuto Empty Bottle {
 
 # live_ro: продавать лут, когда рюкзак заполнен на itemsMaxWeight_sellOrStore (48%).
 sellAuto 1
-sellAuto_npc prt_in 126 76
+sellAuto_npc payon 159 96
 sellAuto_standpoint
 sellAuto_distance 5
 sellAuto_maxDistance
@@ -830,7 +830,7 @@ sellAuto_npc_steps s
 # плата 40z). На склад идут карты и руда (плагин economy) и всё, что помечено storage в items_control.
 storageAuto 1
 storageAuto_onStart 0
-storageAuto_npc prontera 146 89
+storageAuto_npc payon 181 104
 storageAuto_standpoint
 storageAuto_distance 4
 storageAuto_maxDistance

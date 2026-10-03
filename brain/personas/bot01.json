@@ -9,13 +9,10 @@
     "накопить зеней на хорошее снаряжение",
     "не умирать по глупости"
   ],
-  "hunt_maps": [
-    "prt_fild08",
-    "prt_fild07",
-    "prt_fild05"
-  ],
+  "hunt_maps": ["pay_dun00"],
   "greeting": "Arkady снова на поле. Кто тут по мою душу?",
   "routine": {
+    "town": {"map": "payon", "x": 161, "y": 58},
     "session_minutes": [
       70,
       110
