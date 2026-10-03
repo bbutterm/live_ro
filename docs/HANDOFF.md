@@ -1327,3 +1327,56 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 ### Что прислать
 `docs/qa/HERMES-<sha7>.md`: шаг 0, пункты 1–8 этого задания и 1–7 задания №15, `scripts/lab resources`,
 `scripts/lab chronicle` за день, ручные вмешательства (цель — 0).
+
+## Задание №17: первый прогон ночного кода — этап 0 из docs/ROLLOUT.md
+
+**Ветка:** `claude/brain-routine`. **Commit:** из сообщения разработчика. Заменяет №16 по выкладке; проверяемые пункты
+№14–16 остаются (они и есть этап 0). Полный план включения — [`ROLLOUT.md`](ROLLOUT.md), этапы 0–7. За ночь добавлено
+~50 модулей мозга и плагины; **в игре ничего не проверено** — поэтому первый прогон почти всё новое выключает.
+Правила те же: login/char/map не перезапускать, без SQL/GM/ручного respawn, БД не трогать, `start_point`, гильдию,
+ивенты, свадьбу, спарринг, `auto_job_change`, `auto_hunt_maps` не включать (решения владельца).
+
+### Что изменилось для тела и оператора (даже на этапе 0)
+- **Мост и мозг — вместе.** Новые плагины в `sys.txt`: `pets`, `refine`, `spar`, `buyer` (все спят без команды мозга).
+  `scripts/lab doctor` должен видеть их без ошибок загрузки.
+- **Таблицы переходов renewal** — `bots/common/tables/portals.txt` через `!include` в профиле, `field_*` в `servers.txt`
+  (izlude, полигон, Морокко через Kafra). `portalRecord` — как в профиле (решение владельца, см. ROLLOUT).
+- **Точка отдыха Пронтеры перенесена** с фонтана (156,185) в западный квартал **106,188** (`goals.json routine.town`,
+  риск «все у фонтана»). Проверить маршрут: `Calculating route` без `Unable to calculate`.
+- **Память мозга: миграция схемы v3** (индекс) — при первом старте мозг сам делает `memory.sqlite.bak-v2`. Перед стартом —
+  `cp -a $LAB_ROOT/state $LAB_ROOT/state.before-rollout`.
+- **Команды оператора** (`scripts/lab plan/ask`, сторож) теперь не теряются: мозг забирает inbox атомарным rename, задержка ~1 с.
+- `items_control`: раздел питомцев (яйца, инкубатор, Pet Food не продаются); `config.txt`: выключенные блоки `buyAuto`
+  (Pet Food, Empty Bottle).
+
+### Шаг 0 — код, проверки, строка этапа 0
+```sh
+cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
+git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
+python3 scripts/check.py && python3 scripts/check_skill_lists.py
+(cd brain && python3 -m unittest discover -s tests)          # OK, ~1100 (часть skipped без PyYAML/upstream)
+for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # 12 файлов, без not ok
+scripts/lab down; cp -a $LAB_ROOT/state $LAB_ROOT/state.before-rollout
+# в secrets/live_ro.env:
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,drift,scars,flaw,treat
+scripts/lab modules bot01        # должно совпасть со строкой: выключенные — «BRAIN_DISABLE»
+scripts/lab doctor; scripts/lab resources
+scripts/lab up && sleep 120; scripts/lab report
+```
+
+### Что проверить (этап 0, сутки)
+1. Пункты №16 (1–8) и №15 (1–7) — база: распорядок, сон, город, группа и crew, питомцы, вывески, эмоции.
+2. Плагины загружены, ошибок в `console.log` нет; продажа не уносит зелья, крылья, предметы Sir Andrew, раздел питомцев.
+3. Маршруты: Tool Dealer `prt_in 126,76`, Kafra `prontera 146,89`, точка отдыха 106,188, карты охоты.
+4. Пассивные модули молчат при первом запуске: `collection`, `places`, `bestiary`, `achieve` (если пришёл список
+   достижений — строки «Achievement» в console.log), `memoir`.
+5. Новые инструменты: `scripts/lab organic all` (метрики M1–M22, пороги — гипотеза), `scripts/lab dashboard`,
+   `scripts/lab census`, `scripts/lab episode`.
+
+**Прошло:** ручных вмешательств 0, Traceback 0, оба жителя сутки живут (охота → город → сон → охота). **Откат:** ошибки
+плагинов/маршрутов — `git checkout --detach <commit задания №16>`, `cp -a state.before-rollout state` (память v3
+совместима и со старым кодом). Дальше — этап 1 по ROLLOUT, только после отчёта.
+
+### Что прислать
+`docs/qa/HERMES-<sha7>.md`: шаг 0 (вывод), `scripts/lab modules bot01`, пункты 1–5, `scripts/lab organic all`,
+`scripts/lab resources`, `scripts/lab chronicle` за сутки, ручные вмешательства (цель — 0).
