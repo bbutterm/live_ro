@@ -53,6 +53,7 @@ SAVE_EVERY = 30
 MAX_TICK_GAP = 5          # не засчитывать охоту за время, когда мозг не работал
 STUCK_SEC = 300           # на охоте без движения и без боя дольше — «застрял»
 UNSTUCK_GAP = 120         # не чаще раза в 2 минуты
+GROW_ALERT_SEC = 7 * 86400  # soak: оповещение growth с теми же советами — раз в неделю
 LADDER_WINDOW = 1800      # лестница выхода из застревания (AUT-038/042): попытки за 30 мин
 STUCK_BAN = 1800          # после неудачной лестницы карта исключается на 30 мин
 DEATH_WINDOW = 1800       # 3 смерти за 30 минут — отдых и карта полегче
@@ -788,9 +789,13 @@ class Routine:
         self.note("routine_grow_advice", f"Мои места охоты слишком лёгкие для {state['lv']} уровня; по атласу "
                                          f"подойдут: {', '.join(advice)}.", 2)
         alert = getattr(self.mind, "alert", None)
-        if alert:
-            alert("growth", f"{state.get('name')}: lv {state['lv']}, места охоты слишком лёгкие; атлас советует "
-                            f"{', '.join(advice)} (включить карты и auto_hunt_maps)", every=86400)
+        # soak: оповещение владельцу — когда советы изменились, иначе раз в неделю (было раз в сутки у каждого)
+        told = self.mind.mem.get("grow_alert") or {}         # kv: распорядок (st) сбрасывается каждый день
+        now = self.clock()
+        if alert and (told.get("advice") != list(advice) or now - told.get("ts", 0) >= GROW_ALERT_SEC):
+            if alert("growth", f"{state.get('name')}: lv {state['lv']}, места охоты слишком лёгкие; атлас советует "
+                               f"{', '.join(advice)} (включить карты и auto_hunt_maps)", every=0):
+                self.mind.mem.set("grow_alert", {"advice": list(advice), "ts": now})
 
     def prefer(self, hunt_map):
         """Модель выбрала карту: в охоте — сразу, в городе — на следующую сессию."""

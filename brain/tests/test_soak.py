@@ -336,3 +336,33 @@ class PartySignalTest(BodyMixin, unittest.TestCase):
             self.party_state()
             self.clock.t += party.LEADER_FRESH
             self.assertIsNone(p.leader_wants(), "устарел")
+
+
+class GrowthAlertTest(BodyMixin, unittest.TestCase):
+    """soak: оповещение growth («места охоты слишком лёгкие») приходило владельцу каждые сутки у каждого жителя
+    (40 за 14 суток у Ilsa). Теперь — при смене советов, иначе раз в неделю."""
+
+    def test_weekly_unless_advice_changes(self):
+        m, r = self.mind, self.mind.routine
+        self.state()
+        r.new_day(self.clock.t)
+        alerts = []
+        orig = m.alert
+
+        def alert(kind, text, every=3600):
+            ok = orig(kind, text, every=every)
+            if ok and kind == "growth":
+                alerts.append(self.clock.t)
+            return ok
+        m.alert = alert
+        advice = ["gef_fild02", "prt_fild10"]
+        maps = unittest.mock.Mock(advice=lambda *a, **kw: list(advice))
+        for day in range(14):
+            r.st["day"] = f"d{day}"
+            r.grow(maps)
+            self.clock.t += 86400
+        self.assertEqual(len(alerts), 2, "те же советы — раз в неделю (было 14)")
+        advice.append("gef_fild09")
+        r.st["day"] = "d14"
+        r.grow(maps)
+        self.assertEqual(len(alerts), 3, "советы изменились — сразу")
