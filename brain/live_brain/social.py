@@ -78,7 +78,8 @@ DEFAULTS = {
     "emote_gap_seconds": 120,
     "friend_affinity": 3,
     "together_minutes": 30,
-    "together_cap": 6,          # soak: «просто рядом» поднимает отношение не выше этого (остальное — поступки)
+    "together_cap": 6,
+    "burst_per_minute": 4,      # soak: реплик всем жителям за 60 с; лишние — в очередь, не теряются          # soak: «просто рядом» поднимает отношение не выше этого (остальное — поступки)
     "night_hours": [1, 7],
     "night_factor": 3,
 }
@@ -131,6 +132,7 @@ class Social:
         self.spot = None                  # имя текущей точки интереса или None (исходная точка отдыха)
         self.sat = False
         self.queue = []                   # отложенные ответы: (когда, кому, тема, шаг)
+        self.said_at = []                 # soak: когда ушли последние реплики (лимит burst_per_minute)
         self.near_since = {}              # житель -> с какого времени рядом
         self.last_tick = None
         self.last_emote = 0.0
@@ -586,6 +588,13 @@ class Social:
             self.mind.mem.add_event("social_said", {"peer": peer, "topic": "cold", "fact": False})
             self.save()
             return True
+        # soak: при 3+ жителях реакции веером (уровни всех после сна, приветы, соболезнования) давали 13+ шёпотов
+        # за минуту (replay.invariants SPAM_PER_MIN); сверх burst_per_minute реплика ждёт в очереди ответов
+        self.said_at = [t for t in self.said_at if now - t < 60]
+        cap = self.cfg.get("burst_per_minute") or 0
+        if cap and len(self.said_at) >= cap:
+            self.queue.append((self.said_at[0] + 60 + self.rng.uniform(1, 5), peer, topic, step, key))
+            return False
         text, extra = self.compose(peer, topic, key, now)
         if text is None and topic not in ("hello", "bye", "weather"):
             topic, key = "weather", None
@@ -594,6 +603,7 @@ class Social:
             return False
         tag = f"[chat:{topic}:{step}]"
         self.st["pairs"][peer] = now
+        self.said_at.append(now)                            # soak:
         await self.mind.execute([{"action": "whisper", "to": peer, "text": f"{text} {tag}"}],
                                 source="social", reason=f"общение: {topic} жителю {peer}")
         self.mind.mem.add_event("social_said", {"peer": peer, "topic": topic, "fact": topic in FACT_TOPICS,
