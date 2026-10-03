@@ -5,6 +5,7 @@
 import asyncio
 import sys
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from tests.test_integration import BodyMixin
@@ -282,3 +283,56 @@ class OfflinePeerTest(BodyMixin, unittest.TestCase):
         asyncio.run(m.rumors.share("prt_fild08", "rich"))
         self.assertEqual(self.whispers(), [])
         self.assertEqual(m.rumors.all()["rich:prt_fild08"]["told_to"], [], "расскажу при встрече")
+
+
+class PartySignalTest(BodyMixin, unittest.TestCase):
+    """soak: лидер слал [party:hunt|town:] каждому участнику раз в 300 с (340–390 шёпотов в сутки). Теперь — при
+    смене режима, при входе участника в игру и подтверждением раз в ANNOUNCE (30 мин); LEADER_FRESH согласован."""
+
+    def party_state(self, vera_online=True):
+        vera = {"name": "Vera", "online": vera_online, "map": "prontera", "x": 157, "y": 186, "hp_pct": 100}
+        me = dict(vera, name="Arkady", online=True, x=156, y=185, leader=True)
+        self.state(party="LR_Arkady", party_members=[me, vera])
+
+    def signals(self):
+        return [a["text"] for a in self.sent if a["action"] == "whisper" and a["text"].startswith("[party:")]
+
+    def run_for(self, seconds, vera_online=True, step=10):
+        for _ in range(seconds // step):
+            self.clock.t += step
+            self.party_state(vera_online)
+            asyncio.run(self.mind.party.tick())
+
+    def test_leader_signals_on_change_and_rarely(self):
+        from live_brain import party
+        self.assertGreater(party.LEADER_FRESH, party.ANNOUNCE, "подтверждение приходит раньше, чем режим устареет")
+        r = self.mind.routine
+        r.st["mode"] = "town"
+        self.run_for(2 * 3600)
+        self.assertEqual(len(self.signals()), 2 * 3600 // party.ANNOUNCE, self.signals())   # было 24 (раз в 300 с)
+        n = len(self.signals())
+        r.st["mode"] = "hunt"
+        r.st["lock_map"] = "prt_fild08"
+        self.run_for(10)
+        self.assertEqual(len(self.signals()), n + 1, "смена режима — сразу")
+        self.assertTrue(self.signals()[-1].startswith("[party:hunt:"))
+        n = len(self.signals())
+        self.run_for(600, vera_online=False)
+        self.assertEqual(len(self.signals()), n, "офлайн участнику не шлю")
+        self.run_for(10)
+        self.assertEqual(len(self.signals()), n + 1, "вернулся в игру — сказать сразу")
+
+    def test_follower_drops_mode_of_offline_leader(self):
+        from live_brain import party
+        p = self.mind.party
+        p.st.update(confirmed=True, leader_mode={"mode": "hunt", "map": "prt_fild08", "ts": self.clock.t})
+        with unittest.mock.patch.object(type(p), "is_leader", new=property(lambda self: False)), \
+                unittest.mock.patch.object(type(p), "leader", new=property(lambda self: "Vera")):
+            self.party_state()
+            self.clock.t += party.ANNOUNCE + 60
+            self.assertEqual(p.leader_wants(), ("hunt", "prt_fild08"), "одно подтверждение пропущено — режим жив")
+            self.party_state(vera_online=False)
+            self.assertIsNone(p.leader_wants(), "лидер офлайн по составу — не веду")
+            self.party_state()
+            self.clock.t += party.LEADER_FRESH
+            self.assertIsNone(p.leader_wants(), "устарел")

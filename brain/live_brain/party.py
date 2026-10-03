@@ -6,7 +6,8 @@
     участник: приглашение LR_<житель> принимает плагин brainBridge сразу (partyAuto не успевает отказать).
     «В группе» — только когда сервер прислал состав: state.party == LR_<лидер> и житель в party_members.
 Совместный режим (AUT-058, 059):
-    лидер шёпотом сообщает режим [party:hunt:<карта>] / [party:town:] — при смене и раз в ANNOUNCE с;
+    лидер шёпотом сообщает режим [party:hunt:<карта>] / [party:town:] — участнику при смене режима, при его входе
+    в игру (или после relog лидера) и подтверждением раз в ANNOUNCE с (soak: было 300 с — 340–390 шёпотов в сутки);
     участник с подтверждённой группой следует режиму лидера (распорядок спрашивает leader_wants());
     на охоте на одной карте участник идёт за лидером (follow).
     Участнику нужно восстановиться — [party:recover:], лидер тоже уходит отдыхать (темп по слабому).
@@ -27,8 +28,9 @@ log = logging.getLogger("party")
 TAG = re.compile(r"\[party:(hunt|town|danger|recover|dead):([a-z0-9_]{0,16})\]")
 CREATE_GAP = 300
 INVITE_GAP = 300
-ANNOUNCE = 300
-LEADER_FRESH = 900        # режим лидера устаревает через 15 мин без повтора
+ANNOUNCE = 1800           # soak: подтверждение режима участнику — раз в 30 мин (смена режима — сразу)
+LEADER_FRESH = 2 * ANNOUNCE + 300   # режим лидера устаревает без повтора: одно потерянное подтверждение — не разрыв;
+                                    # лидер офлайн по составу группы — режим не действует сразу (leader_wants)
 WAIT_DIST = 12
 WAIT_MAX = 180
 HELP_SEC = 60
@@ -188,9 +190,14 @@ class Party:
             key = f"{mode}:{hmap}"
             changed = key != self.st.get("announced")
             for m in self.members():
-                if m.get("online") and (changed or self.due(f"announce:{m['name']}", ANNOUNCE, now)):
+                told = f"told:{m['name']}"                  # soak: что этому участнику сказано (сброс — relog)
+                if not m.get("online"):
+                    self.last.pop(told, None)               # вернётся в игру — скажу сразу
+                    continue
+                if self.last.get(told) != key or self.due(f"announce:{m['name']}", ANNOUNCE, now):
                     await self.signal(m["name"], mode, hmap)
                     self.last[f"announce:{m['name']}"] = now
+                    self.last[told] = key
             if changed:
                 self.st["announced"] = key
                 self.save()
@@ -233,6 +240,9 @@ class Party:
         now = now or self.clock()
         lm = self.st.get("leader_mode")
         if self.is_leader or not lm or not self.st.get("confirmed") or now - lm["ts"] > LEADER_FRESH:
+            return None
+        lead = self.member(self.leader)                     # soak: LEADER_FRESH длинный — офлайн-лидер не ведёт
+        if lead is not None and "online" in lead and not lead["online"]:
             return None
         return lm["mode"], lm.get("map", "")
 
