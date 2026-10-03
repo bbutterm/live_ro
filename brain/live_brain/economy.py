@@ -372,6 +372,9 @@ class Economy:
             self.mind.mem.update_relation(str(to), 1, "помог ему, когда ему не хватало")
             self.note("gift_given", f"Отдал {to} {self.label(item, amount)} — сделка завершена сервером.", 2,
                       peer=to, item=item, amount=amount)
+            if (g or {}).get("treat"):                                                       # sinks: ORG-099
+                self.note("treat_given", f"Угостил(а) {to}: {self.label(item, amount)} ({g['treat']}).", 3,   # sinks:
+                          peer=to, item=item, amount=amount, zeny=g.get("zeny"), occasion=g["treat"])        # sinks:
         else:
             self.note("gift_failed", f"Не получилось передать {to} {self.label(item, amount)}: {event.get('reason')}.",
                       1, peer=to, item=item, amount=amount)

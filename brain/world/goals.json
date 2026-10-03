@@ -194,6 +194,17 @@
     "wear": true,
     "wear_gap_minutes": 10
   },
+  "treat": {
+    "_comment": "sinks: ORG-099 угощение (live_brain/treat.py, docs/ECONOMY.md, ТЗ Т-45): по поводу (день рождения жителя, примирение, выпуск ученика) щедрый житель (generosity ≥ min_generosity) отдаёт другу рядом amount зелий из items, сверх keep и share.keep; стоимость по цене NPC ≤ budget_share зени сверх keep_zeny и копилки; одно угощение на cooldown_days. Действие give — как у взаимопомощи. Выключить — enabled: false или BRAIN_DISABLE=treat.",
+    "enabled": true,
+    "items": [503, 502, 501],
+    "amount": 3,
+    "keep": 5,
+    "budget_share": 0.05,
+    "cooldown_days": 7,
+    "occasion_hours": 24,
+    "min_generosity": 0.3
+  },
   "memoir": {
     "_comment": "dreams: ORG-082 мемуары (live_brain/memoir.py, docs/LIFE.md, scripts/lab memoir БОТ): раз в неделю книга жизни от первого лица по фактам памяти -> state/<bot>/memoir.md. llm=true — окраска глав (один вызов на главу, фильтр дневника diary_only, кэш); по умолчанию выкл.",
     "enabled": true,
