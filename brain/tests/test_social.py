@@ -305,6 +305,8 @@ class SocialTest(unittest.TestCase):
     def test_night_is_quieter(self):
         self.clock.t = at_hour(3)
         self.a.state["sitting"] = False
+        rest = self.a.routine.town                       # ночью сидят у точки отдыха (R2: она не у фонтана)
+        self.a.state.update(x=rest["x"], y=rest["y"])
         self.tick(self.a)
         self.assertEqual(self.a.actions(), [{"action": "sit"}])   # ночью сидят
         self.a.out.clear()

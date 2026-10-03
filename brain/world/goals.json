@@ -13,7 +13,7 @@
     "hunt_hours_per_day": [4, 5],
     "session_minutes": [60, 100],
     "break_minutes": [30, 90],
-    "town": {"map": "prontera", "x": 156, "y": 185, "radius": 3},
+    "town": {"map": "prontera", "x": 106, "y": 188, "radius": 3},
     "town_smalltalk_seconds": 600,
     "sit_in_town": true,
     "vend_in_town": true,
@@ -34,10 +34,10 @@
   },
 
   "market_day": {
-    "_comment": "ORG-071 рыночный день (brain/live_brain/market.py, docs/ECONOMY.md): в день недели weekdays (6 — суббота календаря) пороги рынка, лавки, заказов и вывесок мягче, жители сходятся к точке point (prontera 155,180: клетки ±2 проходимы, NPC не ближе 5, варпы не ближе 20); итог дня — market_day_summary в летописи. Выключить — enabled: false или BRAIN_DISABLE=market_day.",
+    "_comment": "ORG-071 рыночный день (brain/live_brain/market.py, docs/ECONOMY.md): в день недели weekdays (6 — суббота календаря) пороги рынка, лавки, заказов и вывесок мягче, жители сходятся к точке point (prontera 156,120 — рыночная улица на южном тракте, не у фонтана (риск R2 IDEAS2): клетки ±2 проходимы по db/re/map_cache.dat, NPC не ближе 8, варпы не ближе 50); итог дня — market_day_summary в летописи. Выключить — enabled: false или BRAIN_DISABLE=market_day.",
     "enabled": true,
     "weekdays": [6],
-    "point": {"map": "prontera", "x": 155, "y": 180, "label": "к рыночной площади у фонтана"},
+    "point": {"map": "prontera", "x": 156, "y": 120, "label": "к рыночной улице на южном тракте"},
     "point_weight": 6,
     "offer_gap_factor": 0.5,
     "trades_bonus": 4,
@@ -102,7 +102,7 @@
       "tools":    {"map": "prontera", "x": 140, "y": 215, "label": "к лавке Tool Dealer (вход prt04 134,221)"},
       "church":   {"map": "prontera", "x": 237, "y": 310, "label": "к собору (вход prt004 237,317)"}
     },
-    "point_weights": {"fountain": 2, "kafra": 1, "tools": 1, "church": 1},
+    "point_weights": {"fountain": 0.5, "kafra": 1, "tools": 1, "church": 1},
     "join_friend_chance": 0.4,
     "near_cells": 6,
     "pair_gap_minutes": 15,

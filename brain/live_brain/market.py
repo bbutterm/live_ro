@@ -16,9 +16,9 @@ brain/world/calendar.json) жители в городе сходятся к ры
 Исходные значения снимаются при создании модуля и возвращаются в обычный день (модули создаются раньше: Economy,
 Orders, Society, Social стоят выше в modules.MODULES).
 
-Точка market (prontera 155,180, «к рыночной площади у фонтана»): клетки ±2 проходимы (db/re/map_cache.dat), до
-ближайшего NPC ≥ 5 клеток — лавке и чат-комнате мешает NPC ближе min_npc_vendchat_distance 3
-(conf/battle/player.conf:191), до варпов prt03/prt06 ≥ 20 клеток. Модуль кладёт её в копию social.cfg.points.
+Точка market (goals.json market_day.point: prontera 156,120, «к рыночной улице на южном тракте» — не у фонтана, риск
+R2 IDEAS2): клетки ±2 проходимы (db/re/map_cache.dat), до ближайшего NPC 8 клеток — лавке и чат-комнате мешает NPC
+ближе min_npc_vendchat_distance 3 (conf/battle/player.conf:191), до варпов ≥ 50 клеток. Модуль кладёт её в копию social.cfg.points.
 Сбор: в рыночный день, когда житель в режиме town дошёл до отдыха, один раз за день — social.walk_now() (точку
 выбирает обычная прогулка по весам); запись market_day_open. Лавка: Merchant с vend.can, лавка закрыта, тело у
 площади (≤ 3 клетки) — один раз за день сбросить kv econ_shop_ts, economy.maybe_shop в том же такте откроет её здесь.

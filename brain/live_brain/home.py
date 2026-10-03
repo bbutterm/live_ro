@@ -15,7 +15,8 @@ saveMap лишь из списка варпов умения Teleport/Warp Porta
 Когда сохраняться: точка не подтверждена домом, житель в режиме town дошёл до города, тело на карте дома, нет плана
 встречи, сделки, этапа квеста; арбитр разрешает владельца plan (как career). Неудача — повтор через retry_minutes,
 после max_fails подряд — пауза на сутки и оповещение.
-Точка отдыха распорядка (routine.town) — в домашнем городе (rest в homes.json; prontera — фонтан goals.json).
+Точка отдыха распорядка (routine.town) — в домашнем городе: rest в homes.json (prontera — западный квартал, не фонтан:
+риск R2 IDEAS2); rest: null — точка goals.json, если она в доме, иначе точка возрождения.
 Ограничение: точки прогулок social (goals.json social.points) знают только Пронтеру — в другом доме прогулок нет.
 Журнал: decisions.jsonl type home; память — сохранение и возрождение дома; события home_saved / home_respawn.
 """
@@ -80,10 +81,12 @@ class Home:
         return self.saved_map() == self.town
 
     def rest_point(self, default):
-        """Точка отдыха распорядка: в домашнем городе. default — точка goals.json (если она уже в доме — она)."""
-        if default and default.get("map") == self.town:
+        """Точка отдыха распорядка: в домашнем городе. rest из homes.json; без него — default (точка goals.json),
+        если она уже в доме, иначе точка возрождения."""
+        rest = self.rec.get("rest")
+        if not rest and default and default.get("map") == self.town:
             return default
-        rest = self.rec.get("rest") or self.rec["savepoint"]
+        rest = rest or self.rec["savepoint"]
         return {"map": self.town, "x": int(rest["x"]), "y": int(rest["y"]), "radius": int(rest.get("radius", 3))}
 
     def summary(self):

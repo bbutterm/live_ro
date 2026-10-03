@@ -100,10 +100,13 @@ class HomeTest(unittest.TestCase):
         return [json.loads(l) for l in self.dec.read_text().splitlines()
                 if '"home"' in l and json.loads(l).get("event") == event] if self.dec.exists() else []
 
-    def test_default_home_prontera_rest_unchanged(self):
+    def test_default_home_prontera_rest(self):
+        """R2 (IDEAS2): отдых в Пронтере — rest из homes.json (западный квартал), не фонтан вечернего круга."""
         self.make()
         self.assertEqual(self.h.town, "prontera")
-        self.assertEqual(self.mind.routine.town, {"map": "prontera", "x": 156, "y": 185, "radius": 3})
+        rest = HOMES["towns"]["prontera"]["rest"]
+        self.assertEqual(self.mind.routine.town, {"map": "prontera", "x": rest["x"], "y": rest["y"], "radius": 3})
+        self.assertNotEqual((rest["x"], rest["y"]), (156, 185), "не у фонтана")
 
     def test_save_at_kafra_then_confirmed(self):
         self.make()

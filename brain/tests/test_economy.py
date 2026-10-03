@@ -530,8 +530,9 @@ class RoutineVendTest(unittest.TestCase):
         mem = Memory(Path(tmp.name) / "m.sqlite")
         persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
         sent = []
-        state = {"name": "Arkady", "map": "prontera", "x": 156, "y": 185, "lock_map": "prontera",
-                 "lock_x": 156, "lock_y": 185, "dead": False, "vend": {"can": 1, "open": 0}}
+        rest = WORLD["routine"]["town"]      # точка отдыха распорядка (R2: не у фонтана)
+        state = {"name": "Arkady", "map": "prontera", "x": rest["x"], "y": rest["y"], "lock_map": "prontera",
+                 "lock_x": rest["x"], "lock_y": rest["y"], "dead": False, "vend": {"can": 1, "open": 0}}
 
         async def execute(actions, source, reason, protocol=False):
             sent.extend(a["action"] for a in actions)

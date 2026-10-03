@@ -7,7 +7,8 @@
     "\"Save\",\"Use Storage\",\"Use Teleport Service\",\"Rent a Pushcart\",\"Check Other Information\",\"Cancel\"; пункт выбирается",
     "по ТЕКСТУ \"Save\" (плагин jobChange), подтверждение — фраза F_KafEnd functions_kafras.txt:452 \"Your Respawn Point\".",
     "stand — проходимая клетка в 2 клетках от NPC (rAthena map_cache и поле OpenKore, тест test_home); rest — точка отдыха",
-    "распорядка в этом городе (prontera — фонтан goals.json, остальные — у точки возрождения). izlude не включён: поле OpenKore",
+    "распорядка в этом городе (prontera — западный квартал 106,188, тот же, что routine.town в goals.json: не у фонтана —",
+    "риск R2 IDEAS2, фонтан оставлен вечернему кругу; остальные — у точки возрождения). izlude не включён: поле OpenKore",
     "izlude (fields/izlude.fld2.gz) не совпадает по размеру с renewal-картой сервера."
   ],
   "default": "prontera",
@@ -16,7 +17,7 @@
       "npc": {"name": "kaf_prontera5", "x": 146, "y": 89, "src": "npc/kafras/kafras.txt:289"},
       "stand": {"x": 144, "y": 87},
       "savepoint": {"x": 116, "y": 73, "src": "npc/kafras/kafras.txt:299"},
-      "rest": null
+      "rest": {"x": 106, "y": 188}
     },
     "geffen": {
       "npc": {"name": "kaf_geffen", "x": 120, "y": 62, "src": "npc/kafras/kafras.txt:130"},

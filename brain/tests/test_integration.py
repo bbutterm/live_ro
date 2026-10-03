@@ -251,7 +251,8 @@ class BodyOwnershipTest(BodyMixin, unittest.TestCase):
     def test_no_sleep_relog_during_trade_or_mail(self):
         """Сон = relog: посреди сделки или почты не засыпать — уснуть после неё."""
         self.clock.t = datetime(2025, 3, 2, 2, 40, tzinfo=TZ).timestamp()      # окно сна Arkady (с 02:30)
-        self.state()
+        rest = self.mind.routine.town                                          # у точки отдыха (R2: не у фонтана)
+        self.state(x=rest["x"], y=rest["y"], lock_x=rest["x"], lock_y=rest["y"])
         r = self.mind.routine
         r.new_day(self.clock.t, keep_mode="town")
         r.st["arrived"] = True
