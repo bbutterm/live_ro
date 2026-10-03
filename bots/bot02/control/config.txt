@@ -758,7 +758,7 @@ useSelf_item 506, 525 {
 ######## Autostorage/autosell ########
 
 # live_ro: экономика — докупать красные зелья у торговца Пронтеры (rAthena: prt_in,126,76 Tool Dealer).
-buyAuto Red Potion {
+buyAuto 501 {
 	npc payon 159 96
 	npc_steps b
 	isMarket 0
@@ -865,11 +865,11 @@ survival_potions 504,503,502,501,569
 npcTimeResponse
 npcWrongStepsMethod 0
 
-getAuto {
-	minAmount
-	maxAmount
+getAuto 505 {
+	minAmount 0
+	maxAmount 5
 	batchSize
-	passive
+	passive 1
 	dcOnEmpty 0
 	# [checkSelfCondition]
 }

@@ -48,12 +48,12 @@ all 0 0 1
 602 10 1 0 # Butterfly Wing
 601 100 1 0 # Fly Wing
 
-505 0 1 0 # Blue Potion
+505 5 1 0 # Blue Potion
 545 50 1 0 # Condensed Red Potion
 547 50 1 0 # Condensed White Potion
 546 50 1 0 # Condensed Yellow Potion
 506 0 1 0 # Green Potion
-501 25 1 0 # Red Potion
+501 40 1 0 # Red Potion
 502 25 1 0 # Orange Potion
 504 25 1 0  # White Potion
 503 25 1 0 # Yellow potion
