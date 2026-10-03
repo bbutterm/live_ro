@@ -35,6 +35,7 @@ use Plugins;
 use Globals qw($char $field $playersList %config %items_control %currentDeal %outgoingDeal %incomingDeal $shopstarted);
 use Log qw(message warning);
 use Commands;
+use Utils ();
 
 Plugins::register('economy', 'склад ценного лута, передача вещей жителю, лавка', \&onUnload);
 
@@ -168,7 +169,7 @@ sub findPlayer {
 
 sub distanceTo {
 	my ($p) = @_;
-	my ($a, $b) = ($char->{pos}, $p->{pos}); # pos_to — цель движения, не подтверждённое приближение
+	my ($a, $b) = (Utils::calcPosition($char), Utils::calcPosition($p)); # pos — начало шага, pos_to — цель
 	return 999 unless $a && $b;
 	my ($dx, $dy) = (abs($a->{x} - $b->{x}), abs($a->{y} - $b->{y}));
 	return $dx > $dy ? $dx : $dy;

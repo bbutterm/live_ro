@@ -76,6 +76,9 @@ $Globals::char->{pos} = {x => 150, y => 180};
 $Globals::char->{pos_to} = {x => 156, y => 185};
 $vera->{pos} = {x => 156, y => 185};
 is(economy::distanceTo($vera), 6, 'цель маршрута не считается прибытием');
+$Globals::char->{test_position} = {x => 156, y => 185};
+is(economy::distanceTo($vera), 0, 'завершённое движение использует расчёт движка, не начало шага');
+delete $Globals::char->{test_position};
 $Globals::char->{pos_to} = {x => 150, y => 180};
 $Globals::char->{pos} = {x => 150, y => 180};
 
