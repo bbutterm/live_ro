@@ -259,3 +259,28 @@ python3 scripts/test_all_hours.py --hours 0-23 --days 0 -j 8
 ```
 Скрипт сдвигает `time.time()`, `time.localtime()/gmtime()/strftime()` без аргумента и `datetime.now()`;
 время в bash (`date`) и mtime файлов не сдвигаются.
+
+**Нестабильные тесты (flaky).** Полный прогон должен быть зелёным каждый раз, в том числе под нагрузкой.
+Известные причины падений и их исправления (комментарии `# flaky:` / `timefix:` в коде):
+- общая `world.sqlite` создавалась двумя процессами — `world_bus.enable_wal`;
+- зависимость от часа запуска — `tests/worldtime.py`, `scripts/test_all_hours.py`;
+- потеря команды оператора: `read_inbox` читал inbox и делал unlink, а писатель (`>>` в `scripts/lab`,
+  `open("a")`) создаёт файл раньше, чем пишет, — команда уходила в удалённый inode. Падал
+  `test_plans.MeetingTest` (~1 из 20 прогонов). Теперь inbox забирается rename в `<inbox>.taken` и
+  читается на следующем тике (тест `test_inbox.test_command_written_after_open_not_lost`);
+- тесты с процессом мозга ждали фиксированный `sleep(1–3 с)` — теперь `BrainHarness.wait_for(условие)`
+  ждёт записи в журнале с таймаутом; `FakeOpenRouter.jev_reply` сбрасывается в `setUp`.
+
+Если тест «то падает, то нет», ищите: `sleep` вместо ожидания условия, общий файл или атрибут класса
+между тестами, случайность без seed, реальное время, гонку между процессами. Не ослабляйте проверку —
+ждите условие или изолируйте состояние. Проверка — много полных прогонов параллельно (это заодно нагрузка),
+логи с `-v`, чтобы видеть имя упавшего теста:
+```sh
+cd brain && seq 1 15 | xargs -P 3 -I{} sh -c 'python3 -m unittest discover -s tests -v > /tmp/run-{}.log 2>&1; echo "{} $?"'
+grep -l "^FAILED" /tmp/run-*.log; grep -h -A15 "^FAIL:\|^ERROR:" /tmp/run-*.log
+python3 ../scripts/test_all_hours.py --hours 0,4,8,12,16,20,1.5,23.5 --days 0,3 -j 2   # время запуска
+```
+Статистика (2026-10, 4 CPU): до исправления — 1 падение на 20 полных прогонов (4 параллельно) и 1 на
+24 прогона `tests.test_plans`; после — 0 на 18 полных прогонов (3 параллельно), 0 на 24 прогона тестов
+с процессом мозга (`test_plans`, `test_inbox`, `test_brain`, `test_limits`, `test_rules`) под нагрузкой
+и 0 на 10 сдвигах времени.
