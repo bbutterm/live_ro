@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import resources
+from . import drift as drift_mod                                        # traits: ORG-092
 from . import interests as interests_mod                                # interests: ORG-103
 from .atlas import ARCHETYPES
 from .economy import MERCHANTS
@@ -106,6 +107,8 @@ def read_memory(db_path, now, names):
             rels = {n: int(a or 0) for n, a in db.execute("SELECT name, affinity FROM relations") if n in names}
         except sqlite3.OperationalError:
             rels = {}
+        row = db.execute("SELECT value FROM kv WHERE key = 'traits_drift'").fetchone()   # traits: ORG-092
+        drift = _loads(row[0]) if row else None                                         # traits:
         row = db.execute("SELECT value FROM kv WHERE key = 'legacy'").fetchone()   # legacy: ORG-083
         legacy = _loads(row[0]) if row else None                                  # legacy:
     except sqlite3.DatabaseError:
@@ -113,7 +116,8 @@ def read_memory(db_path, now, names):
     finally:
         db.close()
     return {"state": st if isinstance(st, dict) else {}, "activities": acts, "relations": rels,
-            "legacy": legacy if isinstance(legacy, dict) else None}             # legacy:
+            "legacy": legacy if isinstance(legacy, dict) else None,             # legacy:
+            "drift": drift if isinstance(drift, dict) else None}                # traits: ORG-092
 
 
 def persona_interests(repo, persona):                                   # interests: ORG-103
@@ -142,6 +146,7 @@ def residents(repo, lab_root, lab_bots, now):
             "activities": sorted(((mem or {}).get("activities") or {}).items(), key=lambda kv: -kv[1])[:3],
             "legacy": (mem or {}).get("legacy"),                                  # legacy: ORG-083
             "interests": persona_interests(repo, o.get("persona") or bot),        # interests: ORG-103
+            "drift": drift_mod.report_line((mem or {}).get("drift")) if (mem or {}).get("drift") else None,  # traits:
         })
     return out
 
@@ -342,6 +347,8 @@ def render(data):
         lines.append(head + (f" [{'; '.join(flags)}]" if flags else ""))
         if r.get("interests"):                                              # interests: ORG-103
             lines.append("      интересы: " + ", ".join(interests_mod.RU.get(x, x) for x in r["interests"]))
+        if r.get("drift"):                                                  # traits: ORG-092
+            lines.append("      " + r["drift"])                                 # traits:
         if r["relations"]:
             lines.append("      связи: " + ", ".join(f"{n} {a:+d}" for n, a in sorted(r["relations"].items())))
         if r["activities"]:

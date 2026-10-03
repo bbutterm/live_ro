@@ -38,6 +38,7 @@ from .trek import CHRONICLE_LINES as TREK_LINES          # trek: дальний 
 from .wed import CHRONICLE_LINES as WED_LINES            # wed: помолвка и свадьба (ORG-062)
 from .legacy import CHRONICLE_LINES as LEGACY_LINES      # legacy: наследие и уход на покой (ORG-083)
 from .fest import CHRONICLE_LINES as FEST_LINES          # events2: ивенты rAthena (ORG-087)
+from .drift import CHRONICLE_LINES as DRIFT_LINES      # traits: дрейф характера (ORG-092)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
@@ -75,6 +76,7 @@ LINES = {
     **ACHIEVE_LINES,                                      # achieve: ORG-080
     **HERBAL_LINES,                                       # herbal: ORG-076
     **ARROW_LINES,                                        # arrows: ORG-075
+    **DRIFT_LINES,                                        # traits: ORG-092
     **TREK_LINES,                                         # trek: ORG-078
     **WED_LINES,                                          # wed: ORG-062
     **LEGACY_LINES,                                       # legacy: ORG-083

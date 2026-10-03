@@ -25,12 +25,14 @@ from . import episode as episode_mod                    # serial: серия н�
 from .chronicle import LINES, day_bounds
 from .economy import metrics_from_rows
 from .bestiary import world_bestiary                    # bestiary: общий бестиарий (ORG-077)
+from .drift import report_line as drift_report              # traits: ORG-092
 from . import organic as organic_mod                    # organic: ORG-113/114 метрики v2, «кто вёл тело»
 
 WORLD = Path(__file__).resolve().parents[1] / "world"
 KV_KEYS = ("last_state", "status", "needs", "aims", "activity", "mood", "pets", "party", "crew", "society",
            "career", "resources", "routine", "collection")   # collect: альбом карт (ORG-074) для метрик
 KV_KEYS += ("bestiary",)    # bestiary: ORG-077 — виды для метрики
+KV_KEYS += ("traits_drift",)  # traits: ORG-092 — строка «характер» в карточке
 MAX_EVENTS = 400            # лента дня: последние N строк (файл остаётся < 1 МБ)
 MAX_CARD_TEXT = 160
 STATUS_RU = {"SLEEPING": "спит", "OFFLINE": "не в сети", "DEAD": "погиб", "ESCAPING": "спасается",
@@ -114,6 +116,7 @@ def read_resident(db_path, start, end, now, labels):
         "mood": kv.get("mood") if isinstance(kv.get("mood"), str) else None,
         "needs": top, "aims": aims, "pet": pet.get("name") or pet.get("type"),
         "career": (kv.get("career") or {}).get("text"),
+        "drift": drift_report(kv.get("traits_drift")) if kv.get("traits_drift") else None,   # traits: ORG-092
         "party": bool((kv.get("party") or {}).get("confirmed")),
         "crew_map": ((kv.get("crew") or {}).get("decided") or {}).get("map"),
         "quarrels": quarrels,
@@ -320,6 +323,8 @@ def _card(r):
     ]
     if r["mood"]:
         rows.append(("настроение", esc(r["mood"], 60)))
+    if r.get("drift"):                                                     # traits: ORG-092
+        rows.append(("характер", esc(r["drift"].replace("характер: ", ""), MAX_CARD_TEXT)))   # traits:
     rows.append(("мотивы", needs))
     if r["pet"]:
         rows.append(("питомец", esc(r["pet"])))

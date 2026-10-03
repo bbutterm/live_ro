@@ -64,6 +64,7 @@ legacy (ORG-083) — тик 232 (после memoir), без поля промп�
 fest (ORG-087) — тик 122, событие kill 76; объявление — из rumors.on_world_msg (on_announce).  # events2:
 buying (ORG-036) — тик 27, события job_change_result 18 (consume "result", path buying), buyer_* 18 (own), промпт 145;
 по умолчанию выключен.  # buying:
+drift (ORG-092) — тик 3 (раз в 10 мин, сдвиг раз в неделю), без меток и событий.  # traits:
 attention (ORG-109) — без тика, меток и событий: бюджет инициатив, строки `# attention:` в говорящих модулях.  # attention:
 """
 import inspect
@@ -85,6 +86,7 @@ from .habits import Habits                # habits: ORG-068
 from .guild import Guild
 from .home import Home
 from .mood import Mood
+from .drift import TraitDrift          # traits: ORG-092 дрейф характера (до всех, кто читает черты)
 from .interests import Interests   # interests: ORG-103 увлечения жителя (без тика)
 from .attention import Attention       # attention: ORG-109 бюджет внимания
 from .party import Party
@@ -126,6 +128,7 @@ from .world_calendar import WorldCalendar
 # Activities/Explorer — распорядок). Новый модуль — одна строка здесь, остальное — атрибуты его класса.
 MODULES = (
     Home,              # EARLY: до SafetyPolicy
+    TraitDrift,        # traits: ORG-092 — первым: применяет сдвиг черт к persona.traits и needs.t
     Mood,
     Interests,         # interests: ORG-103 — до хобби-модулей (они читают mind.interests при вызове)
     Attention,         # attention: ORG-109 после mood (только создание; routine/calendar читает при вызове)

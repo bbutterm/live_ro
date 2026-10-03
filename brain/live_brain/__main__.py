@@ -17,6 +17,7 @@ from .bridge import Bridge
 from .budget import SharedBudget
 from .config import Settings, load_env, load_persona
 from . import interests as interests_mod                                       # interests: ORG-103
+from .drift import report_line as drift_report                                # traits: ORG-092
 from .wealth import report_line as wealth_line                                 # wealth: ORG-100
 from .economy import economy_metrics
 from .gate import RuleGate, make_fast_gate
@@ -152,6 +153,9 @@ def report(args, memory, state_dir):
     if mood:                                                                   # talk:
         print(f"   настроение: {mood.get('label')} ({mood.get('value', 0):+.2f})"  # talk:
               + (": " + ", ".join(mood["reasons"]) if mood.get("reasons") else ""))   # talk:
+    drift_line = drift_report(memory.get("traits_drift"))                     # traits: ORG-092
+    if drift_line:                                                             # traits:
+        print("   " + drift_line)                                              # traits:
     try:                                                                       # interests: ORG-103
         mine = interests_mod.interests(load_persona(args.persona))             # interests:
         print("   интересы: " + ", ".join(interests_mod.RU.get(x, x) for x in mine))   # interests:

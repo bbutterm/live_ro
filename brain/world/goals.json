@@ -172,6 +172,15 @@
     "cache_seconds": 600
   },
 
+  "drift": {
+    "_comment": "traits: ORG-092 дрейф характера (brain/live_brain/drift.py, docs/LIFE.md, ТЗ Т-47): раз в week_days черты сдвигаются от фактов недели (смерти, часы охоты, победы над сильными, подарки/лечение, разговоры, новые места); шаг ≤ step_max, сдвиг ≤ limit от persona.traits, якорь anchor тянет к врождённой. Хранится в kv traits_drift, персона-файл не меняется. Выключить: enabled=false или BRAIN_DISABLE=drift.",
+    "enabled": true,
+    "week_days": 7,
+    "anchor": 0.1,
+    "step_max": 0.05,
+    "limit": 0.2
+  },
+
   "dream": {
     "_comment": "dreams: ORG-081 жизненный путь (live_brain/dream.py, docs/LIFE.md): мечта на месяцы из черт характера, этапы по фактам питают цели недели (aims) и мотивы. stale_days без нового этапа — мечта оставлена; region_hops — окрестности города для мечты explorer; save — цель копилки (ORG-073) по виду мечты, у rich — вся сумма.",
     "enabled": true,

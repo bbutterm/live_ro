@@ -50,6 +50,7 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `home` | дом из `homes.json`, сохранение у Kafra (jobChange `path home`, пункт «Save»), отдых в доме, учёт возрождения | вкл. (выключателя в goals нет) | мир; плагин jobChange; Kafra-диалог по тексту | тело: сам идёт к Kafra и говорит с NPC; точка сохранения в БД персонажа (обратимо новым сохранением) | 3 |
 | `mood` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров | вкл. (`mood.enabled` по умолч. true) | — | действий нет; может приглушить разговоры | 1 |
 | `interests` | увлечения жителя (ORG-103): шанс тем хобби, приручения, экспедиции, выбор мечты × вес интереса | вкл. (`interests.enabled`) | — | действий нет; меняет частоту тем и выбор | 1 |
+| `drift` | дрейф характера (ORG-092): черты сдвигаются раз в неделю от смертей, охоты, подарков, разговоров; ±0.2 от персоны, kv `traits_drift` | вкл. (`drift.enabled`) | — | действий нет; меняет мотивы и риск карты через черты | 1 |
 | `wealth` | мотив `wealth` от копилки мечты и медианы зени мира вместо порога 50 000 (ORG-100) | вкл. (`wealth.enabled`) | шина (медиана), dream | действий нет; меняет выбор занятий | 1 |
 | `attention` | бюджет внимания (ORG-109): суточный запас инициатив речи (social, gossip, rumors, rivalry, mentor, wed, director) от общительности и дел; ответы и протокол — без ограничений | вкл. (`attention.enabled` по умолч. true) | мир | действий нет; может приглушить речь (deny в decisions) | 2 |
 | `calendar` | день недели, праздники, дни рождения → множители мотивов, темы; тихие дни мира (ORG-110, `calendar.json quiet.per_week` 1.5, 0 — выкл.) | вкл. | мир, `calendar.json` | действий нет; меняет выбор занятий; в тихий день меньше речи и вывесок | 1 |
@@ -169,7 +170,7 @@ grep -h '"source": "<модуль>"' $L/state/bot0*/decisions.jsonl | tail      
 перезапускаются).
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,drift
 ```
 Включены остаются: `career`, `routine`, `economy`, `party`, `activity`, `bonds`, `crew`, `pets`, `social`, `rumors`,
 `society`, `aims`, `world_bus` (база №14–16) и пассивные летописцы `collection`, `places`, `bestiary`, `achieve`,
@@ -190,7 +191,7 @@ Andrew; `achieve`: события `achievement_list`, если пакет при
 BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest,attention
 ```
 Включаются: `mood`, `calendar`, `crowd`, `habits`, `dream`, `interests` (ORG-103: веса тем хобби, приручения,
-экспедиций и выбора мечты), `wealth` (ORG-100: мотив денег от копилки и медианы мира). Ни одного нового действия моста — только мотивы, выбор
+экспедиций и выбора мечты), `wealth` (ORG-100: мотив денег от копилки и медианы мира), `drift` (ORG-092: черты от опыта раз в неделю). Ни одного нового действия моста — только мотивы, выбор
 занятий и окраска фраз.
 Смотреть: `report` — «настроение», цель недели/мечта; `type: dream` (`dream_new`) и `type: habits` в decisions;
 разнообразие занятий в `report` (ORG-046); заголовок дня календаря в `chronicle`.
@@ -298,9 +299,9 @@ BRAIN_DISABLE=
 
 Первый прогон — строка этапа 0:
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,drift
 ```
-Почему так, а не «всё по умолчанию» (по умолчанию включено 40 модулей реестра из 46 — с `interests` и `wealth`):
+Почему так, а не «всё по умолчанию» (по умолчанию включено 41 модуль реестра из 47 — с `interests`, `wealth` и `drift`):
 - **Неизвестна сама база.** Отчётов по №10–16 нет; на VPS последний проверенный код — cbeb2a9. Если включить всё,
   любой сбой придётся делить между 30+ модулями и новым телом (мост, таблицы переходов, продажа лута).
 - **`home` ведёт к Kafra** этапом jobChange в первый же отдых — новое движение и диалог с NPC, ещё и меняет точку
