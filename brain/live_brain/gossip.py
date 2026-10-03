@@ -405,6 +405,11 @@ class Gossip:
             key = self.pick(peer, now)
             if not key:
                 continue
+            att = getattr(self.mind, "attention", None)                # attention: ORG-109 бюджет инициатив
+            if att is not None and not att.may("gossip", peer, now):   # attention:
+                continue                                               # attention:
+            if att is not None:                                        # attention:
+                att.spend("gossip", peer, now)                         # attention:
             rec = self.mark_told(peer, key, now)
             await self.send(peer, self.tag_for(rec), f"сплетня жителю {peer} при встрече: {rec['who']} {rec['what']}")
             return

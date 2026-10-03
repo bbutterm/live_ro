@@ -375,6 +375,14 @@ ORG — за «житель живёт: у него свой ритм, мест�
 - **ORG-090 · Т-8 — Дашборд мира.** `dashboard.py`, `scripts/lab dashboard` → `run/dashboard.html`. Тест test_dashboard.
 - **ORG-091 · Т-11 — Сериал-хроника.** `episode.py`, `scripts/lab episode`: серия недели по фактам. Тест test_episode.
 
+## Фаза 9. Органичность v3: из IDEAS2.md (ORG-092…116)
+
+Полные карточки и ТЗ — в [`IDEAS2.md`](IDEAS2.md) (раздел 2 — идеи, раздел 3 — ТЗ Т-38…Т-42).
+
+- **ORG-109 · Т-38 — Бюджет внимания.** Статус: **код, в игре не проверено.** `attention.py`: суточный бюджет
+  инициатив речи от общительности и дел, ответы и протокол не ограничиваются, строки `# attention:` в social, gossip,
+  rumors, rivalry, mentor, wed, director. Тест test_attention.
+
 ---
 
 ## Сводка по фазам и зависимостям

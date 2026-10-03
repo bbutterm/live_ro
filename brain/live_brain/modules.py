@@ -62,6 +62,7 @@ trek (ORG-078) — метка [trek:] 45, событие job_change_result 17 (c
 wed (ORG-062) — метка [wed:] 57, тик 143, промпт 227; объявление о браке — из rumors.on_world_msg.  # wed:
 legacy (ORG-083) — тик 232 (после memoir), без поля промпта; по умолчанию выключен.  # legacy:
 fest (ORG-087) — тик 122, событие kill 76; объявление — из rumors.on_world_msg (on_announce).  # events2:
+attention (ORG-109) — без тика, меток и событий: бюджет инициатив, строки `# attention:` в говорящих модулях.  # attention:
 """
 import inspect
 import re
@@ -82,6 +83,7 @@ from .habits import Habits                # habits: ORG-068
 from .guild import Guild
 from .home import Home
 from .mood import Mood
+from .attention import Attention       # attention: ORG-109 бюджет внимания
 from .party import Party
 from .pets import Pets
 from .rivalry import Rivalry
@@ -120,6 +122,7 @@ from .world_calendar import WorldCalendar
 MODULES = (
     Home,              # EARLY: до SafetyPolicy
     Mood,
+    Attention,         # attention: ORG-109 после mood (только создание; routine/calendar читает при вызове)
     WorldCalendar,
     Career,
     Routine,

@@ -107,6 +107,7 @@ survival > plan > economy > party > routine), `plans.py` (план встреч�
 |---|---|---|---|---|
 | `home.py` | дом и точка сохранения у Kafra, отдых распорядка в доме (ORG-014) | `BRAIN_DISABLE=home` | вкл. | мир |
 | `mood.py` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров (ORG-064) | `BRAIN_DISABLE=mood`; `mood.enabled` (умолч. true) | вкл. | — |
+| `attention.py` | бюджет внимания: суточный запас инициатив речи от общительности и дел, ответы и протокол не ограничиваются (ORG-109) | `BRAIN_DISABLE=attention`; `attention.enabled` (умолч. true) | вкл. | мир |
 | `world_calendar.py` | день недели, праздники, дни рождения — множитель мотивов, темы разговора (ORG-059) | `BRAIN_DISABLE=calendar`; `calendar.enabled` (умолч. true) | вкл. | мир |
 | `career.py` | цель прогрессии и этапы смены профессии (сам идёт к NPC только при `progression.auto_job_change`) | `BRAIN_DISABLE=career` | вкл. | мир |
 | `routine.py` | распорядок: охота/отдых, сон по хронотипу, восстановление, застревание, лавка в городе | `BRAIN_DISABLE=routine` | вкл. | мир |

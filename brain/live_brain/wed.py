@@ -266,6 +266,11 @@ class Wed:
             self.save()
             self.mind.write_decision({"type": "wed", "event": "wed_not_today", "peer": peer})
             return
+        att = getattr(self.mind, "attention", None)                    # attention: ORG-109 (цена 0 — учёт)
+        if att is not None and not att.may("wed", peer, now):          # attention:
+            return                                                     # attention:
+        if att is not None:                                            # attention:
+            att.spend("wed", peer, now)                                # attention:
         self.st["asked"][peer] = self.asks(peer, now) + [now]
         self.st["pending"] = {"peer": peer, "since": now}
         self.save()

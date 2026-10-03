@@ -80,6 +80,16 @@
     "gifts_per_day": 6
   },
 
+  "attention": {
+    "_comment": "ORG-109 бюджет внимания (brain/live_brain/attention.py, docs/SOCIETY.md): суточный бюджет инициатив речи = base по общительности × настроение + жетоны за дела (deed_bonus, не больше deed_cap) + 1 за каждые hunt_minutes охоты; цены costs; pair_max — разговоров с одним жителем, начатых мной, за день. Ответы и протокол не ограничиваются. Выключить — enabled: false или BRAIN_DISABLE=attention.",
+    "enabled": true,
+    "base": [3, 12],
+    "deed_bonus": 1,
+    "deed_cap": 6,
+    "hunt_minutes": 90,
+    "pair_max": 4,
+    "costs": {"chat": 1, "gossip": 1, "rumor": 0.5, "rival": 1, "mentor": 0.5, "wed": 0, "director": 0}
+  },
   "social": {
     "_comment": "Социальная жизнь без LLM (brain/live_brain/social.py). Точки — проходимые клетки prontera (проверено по db/re/map_cache.dat rAthena, все 25 клеток ±2 проходимы, до варпов не ближе 5 клеток). Персональные переопределения — поле social в personas, фразы — поле phrases.",
     "enabled": true,

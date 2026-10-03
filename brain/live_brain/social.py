@@ -539,6 +539,11 @@ class Social:
                 continue                          # одновременно не начинать: первым заговаривает меньшее имя
             if now - last < gap or any(q[1] == peer for q in self.queue):
                 continue
+            att = getattr(self.mind, "attention", None)                # attention: ORG-109 бюджет инициатив
+            if att is not None and not att.may("chat", peer, now):     # attention: как будто пауза не прошла
+                continue                                               # attention:
+            if att is not None:                                        # attention:
+                att.spend("chat", peer, now)                           # attention:
             self.st["pairs"][peer] = now
             if self.llm():
                 f = self.facts(peer, now)

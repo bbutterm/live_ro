@@ -22,6 +22,7 @@ from .routine import load_world
 from .memory import Memory
 from .mind import Mind
 from . import resources  # ops: ORG-047 замер ресурсов
+from . import attention as attention_mod  # attention: ORG-109 строка report
 from .collection import album_size  # collect: ORG-074 метрика альбома
 from .bestiary import species as bestiary_species   # bestiary: ORG-077 метрика бестиария
 
@@ -145,6 +146,9 @@ def report(args, memory, state_dir):
     if mood:                                                                   # talk:
         print(f"   настроение: {mood.get('label')} ({mood.get('value', 0):+.2f})"  # talk:
               + (": " + ", ".join(mood["reasons"]) if mood.get("reasons") else ""))   # talk:
+    att_line = attention_mod.report_line(memory.get("attention"))              # attention: ORG-109
+    if att_line:                                                               # attention:
+        print(att_line)                                                        # attention:
     party = memory.get("party") or {}
     if party:
         print(f"   группа: {'подтверждена сервером' if party.get('confirmed') else 'нет'}; "

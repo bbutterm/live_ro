@@ -263,6 +263,9 @@ class Rivalry:
         """Подначка сопернику. True — отправлена. Отношения не трогает."""
         if self.quarrel(name) or self.said_today(now) >= self.cfg["max_per_day"]:
             return False
+        att = getattr(self.mind, "attention", None)                    # attention: ORG-109 бюджет инициатив
+        if att is not None and not att.may("rival", name, now):        # attention:
+            return False                                               # attention:
         text = self.phrase(key, who=name, **fmt)
         s = getattr(self.mind, "s", None)
         crew, party = getattr(self.mind, "crew", None), getattr(self.mind, "party", None)
@@ -277,6 +280,8 @@ class Rivalry:
                                     source="rivalry", reason=f"соперничество: {key} жителю {name}")
             sent = True
         if sent:
+            if att is not None:                                        # attention:
+                att.spend("rival", name, now)                          # attention:
             self.st["said"] = {"day": self.day(now), "n": self.said_today(now) + 1}
             self.save()
             self.mind.mem.add_event("rival_said", {"peer": name, "key": key})

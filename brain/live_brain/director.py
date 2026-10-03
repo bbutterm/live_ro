@@ -337,6 +337,11 @@ class Director:
         rumors = getattr(self.mind, "rumors", None)
         if rumors is None:
             return False
+        att = getattr(self.mind, "attention", None)                    # attention: ORG-109 (цена 0 — учёт)
+        if att is not None and not att.may("director", None):          # attention:
+            return False                                               # attention:
+        if att is not None:                                            # attention:
+            att.spend("director", None)                                # attention:
         if params.get("src") == "own":
             await rumors.share(params["map"], "rich")
             return True

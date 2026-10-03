@@ -49,6 +49,7 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 |---|---|---|---|---|---|
 | `home` | дом из `homes.json`, сохранение у Kafra (jobChange `path home`, пункт «Save»), отдых в доме, учёт возрождения | вкл. (выключателя в goals нет) | мир; плагин jobChange; Kafra-диалог по тексту | тело: сам идёт к Kafra и говорит с NPC; точка сохранения в БД персонажа (обратимо новым сохранением) | 3 |
 | `mood` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров | вкл. (`mood.enabled` по умолч. true) | — | действий нет; может приглушить разговоры | 1 |
+| `attention` | бюджет внимания (ORG-109): суточный запас инициатив речи (social, gossip, rumors, rivalry, mentor, wed, director) от общительности и дел; ответы и протокол — без ограничений | вкл. (`attention.enabled` по умолч. true) | мир | действий нет; может приглушить речь (deny в decisions) | 2 |
 | `calendar` | день недели, праздники, дни рождения → множители мотивов, темы | вкл. | мир, `calendar.json` | действий нет; меняет выбор занятий | 1 |
 | `career` | цель прогрессии в report/промпт; этап jobChange — только при `progression.auto_job_change` | вкл., авто-смена **выкл.** | мир; jobChange (при флаге) | при флаге — необратимая смена профессии | 0 (флаг — 7) |
 | `routine` | распорядок: охота/отдых/сон (`relog`)/сервис/лавка, застревание | вкл. | мир; lockMap, sitAuto_idle, relog | тело; сон через relog → возможен «still recognizes» | 0 |
@@ -165,7 +166,7 @@ grep -h '"source": "<модуль>"' $L/state/bot0*/decisions.jsonl | tail      
 перезапускаются).
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,wed,fest
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,wed,fest,attention
 ```
 Включены остаются: `career`, `routine`, `economy`, `party`, `activity`, `bonds`, `crew`, `pets`, `social`, `rumors`,
 `society`, `aims`, `world_bus` (база №14–16) и пассивные летописцы `collection`, `places`, `bestiary`, `achieve`,
@@ -183,7 +184,7 @@ Andrew; `achieve`: события `achievement_list`, если пакет при
 ### Этап 1 — внутренний мир без новых действий
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest,attention
 ```
 Включаются: `mood`, `calendar`, `crowd`, `habits`, `dream`. Ни одного нового действия моста — только мотивы, выбор
 занятий и окраска фраз.
@@ -198,6 +199,8 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episod
 BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,savings,fest
 ```
 Включаются: `episodes`, `gossip`, `rivalry`, `director`, `mentor`. Всё — шёпоты жителю (или чат группы у `rivalry`).
+Вместе с речью включается `attention` (бюджет внимания ORG-109): `report` — строка «внимание», отказы
+`type: attention` в decisions. Откат — `BRAIN_DISABLE=...,attention` (речь как без бюджета).
 Смотреть: `grep -h '"action": "whisper"' …decisions.jsonl | wc -l` по дням против этапа 1; метки `[gossip:`,
 `[mentor:`, `[info:` в `console.log`; `rival_overtook` в `chronicle`; режиссёр — `type: director`, раздел в
 `dashboard`. `mentor`: Vera — «новичок», если её уровень < 20 и Arkady выше на 15+; иначе модуль спит — «не наблюдалось».
@@ -291,7 +294,7 @@ BRAIN_DISABLE=
 
 Первый прогон — строка этапа 0:
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,wed,fest
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,wed,fest,attention
 ```
 Почему так, а не «всё по умолчанию» (по умолчанию включено 38 модулей реестра из 44):
 - **Неизвестна сама база.** Отчётов по №10–16 нет; на VPS последний проверенный код — cbeb2a9. Если включить всё,
