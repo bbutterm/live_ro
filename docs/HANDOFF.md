@@ -1345,6 +1345,8 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
   риск «все у фонтана»). Проверить маршрут: `Calculating route` без `Unable to calculate`.
 - **Память мозга: миграция схемы v3** (индекс) — при первом старте мозг сам делает `memory.sqlite.bak-v2`. Перед стартом —
   `cp -a $LAB_ROOT/state $LAB_ROOT/state.before-rollout`.
+- **Разогрев после входа в игру:** социальные и хобби-модули молчат первые 1–2 мин после подключения тела (WARMUP),
+  сигналы группы `[party:hunt|town:]` — при смене режима и раз в 30 мин (было 5 мин), шёпоты офлайн-жителям не шлются.
 - **Команды оператора** (`scripts/lab plan/ask`, сторож) теперь не теряются: мозг забирает inbox атомарным rename, задержка ~1 с.
 - `items_control`: раздел питомцев (яйца, инкубатор, Pet Food не продаются); `config.txt`: выключенные блоки `buyAuto`
   (Pet Food, Empty Bottle).
@@ -1354,7 +1356,7 @@ scripts/lab down; scripts/lab up && sleep 120; scripts/lab report
 cd /opt/ro-bot-lab/src/live_ro-qa; export LAB_ROOT=/opt/ro-bot-lab
 git fetch origin && git checkout --detach <COMMIT> && git submodule update --init --recursive && git rev-parse HEAD
 python3 scripts/check.py && python3 scripts/check_skill_lists.py
-(cd brain && python3 -m unittest discover -s tests)          # OK, ~1100 (часть skipped без PyYAML/upstream)
+(cd brain && python3 -m unittest discover -s tests)          # OK, ~1140 (часть skipped без PyYAML/upstream)
 for t in bots/tests/*.t; do perl -Ibots/tests/stubs $t | tail -1; done   # 12 файлов, без not ok
 scripts/lab down; cp -a $LAB_ROOT/state $LAB_ROOT/state.before-rollout
 # в secrets/live_ro.env:
