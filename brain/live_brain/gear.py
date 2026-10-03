@@ -96,6 +96,7 @@ class Gear:
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "gear", "gear", "gear", False, "world"
     REQUIRES = ("economy",)                     # keep_zeny и занятость тела — от экономики
     TICK_ORDER = 148                            # после копилки (147), до целей недели (150)
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TICK_EVERY = 30
     PROMPT = [("снаряжение", "summary", 137)]   # рядом с копилкой (135)
 

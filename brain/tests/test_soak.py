@@ -166,3 +166,64 @@ class EventScanTest(BodyMixin, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WarmupTest(BodyMixin, unittest.TestCase):
+    """soak: «шторм после пробуждения» — после relog/hello за первую минуту 13–21 действие (приветы, группа,
+    pet_setup, friend_request, соперничество, поздравления, взгляд, вывеска) > SPAM_PER_MIN. Модули с WARMUP
+    (необязательная инициатива) тикают не раньше 60–120 с после первого свежего state, вразнос; служебное — сразу."""
+
+    def ticks(self, attrs):
+        calls = {a: [] for a in attrs}
+        for a in attrs:
+            module = getattr(self.mind, a)
+            orig = module.tick
+
+            def tick(*args, _a=a, _orig=orig, **kw):
+                calls[_a].append(self.clock.t)
+                return _orig(*args, **kw)
+            module.tick = tick
+        return calls
+
+    def test_registry_spreads_warmup(self):
+        from live_brain import modules
+        w = modules.REGISTRY.warmup
+        for attr in ("social", "gaze", "pets", "bonds", "rivalry", "crew", "society", "healer", "rumors"):
+            self.assertIn(attr, w, attr)
+        for attr in ("routine", "party", "economy", "career", "home", "activities"):
+            self.assertNotIn(attr, w, f"{attr}: служебное — без разогрева")
+        self.assertGreaterEqual(min(w.values()), 60)
+        self.assertLessEqual(max(w.values()), 120)
+        self.assertEqual(len(set(w.values())), len(w), "разнесены по времени")
+
+    def test_optional_modules_wait_after_hello(self):
+        m = self.mind
+        calls = self.ticks(["social", "gaze", "pets", "rivalry", "party", "routine"])
+        asyncio.run(m.on_message({"type": "hello", "char": "Arkady"}))
+        self.clock.t += 5
+        t0 = self.clock.t
+        self.state()
+        self.assertEqual(m.awake_at, t0)
+        for _ in range(130):
+            asyncio.run(m.step())
+            self.clock.t += 1
+            self.state()
+        self.assertEqual(calls["routine"][0], t0, "распорядок — без задержки")
+        self.assertEqual(calls["party"][0], t0, "группа — без задержки")
+        firsts = {a: calls[a][0] - t0 for a in ("social", "gaze", "pets", "rivalry")}
+        for a, d in firsts.items():
+            self.assertGreaterEqual(d, 60, a)
+            self.assertLessEqual(d, 121, a)
+        self.assertEqual(len(set(firsts.values())), 4, f"вразнос: {firsts}")
+
+    def test_no_warmup_without_hello_and_again_after_relog(self):
+        m = self.mind
+        calls = self.ticks(["social"])
+        self.state()
+        asyncio.run(m.step())
+        self.assertEqual(len(calls["social"]), 1, "без hello (перезапуск теста, реплей) — как раньше")
+        asyncio.run(m.on_message({"type": "hello", "char": "Arkady"}))
+        self.clock.t += 600
+        self.state()
+        asyncio.run(m.step())
+        self.assertEqual(len(calls["social"]), 1, "после relog — снова разогрев")

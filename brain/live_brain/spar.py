@@ -63,6 +63,7 @@ class Spar:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "spar", "spar", "spar", False, ("peers",), "world"
     TICK_ORDER = 195                          # после rivalry (190): соперник недели уже выбран
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 47   # после boss (45), до crew (50)
     EVENTS = {"spar_step": {"call": "on_step", "own": True}, "spar_result": {"call": "on_result", "own": True},
               "spar_fall": {"call": None, "own": True}}     # review4: падение на арене (mind.on_event) — не в gate/LLM

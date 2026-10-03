@@ -116,6 +116,7 @@ class Society:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "society", "society", "society", True, ("peers",), "world"
     TICK_ORDER = 130
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     PROMPT = [("в_ссоре", "summary", 310)]
 
     def __init__(self, mind, world=None, clock=None, rng=None):

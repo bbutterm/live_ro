@@ -59,6 +59,7 @@ class MarketDay:
     ATTR, FEATURE, CONFIG, ENABLED = "market_day", "market_day", "market_day", True
     REQUIRES, ARGS = ("world", "calendar", "economy"), "world"
     TICK_ORDER = 15
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
 
     def __init__(self, mind, world=None, clock=None):
         self.mind = mind

@@ -53,6 +53,7 @@ class Gaze:
     ATTR, FEATURE, CONFIG, ENABLED = "gaze", "gaze", "gaze", True
     REQUIRES, ARGS = ("world", "peers", "social"), "world"
     TICK_ORDER = 75
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     ECHO = [("social", r"\[chat:", "on_chat", 20)]
 
     def __init__(self, mind, world=None, clock=None):

@@ -79,6 +79,7 @@ class Wed:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "wed", "wed", "wed", True, ("peers",), "world"
     TICK_ORDER = 143                          # до dream (145): мечта видит свежую помолвку
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TICK_EVERY = 30             # perf: реестр не зовёт tick до next_tick (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 57   # после mentor (55), до guild (60)
     PROMPT = [("пара", "summary", 227)]       # после мечты (225)

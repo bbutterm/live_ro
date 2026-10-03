@@ -49,6 +49,7 @@ class Pets:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "pets", "pets", "pets", True, ("world",), "config"
     TICK_ORDER = 80
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     EVENT_ORDER = 50
     EVENTS = dict.fromkeys(("pet_tame_result", "pet_hatched", "pet_fed"), {"call": "on_event", "own": True})
 

@@ -55,6 +55,7 @@ class Crew:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, REQUIRES, ARGS = "crew", "crew", "crew", ("party",), "config"
     TICK_ORDER = 90
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 50
     ECHO = [("party", r"\[party:dead:", "on_mate_dead", 20)]          # смерть в группе — в чат группы
     EVENT_ORDER = 10

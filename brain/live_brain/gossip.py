@@ -109,6 +109,7 @@ class Gossip:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "gossip", "gossip", "gossip", True, ("peers",), "world"
     TICK_ORDER = 125                  # после rumors (120)
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 35   # после rumors [info:] (30)
     PROMPT = [("репутация", "summary", 245)]
 

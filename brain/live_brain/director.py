@@ -76,6 +76,7 @@ class Director:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "director", "director", "director", True, ("world",), "world"
     TICK_ORDER = 230
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
 
     def __init__(self, mind, world=None, clock=None, rng=None):
         self.mind = mind

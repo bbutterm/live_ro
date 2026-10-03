@@ -78,6 +78,7 @@ class Strangers:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "strangers", "strangers", "strangers", True, "world"
     TICK_ORDER = 140            # private() и on_whisper() — явно в mind (стык с памятью и gate)
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
 
     def __init__(self, mind, world=None, cfg=None, clock=None, rng=None):
         self.mind = mind

@@ -79,6 +79,7 @@ class Fest:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "fest", "fest", "fest", True, "world"
     TICK_ORDER = 122                          # после rumors (120): объявление уже записано
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TICK_EVERY = 5              # perf: реестр не зовёт tick до next_tick (modules.py)
     EVENTS, EVENT_ORDER = {"kill": "on_kill"}, 76   # после bestiary (75)
     # Поля промпта нет: объявление уже есть в слухах (rumors) и новостях мира.

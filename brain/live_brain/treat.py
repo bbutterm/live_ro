@@ -37,6 +37,7 @@ class Treat:
     ATTR, FEATURE, CONFIG, ENABLED, ARGS = "treat", "treat", "treat", True, "world"
     REQUIRES = ("economy", "peers")             # канал передачи и цены — у экономики; угощать некого — не создаётся
     TICK_ORDER = 149                            # после снаряжения (148), до целей недели (150)
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TICK_EVERY = 30
 
     def __init__(self, mind, world=None, clock=None):

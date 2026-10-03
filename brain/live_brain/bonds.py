@@ -27,6 +27,7 @@ class Bonds:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, REQUIRES = "bonds", "bonds", ("peers",)
     TICK_ORDER = 60
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
 
     def __init__(self, mind, clock=None):
         self.mind = mind

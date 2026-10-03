@@ -53,6 +53,7 @@ class Episodes:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES = "episodes", "episodes", "episodes", True, ("peers",)
     TICK_ORDER = 210
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TICK_EVERY = TICK_SEC       # perf: реестр не зовёт tick до next_tick (modules.py)
 
     def __init__(self, mind, clock=None):

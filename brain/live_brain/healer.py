@@ -81,6 +81,7 @@ class Healer:
     # реестр модулей (modules.py, W8): создание, тик, подписки (метка [heal:], support, просьбы людей)
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "healer", "healer", "healer", True, ("world",), "world"
     TICK_ORDER = 135                         # после society (130): вывеска уже решена в этом тике
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 65  # после guild (60), до party (70)
     EVENTS, EVENT_ORDER = {"support": "on_support", "chat_private": "on_chat", "chat_public": "on_chat"}, 25
 

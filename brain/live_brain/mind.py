@@ -127,6 +127,8 @@ class Mind:
         self.fresh_state = False       # есть ли свежее (моложе STALE_SEC) состояние от тела
         self.state_received = 0.0
         self.epoch = 0                 # номер подключения тела: растёт на каждый hello (AUT-003)
+        self.awake_at = None           # warmup: первый свежий state после hello — от него разогрев модулей (WARMUP)
+        self.awake_wait = False        # warmup: hello был, свежего state после него ещё нет
         self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
         self.plans = PlanExecutor(self, PlanStore(memory.db))
         self.postmortem = Postmortem(self)
@@ -171,6 +173,11 @@ class Mind:
         self.check_job_ready()
         self.state_received = time.time()
         self.fresh_state = True
+        if self.awake_wait:                            # warmup: отсчёт разогрева — с первого свежего state
+            self.awake_wait = False
+            self.awake_at = self.state_received
+            self.write_decision({"type": "warmup", "epoch": self.epoch,
+                                 "until": round(max(getattr(self.registry, "warmup", {}).values(), default=0))})
 
     @contextmanager
     def tick_scope(self):
@@ -470,6 +477,7 @@ class Mind:
         self.sent.clear()                              # ack прошлого подключения уже не придут (иначе копятся)
         self.fresh_state = False
         self.state_received = 0.0
+        self.awake_wait = True                         # warmup: необязательные инициативы — после разогрева
         if self.economy and self.economy.giving:
             self.economy.on_rejected({"action": "give"}, "тело переподключилось — сделка прервана")
         if self.routine:

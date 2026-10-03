@@ -58,6 +58,7 @@ class Tradition:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES = "tradition", "tradition", "tradition", True, ("world",)
     TICK_ORDER = 170
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     PROMPT = [("традиция", "summary", 180)]
 
     @classmethod

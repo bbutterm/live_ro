@@ -22,6 +22,11 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
               и сброс next_tick = 0 работает как раньше. Иначе срок ведёт реестр: следующий вызов — через N с
               после предыдущего. Модулю, который должен реагировать на состояние тела каждую секунду, не ставить.
               Тест-страж — tests/test_perf.py (docs/PERF.md).
+  WARMUP      warmup: разогрев после нового подключения тела (soak, «шторм после пробуждения»): модуль с
+              необязательной инициативой (общение, хобби, вывески, взгляд) не тикает WARMUP + разнос секунд после
+              первого свежего state за hello (mind.awake_at). Разнос — от 0 до WARMUP_SPREAD по месту модуля среди
+              разогреваемых (TICK_ORDER), чтобы инициативы не выходили одной минутой. Служебное (выживание,
+              распорядок, группа, экономика, протоколы, ack) WARMUP не ставит — без задержки. None — без разогрева.
   TAGS        [(regex, "метод")] — метки в шёпоте ДРУГОГО ЖИТЕЛЯ; метод(sender, text). Совпавшая метка
               поглощает шёпот: дальше (gate/LLM) он не идёт. TAG_ORDER — место модуля в цепочке меток.
   ECHO        [("ATTR источника", regex, "метод", порядок)] — отклик на метку, которую обработал ДРУГОЙ
@@ -74,6 +79,8 @@ attention (ORG-109) — без тика, меток и событий: бюдж�
 import inspect
 import re
 import time
+
+WARMUP_SPREAD = 60       # warmup: разогреваемые модули выходят на интервале WARMUP … WARMUP + 60 с
 
 from .activity import Activities
 from .aims import Aims
@@ -245,6 +252,10 @@ class Registry:
         self.ticks = [attr for _, _, attr in sorted(ticks)]
         self.every = {cls.ATTR: cls.TICK_EVERY for cls in self.classes            # perf: TICK_EVERY
                       if getattr(cls, "TICK_ORDER", None) is not None and getattr(cls, "TICK_EVERY", None)}
+        warm = sorted((cls.TICK_ORDER, i, cls.ATTR, cls.WARMUP) for i, cls in enumerate(self.classes)   # warmup:
+                      if getattr(cls, "TICK_ORDER", None) is not None and getattr(cls, "WARMUP", None))
+        step = WARMUP_SPREAD / max(1, len(warm) - 1)
+        self.warmup = {attr: w + round(k * step, 1) for k, (_, _, attr, w) in enumerate(warm)}   # warmup:
         self.tags = [(rx, attr, meth) for *_, rx, attr, meth in sorted(tags, key=lambda t: t[:3])]
         self.events = {k: [(attr, sub) for _, _, attr, sub in sorted(v, key=lambda t: t[:2])]
                        for k, v in events.items()}
@@ -308,8 +319,18 @@ class Registry:
     async def tick(self, mind):
         for attr in self.ticks:
             module = getattr(mind, attr, None)
-            if module and self.due(mind, attr, module):
+            if module and not self.warming(mind, attr) and self.due(mind, attr, module):
                 await call(module.tick)
+
+    def warming(self, mind, attr):
+        """warmup: модуль ещё разогревается после пробуждения тела (mind.awake_at + его задержка)."""
+        delay = self.warmup.get(attr)
+        if not delay:
+            return False
+        since = getattr(mind, "__dict__", {}).get("awake_at")
+        if not isinstance(since, (int, float)) or isinstance(since, bool):
+            return False
+        return time.time() < since + delay
 
     def due(self, mind, attr, module):
         """perf: TICK_EVERY — пора ли звать tick (см. описание атрибута в начале файла)."""

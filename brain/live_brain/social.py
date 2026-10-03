@@ -117,6 +117,7 @@ class Social:
     # реестр модулей (modules.py, W8): создание, тик, подписки, промпт
     ATTR, FEATURE, CONFIG, ENABLED, REQUIRES, ARGS = "social", "social", "social", True, ("world", "peers"), "world"
     TICK_ORDER = 70
+    WARMUP = 60                 # warmup: необязательная инициатива — через 60–120 с после пробуждения (modules.py)
     TAGS, TAG_ORDER = [(TAG, "on_tag")], 80
     ECHO = [("party", r"\[party:dead:", "on_peer_dead", 10)]          # сочувствие
     EVENTS, EVENT_ORDER = {"support": "on_support", "level_up": "on_level_up"}, 20
