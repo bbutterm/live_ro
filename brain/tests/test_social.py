@@ -254,11 +254,11 @@ class SocialTest(unittest.TestCase):
         self.meet()
         self.tick(self.a)
         self.converse()
-        self.clock.t += 16 * 60                           # не друзья: 15 * 1.5 = 22.5 мин
+        self.clock.t += 41 * 60                           # не друзья: 40 * 1.5 = 60 мин (pair_gap_minutes 40)
         self.tick(self.a)
         self.assertEqual(self.a.actions("whisper"), [])
         for _ in range(2):
-            self.a.mem.update_relation("Vera", 2)         # друзья (affinity 4): раз в 15 мин
+            self.a.mem.update_relation("Vera", 2)         # друзья (affinity 4): раз в 40 мин
         self.tick(self.a)
         self.assertEqual(len(self.a.actions("whisper")), 1)
 

@@ -331,6 +331,8 @@
 - Настройки — `goals.json` раздел `attention` (`enabled`, `base`, `deed_bonus`, `deed_cap`, `hunt_minutes`,
   `pair_max`, `quiet_factor`, `costs`). Выключить: `BRAIN_DISABLE=attention` или `"attention": {"enabled": false}` →
   `mind.attention = None`, строки `# attention:` пропускают проверку — поведение как до ORG-109.
+- Вместе с бюджетом (рекомендация R1 IDEAS2): пауза пары `social.pair_gap_minutes` 15 → **40** мин (нейтральным ×1.5 —
+  60 мин, ночью ×3). Окно защиты от петли ответов `[chat:]` — то же `pair_gap_minutes`.
 - Ожидание для проверки в игре: инициированных шёпотов в сутки — в коридоре «живо» раздела 4 IDEAS2.md.
 
 ## Вечерний круг у фонтана (ORG-058) — `brain/live_brain/tradition.py`

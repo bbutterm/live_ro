@@ -17,7 +17,7 @@
     Шаг 1 — приветствие (с эмоцией), 2 — ответ на приветствие, 3 — тема по фактам памяти
     (уровень, победы за день, добыча, гибель, усталость, погода мира — weather.py), 4 — прощание или поздравление/
     сочувствие. На шаг 4 не отвечают: не больше max_exchanges (2) обменов подряд.
-    Пара говорит не чаще pair_gap_minutes (15 мин); не друзьям — реже, ночью — ещё реже.
+    Пара говорит не чаще pair_gap_minutes (40 мин, было 15 — риск R1 IDEAS2); не друзьям — реже, ночью — ещё реже.
     Фразы не повторяются, пока не исчерпаны варианты ключа (история used в kv "social").
     При включённом LLM модуль не говорит шаблонами, а только даёт повод mind.trigger(kind="chat").
 Реакции на события (по шаблону, с лимитом react_gap_minutes на вид и жителя):
@@ -71,7 +71,7 @@ DEFAULTS = {
     "point_weights": {},
     "join_friend_chance": 0.4,
     "near_cells": 6,
-    "pair_gap_minutes": 15,
+    "pair_gap_minutes": 40,
     "max_exchanges": 2,
     "reply_delay_seconds": [3, 8],
     "react_gap_minutes": 30,
@@ -190,7 +190,7 @@ class Social:
         return (rel or {}).get("affinity", 0)
 
     def pair_gap(self, peer, now):
-        """Друзья общаются чаще: 15 мин — минимум; нейтральным ×1.5, неприятным ×3; ночью ещё ×night_factor."""
+        """Друзья общаются чаще: pair_gap_minutes (40) — минимум; нейтральным ×1.5, неприятным ×3; ночью ×night_factor."""
         aff = self.affinity(peer)
         factor = 1.0 if aff >= self.cfg["friend_affinity"] else (3.0 if aff < 0 else 1.5)
         if self.is_night(now):
