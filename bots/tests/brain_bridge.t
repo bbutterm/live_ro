@@ -467,4 +467,24 @@ package main;
 	undef $Globals::achievementList;
 }
 
+# ---- sinks: снаряжение в state и действие equip (ORG-097, Т-44) ----
+{
+	local $Globals::char->{inv} = [
+		{nameID => 1116, binID => 3, equipped => 0x22, type_equip => 0x22},    # двуручный Katana: обе руки
+		{nameID => 2301, binID => 4, equipped => 0x10, type_equip => 0x10},    # Cotton Shirt
+		{nameID => 1108, binID => 7, equipped => 0, type_equip => 0x2},        # Blade в рюкзаке
+		{nameID => 501, binID => 9, amount => 5},                              # зелье — не снаряжение
+	];
+	local $Globals::char->{sitting} = 0;
+	my $f = brainBridge::equipFields();
+	is_deeply($f->{equip}, {weapon => 1116, Left_Hand => 1116, Armor => 2301}, 'sinks: надетое по маскам EQP_*');
+	is_deeply($f->{equip_bag}, [1108], 'sinks: снаряжение в рюкзаке, без зелий');
+	my ($okE, $resE) = brainBridge::actionToCommand({action => 'equip', item => 1108});
+	ok($okE, 'sinks: надеть из рюкзака');
+	is_deeply($resE, ['eq 7'], 'sinks: eq по номеру в рюкзаке');
+	ok(!(brainBridge::actionToCommand({action => 'equip', item => 1116}))[0], 'sinks: уже надето — нельзя');
+	ok(!(brainBridge::actionToCommand({action => 'equip', item => 501}))[0], 'sinks: зелье не надевается');
+	ok(!(brainBridge::actionToCommand({action => 'equip', item => '1108; quit'}))[0], 'sinks: не число — нельзя');
+}
+
 done_testing();

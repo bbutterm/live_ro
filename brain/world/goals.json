@@ -186,6 +186,14 @@
     "bank_gap_minutes": 10,
     "min_deposit": 5000
   },
+  "gear": {
+    "_comment": "sinks: ORG-097 снаряжение (live_brain/gear.py, docs/ECONOMY.md, ТЗ Т-44): совет «что купить» у NPC своего города по каталогу brain/world/jobs/catalog.json (бюджет = (зени − keep_zeny − копилка) / (1 + greed_scale × жадность)) и надеть лучшее из рюкзака (действие equip). Покупки у NPC нет. По умолчанию выключено — в игре не проверено.",
+    "enabled": false,
+    "tick_seconds": 300,
+    "greed_scale": 0.5,
+    "wear": true,
+    "wear_gap_minutes": 10
+  },
   "memoir": {
     "_comment": "dreams: ORG-082 мемуары (live_brain/memoir.py, docs/LIFE.md, scripts/lab memoir БОТ): раз в неделю книга жизни от первого лица по фактам памяти -> state/<bot>/memoir.md. llm=true — окраска глав (один вызов на главу, фильтр дневника diary_only, кэш); по умолчанию выкл.",
     "enabled": true,

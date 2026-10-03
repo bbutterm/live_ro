@@ -64,6 +64,7 @@ legacy (ORG-083) — тик 232 (после memoir), без поля промп�
 fest (ORG-087) — тик 122, событие kill 76; объявление — из rumors.on_world_msg (on_announce).  # events2:
 buying (ORG-036) — тик 27, события job_change_result 18 (consume "result", path buying), buyer_* 18 (own), промпт 145;
 по умолчанию выключен.  # buying:
+gear (ORG-097) — тик 148, промпт 137; по умолчанию выключен.  # sinks:
 attention (ORG-109) — без тика, меток и событий: бюджет инициатив, строки `# attention:` в говорящих модулях.  # attention:
 """
 import inspect
@@ -104,6 +105,7 @@ from .buying import Buying                # buying: ORG-036 скупка и сн
 from .dream import Dream             # dreams: ORG-081 жизненный путь
 from .savings import Savings         # dreams: ORG-073 копилка мечты и банк
 from .wealth import Wealth           # wealth: ORG-100 относительная бедность (без тика)
+from .gear import Gear               # sinks: ORG-097 снаряжение: совет и надеть из рюкзака (по умолчанию выключен)
 from .memoir import Memoir           # dreams: ORG-082 мемуары жителя
 from .mentor import Mentor           # mentor: ORG-057 наставничество новичков
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
@@ -166,6 +168,7 @@ MODULES = (
     Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты
     Wealth,            # wealth: ORG-100 после dream, savings, crowd (мотив wealth в needs.values)
+    Gear,              # sinks: ORG-097 после economy и savings (бюджет сверх keep и копилки); тик 148, промпт 137
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
     Legacy,            # legacy: ORG-083 после mentor, wed, dream, memoir, economy (наследник, посылки, прощание)
