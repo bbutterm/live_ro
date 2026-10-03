@@ -151,6 +151,16 @@
     "explore_other": 0.7
   },
 
+  "wealth": {
+    "_comment": "ORG-100 относительная бедность (brain/live_brain/wealth.py, docs/LIFE.md §7, ТЗ Т-43 в docs/IDEAS2.md): мотив wealth = 1 − (зени + банк) / target, target = max(floor, цель копилки мечты, median_factor × медиана зени мира по presence моложе median_days) × (1 − greed_scale/2 + greed_scale × жадность). Выключить: enabled=false или BRAIN_DISABLE=wealth — прежняя формула 1 − зени/50000.",
+    "enabled": true,
+    "floor": 5000,
+    "median_factor": 1.5,
+    "median_days": 3,
+    "greed_scale": 0.5,
+    "cache_seconds": 600
+  },
+
   "dream": {
     "_comment": "dreams: ORG-081 жизненный путь (live_brain/dream.py, docs/LIFE.md): мечта на месяцы из черт характера, этапы по фактам питают цели недели (aims) и мотивы. stale_days без нового этапа — мечта оставлена; region_hops — окрестности города для мечты explorer; save — цель копилки (ORG-073) по виду мечты, у rich — вся сумма.",
     "enabled": true,

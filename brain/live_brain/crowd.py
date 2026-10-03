@@ -66,7 +66,8 @@ class Crowd:
         acts = getattr(self.mind, "activities", None)
         r = getattr(self.mind, "routine", None)
         return {"map": self.mind.state.get("map"), "activity": (acts.st.get("name") if acts else None),
-                "mode": (r.st.get("mode") if r and r.st else None)}
+                "mode": (r.st.get("mode") if r and r.st else None),
+                "zeny": self.mind.state.get("zeny")}                      # wealth: ORG-100 медиана мира
 
     # ---------- шина ----------
 

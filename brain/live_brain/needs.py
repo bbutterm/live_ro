@@ -7,7 +7,7 @@
     social    — давно не общался с жителями (быстрее растёт у общительных);
     curiosity — давно не был в новом месте;
     rest      — устал: доля пройденной сессии охоты, поздний час;
-    wealth    — мало зени относительно цели;
+    wealth    — мало зени относительно цели: копилки мечты и медианы мира (wealth.py, ORG-100), без модуля — 50 000;
     care      — житель группы в беде (умер, опасность, просил помочь).
 Вес мотива — из черт характера (traits): например care ~ generosity, social ~ sociability.
 Итог (value × вес) нужен модулям для выбора: длина сессии, карта охоты (смелость), частота общения,
@@ -87,7 +87,8 @@ class Needs:
         rest = 0.0
         if r.get("mode") == "hunt" and r.get("session_end"):
             rest = clamp(r.get("hunted", 0) / max(r["session_end"], 1))
-        wealth = clamp(1 - zeny / 50000)
+        wmod = getattr(self.mind, "wealth", None)                    # wealth: ORG-100 относительная бедность
+        wealth = wmod.value(s, now) if wmod is not None else clamp(1 - zeny / 50000)   # wealth:
         care = clamp(0.5 * mem.count_events("party_member_dead", now - 1800) +
                      0.5 * mem.count_events("party_danger", now - 600))
         return {"safety": round(safety, 2), "supply": round(supply, 2), "progress": round(progress, 2),

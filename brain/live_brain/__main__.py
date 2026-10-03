@@ -17,6 +17,7 @@ from .bridge import Bridge
 from .budget import SharedBudget
 from .config import Settings, load_env, load_persona
 from . import interests as interests_mod                                       # interests: ORG-103
+from .wealth import report_line as wealth_line                                 # wealth: ORG-100
 from .economy import economy_metrics
 from .gate import RuleGate, make_fast_gate
 from .routine import load_world
@@ -142,6 +143,9 @@ def report(args, memory, state_dir):
     if needs:
         top = sorted(needs.items(), key=lambda kv: -kv[1])[:3]
         print("   мотивы сейчас: " + ", ".join(f"{k} {v:.2f}" for k, v in top))
+    line = wealth_line(memory.get("wealth"))                                   # wealth: ORG-100
+    if line:                                                                   # wealth:
+        print("   " + line)                                                    # wealth:
     mood = memory.get("mood") or {}                                            # talk: ORG-064
     if mood:                                                                   # talk:
         print(f"   настроение: {mood.get('label')} ({mood.get('value', 0):+.2f})"  # talk:
