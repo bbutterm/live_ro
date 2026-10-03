@@ -421,6 +421,9 @@ class Mind:
             if a.get("action") == "set_hunt_map" and a.get("map") == self.state.get("lock_map"):
                 continue
             clean, why = self.safety.check(a, self.state, protocol=protocol)
+            agency = getattr(self, "activities", None)
+            if not why and agency:
+                why = agency.body_denial(a, source)
             if (not why and a.get("action") == "whisper" and a.get("to") in self.ctx.peers   # soak: шёпоты спящим
                     and self.peer_offline(a["to"])):
                 why = "адресат не в игре (peer_offline)"
@@ -589,6 +592,7 @@ class Mind:
         now = time.time()
         self.peer_smalltalk(now)
         if (not self.reasons and self.s.llm_enabled
+                and not (self.activities and self.activities.agentic)
                 and now - self.last_decision >= self.s.decide_interval):
             self.trigger("плановое размышление", {}, "timer")
         if not self.reasons or self.lock.locked():
@@ -742,7 +746,11 @@ class Mind:
             '"mood": "настроение одним словом", "actions": [...], '
             '"remember": [{"text": "что запомнить", "importance": 1-5}], '
             '"relations": [{"name": "игрок", "delta": -2..2, "note": "кто это для тебя"}]}. '
-            f"Допустимые действия (не больше {MAX_ACTIONS}): "
+            + ("В агентном режиме выбирай занятие через дополнительное поле JSON "
+             '\"intent\": {\"activity\": \"ID из available\", \"why\": \"твоя причина\"}. '
+             "Незавершённый замысел не заменяется. Прямую смену карты не используй. "
+             if self.activities and self.activities.agentic else "")
+            + f"Допустимые действия (не больше {MAX_ACTIONS}): "
             '{"action": "say", "text": "..."} — сказать в общий чат; '
             '{"action": "whisper", "to": "имя", "text": "..."} — личное сообщение; '
             f'{{"action": "set_hunt_map", "map": "..."}} — сменить место охоты, только из: {maps}; '
@@ -849,7 +857,11 @@ class Mind:
         return None
 
     async def apply(self, d, reason, latency, usage):
-        if d.get("goal"):
+        agency = getattr(self, "activities", None)
+        if agency and agency.agentic and d.get("intent") is not None:
+            why = await agency.propose(d["intent"])
+            self.write_decision({"type": "agency_proposal", "intent": d["intent"], "result": why or "accepted"})
+        if d.get("goal") and not (agency and agency.agentic):
             self.mem.set("goal", str(d["goal"])[:200])
             self.mem.set("goal_source", "llm")
         if d.get("mood"):
@@ -867,6 +879,9 @@ class Mind:
         actions = [a if isinstance(a, dict) else {"action": "invalid", "raw": a} for a in actions]
         game_actions = []
         for a in actions:
+            if agency and agency.agentic and a.get("action") == "set_hunt_map":
+                game_actions.append(a)  # единый вход тела отклонит прямую смену карты
+                continue
             if a.get("action") == "set_hunt_map" and self.routine:
                 why = self.routine.prefer(str(a.get("map", "")))
                 self.write_decision({"type": "routine_decision", "source": "llm", "action": a, "result": why or "ok"})

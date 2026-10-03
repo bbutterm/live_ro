@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import random
 import tempfile
 import time
@@ -485,7 +486,7 @@ class MindRoutingTest(unittest.TestCase):
             sent.append(action)
             return len(sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         mem = Memory(root / "m.sqlite")
         mind = Mind(Settings.from_env({}), persona, mem, send, root / "decisions.jsonl", RuleGate(),
                     peers={"Arkady", "Vera"}, world=WORLD)
@@ -528,7 +529,7 @@ class RoutineVendTest(unittest.TestCase):
         shift_time(self)                     # timefix: полдень мира — ночью распорядок уводит в сон, а не в лавку
         tmp = tempfile.TemporaryDirectory()
         mem = Memory(Path(tmp.name) / "m.sqlite")
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         sent = []
         rest = WORLD["routine"]["town"]      # точка отдыха распорядка (R2: не у фонтана)
         state = {"name": "Arkady", "map": "prontera", "x": rest["x"], "y": rest["y"], "lock_map": "prontera",

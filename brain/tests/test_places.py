@@ -4,6 +4,7 @@
 Запуск: cd brain && python3 -m unittest -v tests.test_places
 """
 import json
+from tests.persona_fixture import prontera_persona
 import subprocess
 import sys
 import tempfile
@@ -32,7 +33,7 @@ def make(root, bot, name, bus, env=None):
     async def send(a):
         return 1
 
-    persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text(encoding="utf-8"))
+    persona = prontera_persona(bot)
     persona.pop("sleep", None)
     mem = Memory(root / f"{bot}.sqlite")
     mind = Mind(Settings.from_env(env or {}), persona, mem, send, root / f"{bot}.jsonl", RuleGate(),

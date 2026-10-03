@@ -10,6 +10,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import random
 import re
 import tempfile
@@ -129,7 +130,7 @@ class IntegrationTest(unittest.TestCase):
         with mock.patch("time.time", clock):
             mem = Memory(root / "m.sqlite")
             bus = WorldBus(root / "world.sqlite", "Arkady")
-            persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+            persona = prontera_persona()
             mind = None
 
             async def send(a):
@@ -207,7 +208,7 @@ class BodyMixin:
 
         self.mem = Memory(root / "m.sqlite")
         self.addCleanup(self.mem.close)
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         self.mind = Mind(Settings.from_env({}), persona, self.mem, send, root / "d.jsonl", RuleGate(),
                          peers={"Arkady", "Vera"}, world=getattr(self, "WORLD", WORLD))   # review4: мир теста
 
@@ -582,7 +583,7 @@ class LongDayAllModulesTest(unittest.TestCase):
         sent, marks = [], {}
         with mock.patch("time.time", clock):
             mem = Memory(root / "m.sqlite")
-            persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+            persona = prontera_persona()
             mind = None
 
             async def send(a):
@@ -936,7 +937,7 @@ class LongDayRound7Test(unittest.TestCase):
         sent, marks = [], {}
         with mock.patch("time.time", clock):
             mem = Memory(root / "m.sqlite")
-            persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+            persona = prontera_persona()
             mind, body = None, None
 
             async def send(a):
@@ -1144,7 +1145,7 @@ class TwoResidentsDayTest(unittest.TestCase):
             for name, bot, w in (("Arkady", "bot01", WORLD), ("Vera", "bot02", vera_world)):
                 mems[name] = Memory(root / f"{name}.sqlite")
                 buses[name] = WorldBus(root / "world.sqlite", name)
-                persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+                persona = prontera_persona(bot)
 
                 def make_send(n):
                     async def send(a):

@@ -6,6 +6,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import random
 import tempfile
 import time
@@ -54,7 +55,7 @@ class SocietyTest(unittest.TestCase):
             self.sent.append(dict(a))
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         persona.pop("sleep", None)
         self.mem = Memory(root / "m.sqlite")
         self.mind = Mind(Settings.from_env({}), persona, self.mem, send, root / "d.jsonl", RuleGate(),

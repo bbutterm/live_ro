@@ -5,6 +5,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import os
 import random
 import tempfile
@@ -116,7 +117,7 @@ class InboxSleepTest(unittest.TestCase):
 
             async def send(action):
                 return 1
-            persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+            persona = prontera_persona()
             mind = Mind(Settings.from_env({}), persona, mem, send, root / "decisions.jsonl", RuleGate(),
                         peers={"Arkady", "Vera"}, inbox_path=str(inbox),
                         world=json.loads((BRAIN_DIR / "world" / "goals.json").read_text()))

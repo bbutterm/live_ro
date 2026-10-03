@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import random
 import tempfile
 import time
@@ -42,7 +43,7 @@ class Clock:
 
 class FakeMind:
     def __init__(self, bot, peer, mem, clock):
-        self.persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+        self.persona = prontera_persona(bot)
         name = self.persona["name"]
         self.mem = mem
         self.state = {"name": name, "map": "prontera", "x": 156, "y": 185, "hp_pct": 100, "dead": False,
@@ -435,7 +436,7 @@ class MindRoutingTest(unittest.TestCase):
             self.sent.append(action)
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         self.mem = Memory(root / "m.sqlite")
         self.mind = Mind(Settings.from_env({}), persona, self.mem, send, root / "d.jsonl", RuleGate(),
                          peers={"Arkady", "Vera"}, world=WORLD)

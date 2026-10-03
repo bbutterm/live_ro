@@ -3,6 +3,7 @@
 Запуск: cd brain && python3 -m unittest -v tests.test_postmortem
 """
 import json
+from tests.persona_fixture import prontera_persona
 import tempfile
 import time
 import unittest
@@ -28,7 +29,7 @@ class PostmortemTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.mem = Memory(Path(self.tmp.name) / "m.sqlite")
         self.dec = []
-        self.mind = SimpleNamespace(mem=self.mem, persona=json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text()),
+        self.mind = SimpleNamespace(mem=self.mem, persona=prontera_persona(),
                                     write_decision=self.dec.append, state={})
         self.clock = Clock()
         self.pm = Postmortem(self.mind, clock=self.clock)

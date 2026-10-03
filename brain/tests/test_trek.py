@@ -8,6 +8,7 @@ upstream (LIVE_RO_OPENKORE). Это проверка правил мозга, а
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import random
 import sys
 import tempfile
@@ -53,7 +54,7 @@ class Body:
             self.sent.append(a)
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+        persona = prontera_persona(bot)
         persona.pop("sleep", None)
         self.mem = Memory(Path(root) / f"{bot}.sqlite")
         self.mind = Mind(Settings.from_env({}), persona, self.mem, send, Path(root) / f"{bot}.jsonl", RuleGate(),

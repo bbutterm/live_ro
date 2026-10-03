@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from tests.worldtime import brain_argv, shift_time
+from tests.persona_fixture import write_prontera_personas
 
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 FAKE_KEY = "sk-or-v1-" + "0123456789abcdef" * 4
@@ -141,7 +142,8 @@ class BrainHarness(unittest.TestCase):
     def start_brain(self, env):
         with open(self.root / "brain.log", "ab") as log:
             proc = subprocess.Popen(
-                brain_argv(self.shift, "--env", str(env), "--bot", "bot01", "--lab-root", str(self.root)),
+                brain_argv(self.shift, "--env", str(env), "--bot", "bot01", "--lab-root", str(self.root),
+                           "--persona", str(write_prontera_personas(self.root))),
                 cwd=BRAIN_DIR, stdout=log, stderr=subprocess.STDOUT)
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
         return proc

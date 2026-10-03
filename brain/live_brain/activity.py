@@ -36,6 +36,7 @@ import random
 import time
 from pathlib import Path
 
+from .lifecycle import SERVICE
 from . import weather                                   # talk: ORG-085 погода — множитель прогулки
 
 log = logging.getLogger("activity")
@@ -62,6 +63,67 @@ class Activities:
         self.rng = rng or random.Random()
         self.st = mind.mem.get("activity") or {}
         self.next_decide = 0.0
+        self.st.setdefault("avoid_until", {})
+        if self.agentic:
+            basic = {"rest", "stroll", "socialize", "service", "hunt_early", "end_hunt", "keep_hunting", "change_map"}
+            self.catalog = {k: v for k, v in self.catalog.items() if k in basic}
+            self.cfg["activities"] = self.catalog
+            self.cfg.update(decide_minutes=[1, 2], min_hunt_minutes=1)
+            if "rest" in self.catalog:
+                self.catalog["rest"]["cooldown_minutes"] = max(self.catalog["rest"].get("cooldown_minutes", 0), 5)
+            if self.st.get("name") and self.st.get("status") is None:
+                self.st.update(status="cancelled", proved=False)
+                self.st.pop("chain", None)
+                self.save()  # старое занятие не становится новым намерением без выбора
+
+    @property
+    def agentic(self):
+        return bool(getattr(self.mind.s, "agency_enabled", False) and self.mind.s.feature("agency"))
+
+    def body_denial(self, action, source):
+        """Единый вход тела: правила спасения/оператор выше намерения, речь свободна."""
+        kind = action.get("action")
+        if not self.agentic or kind in ("say", "whisper") or source in ("rule", "operator"):
+            return None
+        if source in ("llm", "jev") and kind in ("pause", "resume"):
+            return None
+        if not self.mind.fresh_state:
+            return "нет свежего состояния тела"
+        owner = {"routine": "routine", "social": "routine", "party": "party",
+                 "economy": "economy", "plan": "plan"}.get(source)
+        if not owner:
+            return "агентный режим: выбери intent.activity, тело исполняет текущий замысел"
+        may, blocker = self.mind.may_move(owner)
+        if not may:
+            return "телом владеет " + str(blocker)
+        if source == "social" and (self.st.get("name") not in ("socialize", "stroll")
+                                   or self.st.get("status") != "running"):
+            return "общение не владеет текущим замыслом"
+        if (source == "routine" and self.st.get("name") == "service"
+                and self.st.get("status") == "running" and kind not in ("service", "shop_close", "buyer_close")):
+            return "сначала завершить обслуживание"
+        return None
+
+    async def propose(self, intent, source="llm"):
+        """Модель выбирает только допустимое занятие; параметры тела не принимает."""
+        if not self.agentic or not isinstance(intent, dict):
+            return "нет агентного режима или неверный intent"
+        name = intent.get("activity")
+        if not isinstance(name, str) or name not in self.catalog:
+            return "неизвестное занятие"
+        if self.st.get("status") == "running" and self.st.get("proved") is None:
+            return "текущий замысел ещё не завершён"
+        state = self.mind.state
+        blocker = self.blocked(state)
+        if blocker:
+            return blocker
+        scored, _ = self.scores(state)
+        if name not in scored:
+            return "не выполнены условия занятия"
+        await self.start(name, self.clock(), state)
+        self.st.update(chosen_by=source, reason=str(intent.get("why") or self.st["reason"])[:200])
+        self.save()
+        return None
 
     # ---------- данные ----------
 
@@ -137,6 +199,8 @@ class Activities:
             return "нет данных"
         if r.st.get("mode") == "sleep" or r.st.get("recover") or r.st.get("blocked"):
             return "сон/восстановление/тупик"
+        if self.agentic and self.st.get("operator_until", 0) > self.clock():
+            return "режим оператора"
         if m.plans.store.active():
             return "план встречи"
         explorer = getattr(m, "explorer", None)                 # explore: экспедиция идёт — других занятий нет
@@ -161,9 +225,12 @@ class Activities:
         crowd = getattr(self.mind, "crowd", None)               # crowd: ORG-089 толпа и повторы за день
         out = {}
         for name, a in self.catalog.items():
+            if self.agentic and now < self.st.get("avoid_until", {}).get(name, 0):
+                continue
             if mode not in a["modes"]:
                 continue
-            if now - self.st.get("last", {}).get(name, 0) < a.get("cooldown_minutes", 0) * 60 and name != current:
+            if (now - self.st.get("last", {}).get(name, 0) < a.get("cooldown_minutes", 0) * 60
+                    and (name != current or (self.agentic and self.st.get("status") != "running"))):
                 continue
             if not self.requires_ok(a.get("requires") or {}, state, needs):
                 continue
@@ -183,7 +250,21 @@ class Activities:
     async def tick(self):
         now = self.clock()
         state = self.mind.state
+        if self.agentic:
+            if not self.mind.fresh_state:
+                return  # нет свежего наблюдения — никаких подтверждений
+            r = self.mind.routine
+            interrupted = (state.get("dead") or r.st.get("recover") or r.st.get("blocked")
+                           or r.st.get("mode") == "sleep")
+            changed = (self.st.get("mode") != self.mode()
+                       and self.st.get("name") not in ("hunt_early", "end_hunt"))
+            if self.st.get("status") == "running" and (interrupted or changed):
+                self.cancel(now, "безопасность/смерть" if interrupted else "сменился режим распорядка")
+            if interrupted:
+                return
         await self.check_proof(now, state)
+        if self.agentic and self.st.get("proof") not in (None, "none") and self.st.get("proved") is None:
+            return  # одно незавершённое намерение: не вытеснять новым выбором
         if self.st.get("chain"):                               # home: ORG-018 идёт цепочка — выбор подождёт
             await self.chain_tick(now, state)                  # home:
             return                                             # home:
@@ -195,6 +276,20 @@ class Activities:
         lo, hi = self.cfg["decide_minutes"]
         self.next_decide = now + self.rng.uniform(lo, hi) * 60
         scored, needs = self.scores(state)
+        if (self.agentic and self.mind.s.llm_enabled and self.mind.budget_left() > 0
+                and now - self.st.get("consulted_at", 0) >= 1800 and scored):
+            self.st.update(consulted_at=now, choice_since=now)
+            self.save()
+            self.mind.trigger("выбери следующее занятие", {
+                "intent_format": {"intent": {"activity": "ID доступного занятия", "why": "твоя причина"}},
+                "available": {k: {"label": self.catalog[k]["label"], "score": v} for k, v in scored.items()},
+                "recent_results": self.mind.mem.get("agency_history", [])[-3:]})
+            self.next_decide = now + 30
+            return
+        if self.agentic and self.st.get("choice_since"):
+            if now - self.st["choice_since"] < 30:
+                return
+            self.st.pop("choice_since", None)
         if await self.try_chain(now, state, needs, scored):   # home: ORG-018 лучшее недоступно — цепочка
             return                                             # home:
         if not scored:
@@ -206,7 +301,8 @@ class Activities:
             best = current                                    # порог прерывания: не дёргаться
         self.mind.write_decision({"type": "activity", "chosen": best, "current": current, "top": top,
                                   "needs": needs, "mode": self.mode()})
-        if best == current and self.st.get("mode") == self.mode():
+        if (best == current and self.st.get("mode") == self.mode()
+                and not (self.agentic and self.st.get("status") != "running")):
             return
         await self.start(best, now, state)
 
@@ -214,6 +310,15 @@ class Activities:
         a = self.catalog[name]
         self.st.update(name=name, mode=self.mode(), since=now, proof=a.get("proof", "none"), proved=None,
                        deadline=now + a.get("proof_minutes", 0) * 60, base=self.baseline(state))
+        if self.agentic:
+            if name == "rest":
+                self.st.update(proof="rested", deadline=now + 900)
+            elif name in ("hunt_early", "keep_hunting"):
+                self.st.update(proof="hunt_progress", deadline=now + 900)
+            motives = self.mind.needs.weighted()
+            top = sorted(motives, key=motives.get, reverse=True)[:2]
+            self.st.update(status="running", chosen_by="local", service_seen=False,
+                           reason=a["label"] + "; мотивы: " + ", ".join(top))
         self.st.setdefault("last", {})[name] = now
         self.save()
         self.mind.mem.add_event("activity", {"name": name})
@@ -384,6 +489,11 @@ class Activities:
         steps = ch["steps"]
         while ch["i"] < len(steps):
             step = steps[ch["i"]]
+            if self.agentic and step.get("started") and self.st.get("name") == step["name"]:
+                if self.st.get("proved") is False:
+                    return self.chain_end(now, False, step["name"] + ": результат не подтверждён")
+                if self.st.get("proved") is None:
+                    return
             if self.requires_ok(step["fixes"], state, needs):  # условие выполнено (или было) — дальше
                 ch["i"] += 1
                 self.save()
@@ -429,15 +539,28 @@ class Activities:
             return
         b = self.st.get("base") or {}
         ok = None
-        if proof == "moved" and state.get("x") is not None and b.get("x") is not None:
+        if proof == "hunt_progress":
+            ok = (state.get("map") in self.mind.persona["hunt_maps"]
+                  and self.mind.mem.count_events("kill", self.st.get("since", now)) > 0) or None
+        elif proof == "rested":
+            ok = (self.mind.routine.hp_ok(state) and self.mode() == "town"
+                  and now - self.st.get("since", now) >= 60) or None
+        elif proof == "moved" and state.get("x") is not None and b.get("x") is not None:
             ok = dist(int(state["x"]), int(state["y"]), int(b["x"]), int(b["y"])) >= 3 or None
         elif proof == "peer_near":
             p = self.visible_peer(state)
             ok = (p is not None and state.get("x") is not None
                   and dist(int(p["x"]), int(p["y"]), int(state["x"]), int(state["y"])) <= 4) or None
         elif proof == "supply_better":
-            ok = ((state.get("weight_pct") or 0) < (b.get("weight") or 0) - 5
-                  or self.potions(state) > (b.get("potions") or 0)) or None
+            if self.agentic and state.get("activity") in SERVICE and not self.st.get("service_seen"):
+                self.st["service_seen"] = True
+                self.save()
+            improved = ((state.get("weight_pct") or 0) < (b.get("weight") or 0) - 5
+                        or self.potions(state) > (b.get("potions") or 0))
+            ready = (not self.agentic or (self.st.get("service_seen") and state.get("activity") not in SERVICE
+                     and state.get("weight_pct") is not None and state["weight_pct"] < self.cfg.get("heavy_pct", 50)
+                     and self.potions(state) >= 5))
+            ok = (improved and ready) or None
         elif proof == "on_hunt_map":
             ok = state.get("map") in self.mind.persona["hunt_maps"] or None
         elif proof == "in_town":
@@ -462,6 +585,9 @@ class Activities:
     def finish(self, ok, now):
         name = self.st.get("name")
         self.st["proved"] = bool(ok)
+        if self.agentic:
+            self.record_result("succeeded" if ok else "failed", now,
+                               "fresh game evidence" if ok else "deadline: результат не подтверждён")
         self.save()
         kind = "activity_done" if ok else "activity_failed"
         label = self.catalog.get(name, {}).get("label", name)
@@ -469,6 +595,35 @@ class Activities:
         self.mind.write_decision({"type": "activity", "event": kind, "name": name})
         log.info("занятие «%s»: %s", label, "сделано по данным игры" if ok else "не удалось за отведённое время")
 
+    def cancel(self, now, why):
+        if self.st.get("status") == "running":
+            self.st["proved"] = False
+            self.record_result("cancelled", now, why)
+            if self.st.get("chain"):
+                self.chain_end(now, False, why)
+            self.next_decide = 0
+            self.save()
+
+    def record_result(self, status, now, why):
+        """Сохранять факт результата, а не подтверждение принятой команды."""
+        self.st.update(status=status, finished=now)
+        state = self.mind.state
+        row = {"name": self.st.get("name"), "status": status, "since": self.st.get("since"),
+               "at": now, "why": why, "reason": self.st.get("reason"),
+               "chosen_by": self.st.get("chosen_by"), "evidence": {k: state.get(k) for k in
+                    ("map", "x", "y", "hp_pct", "weight_pct", "zeny")},
+               "heals": self.potions(state)}
+        history = self.mind.mem.get("agency_history", []) or []
+        self.mind.mem.set("agency_history", (history + [row])[-16:])
+        if status == "failed":
+            self.st.setdefault("avoid_until", {})[self.st.get("name")] = now + 300
+        self.mind.mem.add_event("agency_result", row)
+        self.mind.write_decision({"type": "agency_result", **row})
+
     def summary(self):
         name = self.st.get("name")
+        if self.agentic and name:
+            return {"занятие": self.catalog.get(name, {}).get("label"), "с": self.st.get("since"),
+                    "статус": self.st.get("status"), "причина": self.st.get("reason"),
+                    "до": self.st.get("deadline"), "выбрал": self.st.get("chosen_by")}
         return {"занятие": self.catalog.get(name, {}).get("label"), "с": self.st.get("since")} if name else None

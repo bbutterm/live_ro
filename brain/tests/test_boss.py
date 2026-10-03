@@ -6,6 +6,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import tempfile
 import time
 import unittest
@@ -60,7 +61,7 @@ class Resident:
             self.sent.append(dict(a))
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+        persona = prontera_persona(bot)
         persona.pop("sleep", None)
         self.mem = Memory(Path(root) / f"{bot}.sqlite")
         self.bus = world_bus.WorldBus(bus_path, name)

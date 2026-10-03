@@ -8,6 +8,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import re
 import sys
 import tempfile
@@ -57,7 +58,7 @@ class HomeTest(unittest.TestCase):
             self.sent.append(a)
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         persona.pop("sleep", None)
         if home:
             persona["home"] = home
@@ -263,10 +264,14 @@ class HomesDataTest(unittest.TestCase):
             if rest:
                 self.assertTrue(rathena_walkable(town, rest["x"], rest["y"]) and ok_walkable(town, rest["x"], rest["y"]))
 
-    def test_prontera_is_storage_kafra(self):
-        cfg = (ROOT / "bots" / "bot01" / "control" / "config.txt").read_text(encoding="utf-8")
-        npc = HOMES["towns"]["prontera"]["npc"]
-        self.assertIn(f"storageAuto_npc prontera {npc['x']} {npc['y']}", cfg)
+    def test_resident_town_is_storage_kafra(self):
+        for bot in ("bot01", "bot02"):
+            with self.subTest(bot=bot):
+                persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+                town = persona.get("routine", {}).get("town", {}).get("map") or H.home_town(persona)
+                npc = HOMES["towns"][town]["npc"]
+                cfg = (ROOT / "bots" / bot / "control" / "config.txt").read_text(encoding="utf-8")
+                self.assertRegex(cfg, rf"(?m)^storageAuto_npc {town} {npc['x']} {npc['y']}\s*$")
 
 
 if __name__ == "__main__":

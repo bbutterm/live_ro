@@ -8,6 +8,7 @@
 import asyncio
 import copy
 import json
+from tests.persona_fixture import prontera_persona
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,7 +44,7 @@ class Lab:
             self.out.append(dict(a))
             return len(self.out)
 
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         persona.pop("sleep", None)
         self.mem = Memory(root / "m.sqlite")
         self.clock = Clock(T0)

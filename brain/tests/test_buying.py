@@ -8,6 +8,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import tempfile
 import time
 import unittest
@@ -63,7 +64,7 @@ class BuyingCase(unittest.TestCase):
             self.sent.append(a)
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         persona.pop("sleep", None)
         world = load_world(BRAIN_DIR / "world" / "goals.json")
         world["buying"] = dict(world.get("buying") or {}, enabled=enabled, **(patch or {}))

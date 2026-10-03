@@ -8,6 +8,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import re
 import sys
 import tempfile
@@ -54,7 +55,7 @@ class HerbalCase(unittest.TestCase):
             self.sent.append(a)
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text())
+        persona = prontera_persona()
         persona.pop("sleep", None)
         if herbalist:
             persona["herbalist"] = True
@@ -343,7 +344,11 @@ class CraftsDataTest(unittest.TestCase):
             cfg = (ROOT / "bots" / bot / "control" / "config.txt").read_text(encoding="utf-8")
             block = re.search(r"buyAuto Empty Bottle \{(.*?)\}", cfg, re.S)
             self.assertIsNotNone(block, bot)
-            self.assertIn("npc prt_in 126 76", block.group(1))
+            npc = re.search(r"(?m)^\s*npc (\w+) (\d+) (\d+)\s*$", block.group(1))
+            self.assertIsNotNone(npc, bot)
+            location = [npc.group(1), int(npc.group(2)), int(npc.group(3))]
+            self.assertIn(location + [400, "Tool Dealer"], atlas["item_shops"]["713"],
+                          f"{bot}: настроенный торговец должен продавать Empty Bottle (713) за 400z")
             self.assertIn("disabled 1", block.group(1))
 
 

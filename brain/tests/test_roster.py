@@ -21,12 +21,30 @@ import roster  # noqa: E402
 PHRASE_KEYS = ("hello", "weather", "hunt", "loot", "tired", "death", "level", "congrats", "condolence", "thanks", "bye")
 TRAITS = ("bravery", "sociability", "greed", "curiosity", "diligence", "generosity", "patience", "whimsy")
 SECRET_LINE = re.compile(r"^(username|password|storageAuto_password|adminPassword)[ \t]+\S", re.M)
+FIXTURE_RESIDENTS = {
+    "bot01": {"name": "Arkady", "job": "Swordsman", "template": "swordsman", "persona": "bot01",
+              "home_town": "prontera", "active": True, "born": None},
+    "bot02": {"name": "Vera", "job": "Acolyte", "template": "acolyte", "persona": "bot02",
+              "home_town": "prontera", "active": True, "born": None},
+}
 
 
 def copy_repo(dst):
-    """Минимальная копия checkout для генератора: профили, шаблоны, персоны, мир."""
-    for rel in ("bots/bot01", "bots/bot02", "bots/templates", "brain/personas", "brain/world"):
+    """Двухжительный сценарий, независимый от населения deployment."""
+    for rel in ("bots/bot01", "bots/bot02", "bots/templates"):
         shutil.copytree(ROOT / rel, dst / rel)
+    shutil.copytree(ROOT / "brain/world", dst / "brain/world", ignore=shutil.ignore_patterns("roster.json"))
+    (dst / "brain/personas").mkdir(parents=True)
+    for bot in FIXTURE_RESIDENTS:
+        shutil.copy2(ROOT / "brain/personas" / f"{bot}.json", dst / "brain/personas" / f"{bot}.json")
+    residents = {bot: dict(entry) for bot, entry in FIXTURE_RESIDENTS.items()}
+    roster.save(dst, {"residents": residents})
+    for bot in residents:
+        config = dst / "bots" / bot / "control/config.txt"
+        text, missing = roster.set_values(config.read_text(), roster.static_values(residents, bot))
+        if missing:
+            raise AssertionError(f"{bot}: отсутствуют fixture-поля {missing}")
+        config.write_text(text)
     return dst
 
 
@@ -42,12 +60,15 @@ class RosterTest(unittest.TestCase):
 
     def test_repo_roster_consistent(self):
         doc = roster.load(ROOT)
-        self.assertEqual({b: r["name"] for b, r in doc["residents"].items()}, {"bot01": "Arkady", "bot02": "Vera"})
-        problems, _ = roster.check(ROOT, ["bot01", "bot02"])
+        personas = {p.stem: json.loads(p.read_text())["name"]
+                    for p in (ROOT / "brain/personas").glob("bot*.json")}
+        self.assertTrue(personas, "в checkout должны быть персоны жителей")
+        self.assertEqual({b: r["name"] for b, r in doc["residents"].items()}, personas)
+        problems, _ = roster.check(ROOT, list(doc["residents"]))
         self.assertEqual(problems, [])
 
     def test_runtime_values_follow_lab_bots(self):
-        res = roster.load(ROOT)["residents"]
+        res = roster.load(copy_repo(self.root / "r"))["residents"]
         self.assertEqual(roster.runtime_values(res, "bot01", ["bot01", "bot02"]),
                          {"residents": "Vera", "dealAuto_names": "Vera"})
         # Vera не запущена: в группу её не ждём, но сделки по-прежнему только с жителями (не пустой список)
@@ -70,7 +91,8 @@ class RosterTest(unittest.TestCase):
     # ---------- мозг: peer_names из реестра ∩ LAB_BOTS ----------
 
     def test_peer_names_from_roster(self):
-        persona = ROOT / "brain" / "personas" / "bot01.json"
+        repo = copy_repo(self.root / "r")
+        persona = repo / "brain" / "personas" / "bot01.json"
         self.assertEqual(peer_names(persona, ["bot01"]), {"Arkady"})
         self.assertEqual(peer_names(persona, ["bot01", "bot02"]), {"Arkady", "Vera"})
         self.assertEqual(peer_names(persona), {"Arkady", "Vera"})

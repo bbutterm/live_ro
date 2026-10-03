@@ -84,6 +84,7 @@ class Settings:
     global_daily_usd_limit: float = 2.0
     global_jev_daily_limit: int = 4000
     disabled: frozenset = frozenset()
+    agency_enabled: bool = False
 
     def feature(self, name):
         """AUT-120: BRAIN_DISABLE=economy,party,... выключает модуль без потери памяти и без рестарта сервера."""
@@ -144,6 +145,7 @@ class Settings:
             global_daily_usd_limit=_float(env, "BRAIN_GLOBAL_DAILY_USD_LIMIT", 2.0),
             global_jev_daily_limit=_int(env, "JEV_GLOBAL_DAILY_LIMIT", 4000),
             disabled=frozenset(x.strip().lower() for x in env.get("BRAIN_DISABLE", "").split(",") if x.strip()),
+            agency_enabled=env.get("BRAIN_AGENCY", "0").strip() == "1",
         )
 
 

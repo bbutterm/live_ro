@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import tempfile
 import time
 import unittest
@@ -46,7 +47,7 @@ class BondsTest(unittest.TestCase):
         self.social = FakeSocial()
         self.mind = SimpleNamespace(
             mem=self.mem, fresh_state=True, execute=execute, write_decision=self.dec.append,
-            persona=json.loads((BRAIN_DIR / "personas" / "bot01.json").read_text()),
+            persona=prontera_persona(),
             ctx=SimpleNamespace(peers={"Vera"}, last={}), routine=self.routine, social=self.social,
             state={"name": "Arkady", "dead": False, "players": [], "friends": []})
         self.clock = Clock()

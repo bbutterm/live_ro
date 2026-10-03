@@ -8,6 +8,7 @@
 import asyncio
 import importlib.util
 import json
+from tests.persona_fixture import prontera_persona
 import os
 import random
 import tempfile
@@ -47,7 +48,7 @@ def make_mind(root, bot, sent, peers=("Arkady", "Vera")):
         sent.append(a)
         return len(sent)
 
-    persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+    persona = prontera_persona(bot)
     persona.pop("sleep", None)
     mem = Memory(Path(root) / f"{bot}.sqlite")
     mind = Mind(Settings.from_env({}), persona, mem, send, Path(root) / f"{bot}.jsonl", RuleGate(),

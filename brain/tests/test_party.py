@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import random
 import tempfile
 import time
@@ -30,7 +31,7 @@ class Clock:
 
 class FakeMind:
     def __init__(self, bot, peer, mem, clock):
-        self.persona = json.loads((BRAIN_DIR / "personas" / f"{bot}.json").read_text())
+        self.persona = prontera_persona(bot)
         name = self.persona["name"]
         self.mem = mem
         self.state = {"name": name, "map": "prt_fild08", "x": 100, "y": 100, "hp_pct": 100, "dead": False,

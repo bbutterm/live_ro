@@ -25,6 +25,33 @@
       "home_town": "prontera",
       "active": true,
       "born": null
+    },
+    "bot03": {
+      "name": "Bram",
+      "job": "Merchant",
+      "template": "merchant",
+      "persona": "bot03",
+      "home_town": "prontera",
+      "active": true,
+      "born": "2026-10-03"
+    },
+    "bot04": {
+      "name": "Ilsa",
+      "job": "Archer",
+      "template": "archer",
+      "persona": "bot04",
+      "home_town": "prontera",
+      "active": true,
+      "born": "2026-10-03"
+    },
+    "bot05": {
+      "name": "Odette",
+      "job": "Mage",
+      "template": "mage",
+      "persona": "bot05",
+      "home_town": "prontera",
+      "active": true,
+      "born": "2026-10-03"
     }
   }
 }

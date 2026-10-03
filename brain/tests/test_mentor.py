@@ -6,12 +6,14 @@
 """
 import asyncio
 import json
+import shutil
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from live_brain import atlas, world_bus
+from live_brain import atlas, progression, world_bus
 from live_brain.chronicle import LINES
 from live_brain.config import Settings
 from live_brain.gate import RuleGate
@@ -93,6 +95,19 @@ class MentorTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        # Мир сценария: только наставники Arkady/Vera; синтетического Bram
+        # нет в реестре, поэтому Novice не имеет заданного карьерного пути.
+        world_dir = self.root / "world"
+        shutil.copytree(BRAIN_DIR / "world", world_dir, ignore=shutil.ignore_patterns("roster.json"))
+        (world_dir / "roster.json").write_text(json.dumps({"residents": {
+            "bot01": {"name": "Arkady", "job": "Swordsman", "template": "swordsman", "persona": "bot01",
+                      "home_town": "prontera", "active": True, "born": None},
+            "bot02": {"name": "Vera", "job": "Acolyte", "template": "acolyte", "persona": "bot02",
+                      "home_town": "prontera", "active": True, "born": None},
+        }}))
+        world_patch = patch.object(progression, "WORLD", world_dir)
+        world_patch.start()
+        self.addCleanup(world_patch.stop)
         self.clock = Clock(time.time())
         self.bus_path = self.root / "shared" / "world.sqlite"
         self.a = Resident(self.root, "bot01", "Arkady", self.bus_path, self.clock)
@@ -211,6 +226,7 @@ class MentorTest(unittest.TestCase):
     # ---------- советы ----------
 
     def test_tips_from_facts(self):
+        self.assertIsNone(progression.target_job("Bram"), "ученик сценария отсутствует в реестре")
         self.pair()
         for _ in range(5):
             self.a.m.st["last_tip"] = 0

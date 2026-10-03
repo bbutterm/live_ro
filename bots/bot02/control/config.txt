@@ -215,7 +215,7 @@ cartMaxWeight 7900
 itemsTakeGreed 0
 itemsCheckWeight 1
 
-lockMap pay_dun00
+lockMap orcsdun01
 lockMap_x
 lockMap_y
 lockMap_randX
@@ -355,9 +355,9 @@ gracefulStop_timeout 40
 # live_ro: сделки — только с жителями. 3 = принять и подтвердить после второй стороны (передачи
 # от жителей принимаются сами); от остальных игроков сделки отклоняются по dealAuto_names.
 # live_ro: жители (через запятую) — их группу LR_<житель> плагин brainBridge принимает сразу.
-residents Arkady
+residents Arkady,Bram,Ilsa,Odette
 dealAuto 3
-dealAuto_names Arkady
+dealAuto_names Arkady,Bram,Ilsa,Odette
 dealMaxItems 10
 partyAuto 1
 partyAutoShare 0
@@ -801,7 +801,7 @@ buyAuto Pet Food {
 # npc/re/merchants/Dealer_Update.txt:169: prt_in,126,76; 400z). Выключен: травник (brain/live_brain/herbal.py) включает его
 # действием craft_setup {bottles: N} (maxAmount N, minAmount N-1) и выключает после поездки. В игре не проверено.
 buyAuto Empty Bottle {
-	npc payon 159 96
+	npc prt_in 126 76
 	npc_steps b
 	isMarket 0
 	standpoint

@@ -7,6 +7,7 @@
 """
 import asyncio
 import json
+from tests.persona_fixture import prontera_persona
 import random
 import tempfile
 import unittest
@@ -101,7 +102,7 @@ class MindCase(unittest.TestCase):
             self.sent.append(dict(a))
             return len(self.sent)
 
-        persona = json.loads((BRAIN_DIR / "personas" / f"{bot or self.bot}.json").read_text())
+        persona = prontera_persona(bot or self.bot)
         if not keep_sleep:
             persona.pop("sleep", None)
         self.minds = getattr(self, "minds", [])

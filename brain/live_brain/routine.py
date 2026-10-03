@@ -596,6 +596,11 @@ class Routine:
     async def follow_lead(self, now, state, lead):
         """AUT-059: участник группы живёт в темпе лидера; безопасность (HP) — всё равно первой."""
         mode, lmap = lead
+        agency = getattr(self.mind, "activities", None)
+        if (agency and agency.agentic and mode == "hunt" and self.st["mode"] == "town"
+                and (agency.st.get("operator_until", 0) > now
+                     or (agency.st.get("status") == "running" and agency.st.get("name") != "hunt_early"))):
+            return  # закончить собственное обслуживание/отдых, затем догнать лидера
         if mode == "town" and self.st["mode"] == "hunt":
             self.note("routine_party_town", "Лидер группы отдыхает — иду к нему в город.", 1)
             await self.to_town(now)
@@ -617,7 +622,7 @@ class Routine:
                 self.set_goal(f"охочусь в группе на {self.hunt_map()}")
                 self.last_sent = 0
 
-    async def in_town(self, now, state, own_schedule=True):
+    async def in_town(self, now, state, own_schedule=True, operator_override=False):
         at_town = (state.get("map") == self.town["map"] and state.get("x") is not None
                    and max(abs(int(state["x"]) - self.town["x"]), abs(int(state["y"]) - self.town["y"]))
                    <= self.town.get("radius", 3) + 2)
@@ -639,6 +644,9 @@ class Routine:
             await self.service_check(now, state)
         if not self.hp_ok(state):
             await self.check_recover_blocked(now, state)
+        agency = getattr(self.mind, "activities", None)
+        if agency and agency.agentic and not operator_override:
+            own_schedule = own_schedule and agency.st.get("name") == "hunt_early" and agency.st.get("status") == "running"
         if own_schedule and self.st["hunted"] < self.st["budget"] and now >= self.st["rest_until"]:
             if not self.hp_ok(state):                      # AUT-086: больной не идёт драться по расписанию
                 if not self.waiting_hp_noted:
@@ -730,6 +738,11 @@ class Routine:
             self.new_day(now)
         if self.st.get("mode") == "sleep":                   # ops: ORG-044 разбудил оператор — флаг сна снять
             self.mark_awake()
+        agency = getattr(self.mind, "activities", None)
+        if agency and agency.agentic and what in ("rest", "hunt"):
+            agency.cancel(now, "команда оператора: " + what)
+            agency.st["operator_until"] = now + self.minutes("break_minutes") if what == "rest" else 0
+            agency.save()
         if what == "rest":
             if self.st["mode"] == "town":
                 return "уже отдыхает"
@@ -740,7 +753,7 @@ class Routine:
             if self.st["hunted"] >= self.st["budget"]:
                 self.st["budget"] = self.st["hunted"] + self.minutes("session_minutes")
             self.st["rest_until"] = now
-            await self.in_town(now, self.mind.state)
+            await self.in_town(now, self.mind.state, operator_override=True)
             if self.st["mode"] != "hunt":
                 self.save()
                 return f"HP {self.mind.state.get('hp_pct')}% ниже {self.cfg.get('min_hp_to_hunt', 80)}% — сначала восстановлюсь"
