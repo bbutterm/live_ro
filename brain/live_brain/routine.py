@@ -789,10 +789,12 @@ class Routine:
         self.note("routine_grow_advice", f"Мои места охоты слишком лёгкие для {state['lv']} уровня; по атласу "
                                          f"подойдут: {', '.join(advice)}.", 2)
         alert = getattr(self.mind, "alert", None)
-        # soak: оповещение владельцу — когда советы изменились, иначе раз в неделю (было раз в сутки у каждого)
+        # soak: оповещение владельцу раз в неделю (было раз в сутки у каждого); раньше — только если советы сменились
+        # целиком (ни одной карты из прошлого оповещения): с уровнем и порядком атласа список «плывёт» каждый день
         told = self.mind.mem.get("grow_alert") or {}         # kv: распорядок (st) сбрасывается каждый день
         now = self.clock()
-        if alert and (told.get("advice") != list(advice) or now - told.get("ts", 0) >= GROW_ALERT_SEC):
+        moved = not set(told.get("advice") or ()) & set(advice)
+        if alert and (moved or now - told.get("ts", 0) >= GROW_ALERT_SEC):
             if alert("growth", f"{state.get('name')}: lv {state['lv']}, места охоты слишком лёгкие; атлас советует "
                                f"{', '.join(advice)} (включить карты и auto_hunt_maps)", every=0):
                 self.mind.mem.set("grow_alert", {"advice": list(advice), "ts": now})

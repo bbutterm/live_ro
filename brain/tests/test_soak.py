@@ -365,7 +365,7 @@ class PartySignalTest(BodyMixin, unittest.TestCase):
 
 class GrowthAlertTest(BodyMixin, unittest.TestCase):
     """soak: оповещение growth («места охоты слишком лёгкие») приходило владельцу каждые сутки у каждого жителя
-    (40 за 14 суток у Ilsa). Теперь — при смене советов, иначе раз в неделю."""
+    (40 за 14 суток у Ilsa). Теперь — раз в неделю; раньше — только если советы сменились целиком."""
 
     def test_weekly_unless_advice_changes(self):
         m, r = self.mind, self.mind.routine
@@ -382,12 +382,16 @@ class GrowthAlertTest(BodyMixin, unittest.TestCase):
         m.alert = alert
         advice = ["gef_fild02", "prt_fild10"]
         maps = unittest.mock.Mock(advice=lambda *a, **kw: list(advice))
-        for day in range(14):
+        for day in range(10):
             r.st["day"] = f"d{day}"
             r.grow(maps)
             self.clock.t += 86400
-        self.assertEqual(len(alerts), 2, "те же советы — раз в неделю (было 14)")
-        advice.append("gef_fild09")
+        self.assertEqual(len(alerts), 2, "те же советы — раз в неделю (сутки 0 и 7; было 10)")
+        advice[:] = ["prt_fild10", "gef_fild09", "gef_fild02"]       # уровень вырос: список «поплыл»
         r.st["day"] = "d14"
         r.grow(maps)
-        self.assertEqual(len(alerts), 3, "советы изменились — сразу")
+        self.assertEqual(len(alerts), 2, "часть советов та же — ждёт недели")
+        advice[:] = ["moc_fild01", "moc_fild02"]
+        r.st["day"] = "d15"
+        r.grow(maps)
+        self.assertEqual(len(alerts), 3, "советы сменились целиком — сразу")
