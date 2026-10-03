@@ -37,11 +37,14 @@ DECISION = {
 }
 
 
+JEV_REPLY = {"importance": 2, "call_llm": False,
+             "quick": {"action": "whisper", "text": "Привет. Занят, охочусь."}, "why": "простое приветствие"}
+
+
 class FakeOpenRouter(BaseHTTPRequestHandler):
     """Один фейковый сервер для обоих провайдеров: модель test/jev отвечает как JEV."""
     requests = []
-    jev_reply = {"importance": 2, "call_llm": False,
-                 "quick": {"action": "whisper", "text": "Привет. Занят, охочусь."}, "why": "простое приветствие"}
+    jev_reply = dict(JEV_REPLY)
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -114,6 +117,7 @@ class BrainHarness(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         FakeOpenRouter.requests.clear()
+        FakeOpenRouter.jev_reply = dict(JEV_REPLY)    # тесты меняют ответ JEV — не тащить его в следующий тест
         self.shift = shift_time(self)        # timefix: полдень мира фиксированного дня — тесты не о распорядке
 
     def tearDown(self):
@@ -155,6 +159,23 @@ class BrainHarness(unittest.TestCase):
     def connect(self):
         return FakePlugin(str(self.root / "run" / "brain" / "bot01.sock"))
 
+    def wait_for(self, cond, what, timeout=20):
+        """flaky: ждать, пока мозг дойдёт до нужного состояния, вместо фиксированного sleep — под нагрузкой
+        (параллельные прогоны) процесс мозга отвечает медленнее, и пауза в 1–3 с иногда не хватала."""
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                if cond():
+                    return
+            except (ValueError, OSError, sqlite3.Error):     # журнал/БД дописываются прямо сейчас
+                pass
+            if time.monotonic() > deadline:
+                self.fail(f"за {timeout} с не дождались: {what}")
+            time.sleep(0.05)
+
+    def count(self, rtype, background=False):
+        return sum(1 for r in self.decisions(background) if r["type"] == rtype)
+
 
 
 class BrainTest(BrainHarness):
@@ -174,7 +195,7 @@ class BrainTest(BrainHarness):
         self.assertEqual(actions[1]["map"], "prt_fild07")
         for a in actions:
             plugin.send({"type": "ack", "id": a["id"], "ok": True, "command": f"cmd-{a['action']}"})
-        time.sleep(1)
+        self.wait_for(lambda: self.count("ack") >= 2, "оба ack в журнале")
         plugin.close()
         self.stop(proc)
 
@@ -199,7 +220,8 @@ class BrainTest(BrainHarness):
 
         # Память переживает перезапуск, ключ не попадает в лог.
         proc = self.start_brain(env)
-        time.sleep(1.5)
+        self.wait_for(lambda: (self.root / "brain.log").read_text().count("; память: ") >= 2,
+                      "второй запуск загрузил память")
         self.stop(proc)
         log = (self.root / "brain.log").read_text()
         self.assertNotIn(FAKE_KEY, log)
@@ -211,7 +233,7 @@ class BrainTest(BrainHarness):
         plugin = self.connect()
         plugin.send({"type": "state", "name": "Arkady", "lv": 17, "map": "prt_fild08"})
         plugin.send({"type": "event", "kind": "died", "map": "prt_fild08"})
-        time.sleep(3)
+        self.wait_for(lambda: self.count("fallback") >= 1, "решение fallback без ключа")
         plugin.close()
         self.stop(proc)
         self.assertEqual(FakeOpenRouter.requests, [])
