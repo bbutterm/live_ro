@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import resources
+from . import interests as interests_mod                                # interests: ORG-103
 from .atlas import ARCHETYPES
 from .economy import MERCHANTS
 from .healer import DEFAULTS as HEALER_DEFAULTS, HEALER_JOBS
@@ -115,6 +116,12 @@ def read_memory(db_path, now, names):
             "legacy": legacy if isinstance(legacy, dict) else None}             # legacy:
 
 
+def persona_interests(repo, persona):                                   # interests: ORG-103
+    """Интересы жителя по его персоне brain/personas/<persona>.json (поле interests или вывод из черт)."""
+    p = _json(Path(repo) / "brain" / "personas" / f"{persona}.json")
+    return interests_mod.interests(p) if isinstance(p, dict) and p else []
+
+
 def residents(repo, lab_root, lab_bots, now):
     doc = _json(Path(repo) / "brain" / "world" / "roster.json", {}) or {}
     reg = doc.get("residents") or {}
@@ -134,6 +141,7 @@ def residents(repo, lab_root, lab_bots, now):
             "relations": (mem or {}).get("relations") or {},
             "activities": sorted(((mem or {}).get("activities") or {}).items(), key=lambda kv: -kv[1])[:3],
             "legacy": (mem or {}).get("legacy"),                                  # legacy: ORG-083
+            "interests": persona_interests(repo, o.get("persona") or bot),        # interests: ORG-103
         })
     return out
 
@@ -332,6 +340,8 @@ def render(data):
         if r["party"]:
             head += f", группа «{r['party']}»"
         lines.append(head + (f" [{'; '.join(flags)}]" if flags else ""))
+        if r.get("interests"):                                              # interests: ORG-103
+            lines.append("      интересы: " + ", ".join(interests_mod.RU.get(x, x) for x in r["interests"]))
         if r["relations"]:
             lines.append("      связи: " + ", ".join(f"{n} {a:+d}" for n, a in sorted(r["relations"].items())))
         if r["activities"]:

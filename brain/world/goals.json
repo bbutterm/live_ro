@@ -143,6 +143,14 @@
     "min_level": 1
   },
 
+  "interests": {
+    "_comment": "ORG-103 интересы (brain/live_brain/interests.py, docs/LIFE.md §6): 1–3 увлечения из каталога (cards, bestiary, pets, explore, trade, craft, achieve, places, people) — persona.interests или вывод из черт. Факты хобби пишутся у всех; тема хобби у не увлечённого — шанс × other, приручение — с шансом tame_other за попытку, экспедиция — любопытство × explore_other, мечта — оценка × other. Выключить: enabled=false или BRAIN_DISABLE=interests (всё как раньше).",
+    "enabled": true,
+    "other": 0.2,
+    "tame_other": 0.2,
+    "explore_other": 0.7
+  },
+
   "dream": {
     "_comment": "dreams: ORG-081 жизненный путь (live_brain/dream.py, docs/LIFE.md): мечта на месяцы из черт характера, этапы по фактам питают цели недели (aims) и мотивы. stale_days без нового этапа — мечта оставлена; region_hops — окрестности города для мечты explorer; save — цель копилки (ORG-073) по виду мечты, у rich — вся сумма.",
     "enabled": true,

@@ -59,7 +59,7 @@ def install(social, mind, world=None):
         return
     if not ((world or {}).get("topics") or {}).get("enabled", True):
         return
-    social.register_topic("pet", lambda peer, now: pet(mind))
+    social.register_topic("pet", lambda peer, now: pet(mind), interest="pets")   # interest: ORG-103
     social.register_topic("rumor", lambda peer, now: rumor(mind, social, peer, now), said=told_rumor(social))
     social.register_topic("aim", lambda peer, now: aim(mind))
     social.register_topic("news", lambda peer, now: news(mind, social, peer, now), said=told_news(social))

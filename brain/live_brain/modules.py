@@ -82,6 +82,7 @@ from .habits import Habits                # habits: ORG-068
 from .guild import Guild
 from .home import Home
 from .mood import Mood
+from .interests import Interests   # interests: ORG-103 увлечения жителя (без тика)
 from .party import Party
 from .pets import Pets
 from .rivalry import Rivalry
@@ -120,6 +121,7 @@ from .world_calendar import WorldCalendar
 MODULES = (
     Home,              # EARLY: до SafetyPolicy
     Mood,
+    Interests,         # interests: ORG-103 — до хобби-модулей (они читают mind.interests при вызове)
     WorldCalendar,
     Career,
     Routine,

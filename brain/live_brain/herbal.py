@@ -97,7 +97,8 @@ class Herbal:
         if social is not None and hasattr(social, "register_topic"):
             for key, pool in PHRASES.items():
                 social.phrases.setdefault(key, pool)
-            social.register_topic("herbal", self.facts, said=self.said, chance=self.cfg["brag_chance"])
+            social.register_topic("herbal", self.facts, said=self.said, chance=self.cfg["brag_chance"],
+                                  interest="craft")   # interest: ORG-103
 
     # ---------- данные ----------
 

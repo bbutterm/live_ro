@@ -39,6 +39,8 @@ import random
 import time
 from pathlib import Path
 
+from . import interests as interests_mod                 # interest: ORG-103
+
 log = logging.getLogger("dream")
 
 REACH_PATH = Path(__file__).resolve().parents[1] / "world" / "explore_reach.json"
@@ -298,6 +300,7 @@ class Dream:
             if not d:
                 continue
             score = sum(w * t.get(trait, 0.5) for trait, w in tpl["traits"].items()) / sum(tpl["traits"].values())
+            score *= interests_mod.weight(self.mind, interests_mod.DREAM_INTEREST.get(kind))   # interest: ORG-103
             score += self.rng.uniform(0, 0.25) + (PERSONA_BONUS if favorite == kind else 0)
             score += WED_BONUS if kind == "wedding" else 0                   # wed:
             scored.append((score, kind, d))

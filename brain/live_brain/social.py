@@ -51,6 +51,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import weather
+from . import interests as interests_mod                 # interest: ORG-103 вес темы хобби
 from . import grammar as grammar_mod                       # grammar: ORG-065 слой реплик поверх фраз персон
 from .world_calendar import PHRASES as CALENDAR_PHRASES   # calendar: фразы тем holiday/birthday по умолчанию
 
@@ -297,18 +298,21 @@ class Social:
 
     # ---------- реестр тем (ORG-066) ----------
 
-    def register_topic(self, name, provider, reply=None, said=None, chance=1.0, opener=False, fallback=False):
+    def register_topic(self, name, provider, reply=None, said=None, chance=1.0, opener=False, fallback=False,
+                       interest=None):                                         # interest: ORG-103
         """Тема разговора: provider(peer, now) -> факты (dict) или None — темы нет.
 
         reply — ключ фраз ответа собеседника (по умолчанию <name>_re); said(peer, facts, now) — после реплики
         (отметить «уже рассказал»); chance — шанс предложить тему, если она доступна; opener — может заменить
         приветствие на шаге 1 (с тем же шансом); fallback — только когда других тем нет (погода).
         Ключ "_key" в фактах — другой ключ фраз (weather_rain, remember_heal); ключи с "_" в фразы не идут.
+        interest — увлечение (interests.CATALOG): шанс темы × вес интереса (ORG-103; не увлечён — × 0.2).
         """
         if not re.fullmatch(r"[a-z]{3,12}", name):
             raise ValueError(f"тема {name!r}: нужно [a-z]{{3,12}} (метка [chat:<тема>:<шаг>])")
         self.topics[name] = {"provider": provider, "reply": reply or f"{name}_re", "said": said,
-                             "chance": chance, "opener": opener, "fallback": fallback}
+                             "chance": chance, "opener": opener, "fallback": fallback,
+                             "interest": interest}                                    # interest:
 
     def provide(self, name, peer, now):
         """Факты одной темы реестра; ошибка поставщика — в лог, темы нет."""
@@ -340,7 +344,8 @@ class Social:
         for name, t in self.topics.items():
             if t["fallback"] or (opener and not t["opener"]):
                 continue
-            if t["chance"] < 1 and self.rng.random() >= t["chance"]:
+            chance = t["chance"] * interests_mod.weight(self.mind, t.get("interest"))    # interest: ORG-103
+            if chance < 1 and self.rng.random() >= chance:
                 continue
             f = self.provide(name, peer, now)
             if f is None:

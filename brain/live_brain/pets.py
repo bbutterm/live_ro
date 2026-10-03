@@ -17,8 +17,11 @@
 """
 import json
 import logging
+import random
 import time
 from pathlib import Path
+
+from . import interests as interests_mod                 # interest: ORG-103
 
 log = logging.getLogger("pets")
 
@@ -58,6 +61,7 @@ class Pets:
         self.st = mind.mem.get("pets") or {"tries": [], "last_try": 0, "hungry_note": 0, "fed": 0, "pet": None}
         self.setup_epoch = None
         self.last_check = 0.0
+        self.rng = random.Random()                     # interest: бросок «приручать ли» у не увлечённых
 
     # ---------- данные ----------
 
@@ -172,6 +176,11 @@ class Pets:
         near = {str(k): v for k, v in (pet.get("near") or {}).items()}
         for p in self.favorites():
             if items.get(str(p["tame"])) and near.get(str(p["id"]), 99) <= TAME_DIST:
+                if self.rng.random() >= interests_mod.weight(self.mind, "pets", "tame_other"):   # interest: ORG-103
+                    self.st["last_try"] = now                                     # interest: не увлечён — не сейчас
+                    self.save()
+                    self.mind.write_decision({"type": "pets", "event": "tame_skip", "why": "не увлечён(а)"})
+                    return
                 self.st["last_try"] = now
                 self.st["tries"].append(now)
                 self.save()

@@ -175,7 +175,8 @@ class Places:
         if social is not None and hasattr(social, "register_topic"):
             for key, pool in PHRASES.items():
                 social.phrases.setdefault(key, pool)
-            social.register_topic("place", self.facts, said=self.said, chance=self.cfg["topic_chance"])
+            social.register_topic("place", self.facts, said=self.said, chance=self.cfg["topic_chance"],
+                                  interest="places")   # interest: ORG-103
 
     # ---------- данные ----------
 
