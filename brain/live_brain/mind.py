@@ -547,15 +547,27 @@ class Mind:
 
         AUT-006: команды ждут в файле первого свежего состояния тела (иначе решение принималось бы
         по старому снимку); каждая исполняется один раз; старше INBOX_TTL — отклоняется с причиной.
+
+        flaky: писатель (`>>` в scripts/lab, open("a")) сначала создаёт/открывает файл и лишь потом пишет.
+        Прежнее «прочитать и unlink» в этот промежуток читало пустой файл и удаляло его — строка уходила
+        в удалённый inode, команда терялась молча (test_plans падал ~1 раз из 20). Теперь файл забирается
+        атомарным rename в <inbox>.taken и читается на СЛЕДУЮЩЕМ тике: открывший файл до rename писатель
+        дописывает в тот же inode, новые писатели создают новый inbox. Цена — задержка в один тик.
         """
         if not self.inbox_path or not self.fresh_state:
             return
+        taken = self.inbox_path + ".taken"
+        lines = []
         try:
-            with open(self.inbox_path, encoding="utf-8") as f:
+            with open(taken, encoding="utf-8") as f:
                 lines = f.read().splitlines()
-            os.unlink(self.inbox_path)
+            os.unlink(taken)
         except FileNotFoundError:
-            return
+            pass
+        try:
+            os.rename(self.inbox_path, taken)            # прочитаем на следующем тике
+        except FileNotFoundError:
+            pass
         for line in lines:
             try:
                 cmd = json.loads(line)
