@@ -85,6 +85,8 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `gaze` | поворот к собеседнику-жителю | вкл. | social, жители; `look_at` → `lookp` | низкий: поворот виден | 3 |
 | `dream` | мечта на месяцы, этапы по фактам, мотив этапа | вкл. | — | действий нет; меняет мотивы | 1 |
 | `savings` | копилка мечты (резерв: не дарит зени, не перекупает); банк — флаг | вкл., **банк выкл.** (`savings.bank: false`) | dream; банк: `feature.banking`, пакеты 09A6–09AB | деньги (резерв меняет щедрость); банк — зени на счёт | 4 (банк — 7) |
+| `treat` | угощение по поводу (ORG-099, Т-45): день рождения жителя, примирение, выпуск ученика → щедрый (generosity ≥ 0.3) отдаёт другу рядом 3 зелья сверх запаса, ≤ 5 % свободных зени по цене NPC, раз в 7 дней | вкл. (`treat.enabled`) | economy, жители, calendar | деньги: свои зелья жителю (действие `give`, как взаимопомощь); видно рядом | 3 |
+| `gear` | снаряжение (ORG-097, Т-44): совет «что купить» у NPC по каталогу (бюджет сверх keep и копилки), надеть лучшее из рюкзака (`equip` → `eq`); **покупки нет** | **выкл.** (`gear.enabled: false`) | economy; мост с `equip` и `state.equip` (строки `# sinks:`) | тело: смена снаряжения (обратимо); деньги — нет | 4 |
 | `memoir` | раз в неделю `state/<bot>/memoir.md` | вкл.; `memoir.llm: false` | — | только файл | 0 |
 | `mentor` | наставник новичку (< 20 ур. или `born` < 14 дн.): советы, зелья, выпуск на 25 | вкл.; спит без новичка | жители | шёпоты, зелья через `[need:]` | 2 |
 | `bestiary` | счёт видов, «первый среди жителей» в шине | вкл. | — | действий нет (первый запуск молча) | 0 |
@@ -118,7 +120,7 @@ LLM выключен по умолчанию (`BRAIN_LLM=off`).
 
 | Что | Где | Состояние | Риск | Выключить без отката кода |
 |---|---|---|---|---|
-| мост `brainBridge` | плагин, +435 строк после №16 (`look_at`, `skill_on_player`, `bank_*`, `refine`, `spar`, `arrowcraft`, `craft_setup`, `achieve_reward`, `guild_*`) | всегда | обновлять вместе с мозгом (HANDOFF №16) | нет — откат commit |
+| мост `brainBridge` | плагин, +435 строк после №16 (`look_at`, `skill_on_player`, `bank_*`, `refine`, `spar`, `arrowcraft`, `craft_setup`, `achieve_reward`, `guild_*`; `equip` и `state.equip`/`equip_bag` — # sinks:, Т-44) | всегда | обновлять вместе с мозгом (HANDOFF №16) | нет — откат commit |
 | плагины `refine`, `spar` | `loadPlugins_list` обоих `sys.txt` | загружаются всегда, ждут действия мозга | ошибка загрузки Perl сломает тело | убрать из `loadPlugins_list`, перезапустить тело |
 | плагин `pets` | `sys.txt` | всегда; корм — `pet_autoFeed 1` | — | убрать из списка |
 | `buyAuto Pet Food`, `buyAuto Empty Bottle` | `config.txt` | `disabled 1` (Empty Bottle включает только herbal через `craft_setup`) | деньги | уже выкл. |
@@ -169,7 +171,7 @@ grep -h '"source": "<модуль>"' $L/state/bot0*/decisions.jsonl | tail      
 перезапускаются).
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,treat
 ```
 Включены остаются: `career`, `routine`, `economy`, `party`, `activity`, `bonds`, `crew`, `pets`, `social`, `rumors`,
 `society`, `aims`, `world_bus` (база №14–16) и пассивные летописцы `collection`, `places`, `bestiary`, `achieve`,
@@ -187,7 +189,7 @@ Andrew; `achieve`: события `achievement_list`, если пакет при
 ### Этап 1 — внутренний мир без новых действий
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest,attention
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest,attention,treat
 ```
 Включаются: `mood`, `calendar`, `crowd`, `habits`, `dream`, `interests` (ORG-103: веса тем хобби, приручения,
 экспедиций и выбора мечты), `wealth` (ORG-100: мотив денег от копилки и медианы мира). Ни одного нового действия моста — только мотивы, выбор
@@ -200,7 +202,7 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episod
 ### Этап 2 — речь между жителями
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,savings,fest
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,savings,fest,treat
 ```
 Включаются: `episodes`, `gossip`, `rivalry`, `director`, `mentor`. Всё — шёпоты жителю (или чат группы у `rivalry`).
 Вместе с речью включается `attention` (бюджет внимания ORG-109): `report` — строка «внимание», отказы
@@ -217,7 +219,8 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,sav
 BRAIN_DISABLE=explore,strangers,healer,orders,market_day,savings
 ```
 Включаются: `gaze` (новое действие моста `look_at` → `lookp`), `tradition` (20–21 ч мира у фонтана), `home`
-(Kafra-сохранение, отдых в доме). Можно разнести на два прогона: сначала `gaze,tradition`, затем `home`.
+(Kafra-сохранение, отдых в доме). И `treat` (ORG-099: угощение другу по поводу — действие `give`; смотреть `type: treat`,
+`treat_given` после `Deal complete`). Можно разнести на два прогона: сначала `gaze,tradition`, затем `home`.
 Смотреть: `lookp` в `console.log`, `type: gaze` (`look_at`/`seen`); вечером — занятие `gathering`, `type: tradition`;
 `type: home`, действие `job_change` с `path home`, в `console.log` фраза Kafra «Your Respawn Point has been saved here»;
 после смерти — `type: home`, `event: death` с полем `expect` (где ждёт возрождения), и карта возрождения совпала с ним
@@ -231,7 +234,9 @@ BRAIN_DISABLE=explore,strangers,healer,orders,market_day,savings
 ```
 BRAIN_DISABLE=explore,strangers,healer
 ```
-Включаются: `savings` (банк выключен), `orders`, `market_day`.
+Включаются: `savings` (банк выключен), `orders`, `market_day`. Отдельным прогоном — `gear.enabled: true` (ORG-097: совет `gear_wish`, надеть из рюкзака —
+`type: gear`, `eq` в `console.log`, `gear_worn` по `state.equip`; покупки у NPC нет). Стоки (Т-46): `npc_bought`
+(автозакупка NPC), `service_paid` (сбор почты) — строки «покупки NPC, z», «услуги, z» в `report`, M18 в `scripts/lab organic`.
 Смотреть: `type: orders`, метки `[order:` в `console.log`, `Deal complete` у обоих; `savings_progress`, строка
 копилки в `report`; `market_day_open`/`market_day_summary` — только в субботу мира (день 6 календаря по
 `timezone_offset_hours`); иначе «не наблюдалось». Экономика за сутки — `report`, `chronicle` («экономика:»).
@@ -298,9 +303,9 @@ BRAIN_DISABLE=
 
 Первый прогон — строка этапа 0:
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,treat
 ```
-Почему так, а не «всё по умолчанию» (по умолчанию включено 40 модулей реестра из 46 — с `interests` и `wealth`):
+Почему так, а не «всё по умолчанию» (по умолчанию включен 41 модуль реестра из 48 — с `interests`, `wealth` и `treat`; `gear` выключен):
 - **Неизвестна сама база.** Отчётов по №10–16 нет; на VPS последний проверенный код — cbeb2a9. Если включить всё,
   любой сбой придётся делить между 30+ модулями и новым телом (мост, таблицы переходов, продажа лута).
 - **`home` ведёт к Kafra** этапом jobChange в первый же отдых — новое движение и диалог с NPC, ещё и меняет точку

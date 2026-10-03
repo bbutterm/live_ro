@@ -84,7 +84,8 @@ class Economy:
               "mail_result": {"call": "on_mail_result", "own": True},
               "mail_taken": {"call": "on_mail_taken", "own": True},
               "mail_received": {"call": "on_mail_received", "own": True},
-              "npc_sold": {"own": True}, "vend_sold": {"own": True}}       # только память, не в gate
+              "npc_sold": {"own": True}, "vend_sold": {"own": True},       # только память, не в gate
+              "npc_bought": {"own": True}}                                 # sinks: сток — автозакупка NPC (Т-46)
     PROMPT = [("хозяйство", "summary", 130), ("рынок", "market_summary", 140)]
 
     def __init__(self, mind, cfg, clock=None):
@@ -720,6 +721,9 @@ class Economy:
         amount = event.get("amount") if event.get("item") else event.get("zeny")
         self.note("mail_sent", f"Отправил письмо {to}: {event.get('title')} — сервер принял.", 1, peer=to,
                   zeny=int(event.get("zeny") or 0), item=event.get("item"), amount=event.get("amount"), via=kind)
+        fee = int(event.get("zeny") or 0) // 50 + (MAIL_TAX_ITEM if event.get("item") else 0)    # sinks: сбор RODEX
+        if fee > 0:                                                                              # sinks: (mail.cpp)
+            self.mind.mem.add_event("service_paid", {"zeny": fee, "service": "mail", "peer": to})   # sinks: Т-46
         if kind == "gift":
             self.mind.mem.update_relation(str(to), 1, "помог ему издалека, почтой")
             self.note("gift_given", f"Отдал {to} {self.label(item, amount)} почтой.", 2, peer=to, item=item,
@@ -807,7 +811,8 @@ def metrics_from_rows(rows, last_state=None):
     m = {"зени": (last_state or {}).get("zeny"), "сделок с жителями": 0, "продал жителям, z": 0,
          "купил у жителей, z": 0, "подарков отдал": 0, "подарков получил": 0, "подарено зени": 0,
          "писем отправил": 0, "писем получил": 0, "продажи NPC, z": 0, "продажи из лавки, z": 0,
-         "долги жителей, z": 0, "оборот между жителями, z": 0, "доля продаж жителям": None}
+         "долги жителей, z": 0, "оборот между жителями, z": 0, "доля продаж жителям": None,
+         "покупки NPC, z": 0, "услуги, z": 0, "угощений": 0}                 # sinks: стоки (Т-46)
     for kind, data in rows:
         d = json.loads(data) if isinstance(data, str) else (data or {})
         if kind == "trade_sold":
@@ -830,6 +835,12 @@ def metrics_from_rows(rows, last_state=None):
             m["продажи NPC, z"] += int(d.get("zeny") or 0)
         elif kind == "vend_sold":
             m["продажи из лавки, z"] += int(d.get("zeny") or 0)
+        elif kind == "npc_bought":                                       # sinks:
+            m["покупки NPC, z"] += int(d.get("zeny") or 0)
+        elif kind == "service_paid":                                     # sinks:
+            m["услуги, z"] += int(d.get("zeny") or 0)
+        elif kind == "treat_given":                                      # sinks:
+            m["угощений"] += 1
     m["оборот между жителями, z"] = m["продал жителям, z"] + m["купил у жителей, z"] + m["подарено зени"]
     total = m["продал жителям, z"] + m["продажи NPC, z"] + m["продажи из лавки, z"]
     m["доля продаж жителям"] = round(m["продал жителям, z"] / total, 2) if total else None
@@ -837,7 +848,7 @@ def metrics_from_rows(rows, last_state=None):
 
 
 METRIC_KINDS = ("trade_sold", "trade_bought", "trade_debt", "gift_given", "gift_received", "mail_sent", "mail_got",
-                "npc_sold", "vend_sold")
+                "npc_sold", "vend_sold", "npc_bought", "service_paid", "treat_given")   # sinks: Т-46
 
 
 def economy_metrics(memory, since):

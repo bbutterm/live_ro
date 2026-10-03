@@ -702,8 +702,8 @@ class Gear:
 `npc_bought {zeny}` — убыль зени за последовательность автозакупки, как `npc_sold`), `bots/tests/economy.t`,
 `economy.py` (`EVENTS` — `npc_bought` own; `on_mail_result` — `service_paid {zeny, service: "mail"}`: сбор RODEX
 2 % вложенных зени + 2500 за предмет, `conf/battle/misc.conf`; `metrics_from_rows` — «покупки NPC, z», «услуги, z»,
-«угощений»), `organic.json` (без изменений ключей; `mail_sent.zeny` — передача между жителями, не сток:
-убрать из `sink_kinds`), `brain/tests/test_economy*.py`, `docs/ECONOMY.md`.
+«угощений»), `organic.json` без изменений (`mail_sent`/`trade_bought` — отток жителя, но не мира; `seen_sink`
+их и так не считает доказательством трат), `brain/tests/test_sinks.py`, `docs/ECONOMY.md`.
 
 **Тесты.** Perl: зени 2000 → 1400 за автозакупку — `npc_bought 600`; рост зени — без события. Python: метрики
 считают покупки NPC и сбор почты; M18 = сток/приток по `npc_bought` + `service_paid`.

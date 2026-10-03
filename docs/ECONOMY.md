@@ -354,6 +354,51 @@ OpenKore надевает сам только при настройке экип
 (`economy_storeIds`): `craft_setup keep` перекрывает это для лучника. Подарки/продажа стрел другим лучникам и
 «заказы самому себе» (ORG-070) для материалов — следующий шаг.
 
+## Стоки зени: снаряжение, угощение, траты (ORG-097, ORG-099, ORG-100 ч. 2; ТЗ Т-44…Т-46)
+
+Риск R8 (docs/IDEAS2.md): приток — продажа лута NPC, сток — почти только `buyAuto Red Potion`; мотив `wealth`
+(ORG-100) без выхода копит бессмысленно. Три части:
+
+**Снаряжение (ORG-097, часть 1) — `brain/live_brain/gear.py`, по умолчанию выключено (`gear.enabled: false`).**
+- Бюджет = (зени − `economy.market.keep_zeny` − копилка мечты `savings.reserve`) / (1 + `greed_scale` × жадность):
+  ниже запаса и копилки ничего не советуется; жадный тянет дольше.
+- Что купить — готовый `progression.next_equipment(state, бюджет)` по каталогу `brain/world/jobs/catalog.json`
+  (`scripts/gen_progression.py`: магазины Пронтеры/Изюда из `npc/merchants/*` rAthena; `Jobs`, `EquipLevelMin`,
+  `Attack`, `Defense`, `Locations`, `Gender` из `db/re/item_db_equip.yml`; тип оружия профессии — `progression.json`
+  `classes.*.weapon_types`). Только апгрейд по ATK оружия / DEF брони; карты, заточка и renewal-формулы не учитываются.
+- Совет: событие `gear_wish {item, name, slot, price, gain, shop}` один раз на предмет, kv `gear.pick`, поле
+  промпта «снаряжение: купить Scimitar (+32 ATK) за 17000z — prt_in Weapon Dealer», строка летописи.
+- Надеть из рюкзака: мост (`brainBridge.pl`, строки `# sinks:`) кладёт в state `equip {weapon, Armor, Left_Hand,
+  Shoes, Garment, Head_Top: nameID}` по маскам `EQP_*` (rAthena `src/common/mmo.hpp`; поле `equipped` предмета
+  OpenKore `Actor/Item.pm` — та же маска; двуручное — в `weapon` и `Left_Hand`) и `equip_bag [nameID]`.
+  Вещь из каталога в рюкзаке лучше надетой (профессия, уровень, пол, тип оружия) → действие `equip {item}` →
+  «eq <номер в рюкзаке>» (OpenKore `Commands.pm` cmdEquip). Факт — `state.equip` показал вещь в слоте:
+  `gear_worn`; нет за 120 с — `gear_wear_failed`. Только в режиме отдыха, тело свободно, не чаще 10 мин.
+- **Покупки у NPC нет.** Вторая часть: диалог магазина или разовый блок `buyAuto` (как `craft_setup` у herbal) и
+  защита купленного от `sellAuto`/`storageAuto` (economy.pl кладёт снаряжение на склад) — новое действие моста с
+  деньгами, нужна проверка в игре.
+
+**Угощение (ORG-099) — `brain/live_brain/treat.py`, включено (`treat.enabled: true`).**
+- Повод: день рождения жителя (календарь, поле `born` в `roster.json`), примирение (`society_reconciled`),
+  выпуск моего ученика (`mentor_graduated`) за `occasion_hours` (24).
+- Условия: друг виден рядом (≤ 8 клеток), режим отдыха, тело свободно, щедрость ≥ `min_generosity` (0.3), одно
+  угощение на `cooldown_days` (7), один повод — один раз.
+- Что: первый из `items` (503, 502, 501), которого больше `keep` (5) и `economy.share[id].keep` (у 501 — 20), до
+  `amount` (3) штук; стоимость по цене NPC ≤ `budget_share` (5 %) зени сверх `keep_zeny` и копилки.
+- Исполнение — общий канал `economy.giving` + действие `give` (как взаимопомощь) и короткий шёпот повода; итог
+  `give_result ok` → `gift_given` и `treat_given {peer, item, amount, zeny, occasion}`, отношение +1.
+- Сток здесь косвенный: отданные зелья докупает `buyAuto` → `npc_bought`. `treat_given.zeny` — оценка по цене NPC,
+  в M18 не входит (иначе двойной счёт).
+
+**Траты в метриках (Т-46).**
+- `npc_bought {zeny}` — плагин economy: убыль зени между хуками `AI_buy_auto` и `AI_buy_auto_completed`
+  (OpenKore `AI/CoreLogic.pm` processAutoBuy); замер старше 900 с забывается (последовательность прервана).
+- `service_paid {zeny, service: "mail", peer}` — сбор почты RODEX после `mail_result ok`: 2 % вложенных зени +
+  2500 за вложенный предмет (rAthena `conf/battle/misc.conf` `mail_zeny_fee`, `mail_attachment_price`;
+  `src/map/mail.cpp` mail_setattachment).
+- Оба вида уже ждёт `brain/world/organic.json` `sink_kinds` (M18 = сток / приток, `organic.zeny_flow`): теперь M18
+  считается, а не «—». В `economy_metrics` — «покупки NPC, z», «услуги, z», «угощений».
+
 ## Метрики (ORG-037)
 
 `economy.economy_metrics(memory, since)` → dict (для report; `__main__.py` не изменён):
@@ -361,7 +406,8 @@ OpenKore надевает сам только при настройке экип
 `подарено зени`, `писем отправил/получил`, `продажи NPC, z` (событие тела `npc_sold`: прирост зени за
 автопродажу между хуками AI_sell_auto и AI_sell_auto_completed), `продажи из лавки, z` (`vend_sold`, хук
 vending_item_sold), `долги жителей, z`, `оборот между жителями, z` (продажи + покупки + подаренные зени),
-`доля продаж жителям` (продал жителям / (жителям + NPC + лавка)). `metrics_from_rows(rows)` — то же по
+`доля продаж жителям` (продал жителям / (жителям + NPC + лавка)). Стоки (Т-46): `покупки NPC, z` (`npc_bought`), `услуги, z`
+(`service_paid`, сбор почты), `угощений` (`treat_given`). `metrics_from_rows(rows)` — то же по
 строкам событий (для хроники); `CHRONICLE_LINES` — строки хроники для trade_*/mail_*.
 
 ## Поле промпта
@@ -379,6 +425,8 @@ vending_item_sold), `долги жителей, z`, `оборот между ж�
 - `card_floor`, наценки, пороги — правила live_ro, не рыночные цены; реальной цены карт в базе нет.
 - Список желаний не читает `items_control.txt` профиля — только `economy.market.wish`, share и карьеру.
 - `npc_sold` — разница зени за автопродажу; если в то же время пришли другие зени, они попадут в выручку.
+- `npc_bought` — так же разница зени за автозакупку; пришедшие в это время зени уменьшат трату. Снаряжение
+  (ORG-097) и угощение (ORG-099) в игре не проверялись; `equip`/`eq` и маски `equipped` — только тест на заглушках.
 - Подарок почтой предметом стоит 2500z сбора — дорого для зелий; ограничен `remote_gap_minutes` и
   запасом зени дарящего. Лимит писем в safety в памяти процесса (после перезапуска мозга сбрасывается).
 - Если тело перезапустилось посреди сделки, мозг освобождает её по таймаутам (SELL/BUY 300 с, почта 120 с).
