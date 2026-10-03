@@ -168,7 +168,7 @@ sub findPlayer {
 
 sub distanceTo {
 	my ($p) = @_;
-	my ($a, $b) = ($char->{pos_to}, $p->{pos_to});
+	my ($a, $b) = ($char->{pos}, $p->{pos}); # pos_to — цель движения, не подтверждённое приближение
 	return 999 unless $a && $b;
 	my ($dx, $dy) = (abs($a->{x} - $b->{x}), abs($a->{y} - $b->{y}));
 	return $dx > $dy ? $dx : $dy;

@@ -39,8 +39,8 @@ my @inv = (
 	{binID => 6, nameID => 2303, name => 'Jacket', type => 5, amount => 1},
 );
 $Globals::items_control{jacket} = {keep => 0, storage => 0, sell => 1};
-$Globals::char = FakeChar->new(name => 'Arkady', zeny => 5000, inv => \@inv, pos_to => {x => 150, y => 180});
-my $vera = {name => 'Vera', pos_to => {x => 156, y => 185}};
+$Globals::char = FakeChar->new(name => 'Arkady', zeny => 5000, inv => \@inv, pos => {x => 150, y => 180}, pos_to => {x => 150, y => 180});
+my $vera = {name => 'Vera', pos => {x => 156, y => 185}, pos_to => {x => 156, y => 185}};
 $Globals::playersList = FakePlayers->new($vera);
 require "$root/bots/plugins/economy/economy.pl";
 my $ic = \%Globals::items_control;
@@ -71,6 +71,14 @@ ok(!$ok && $why =~ /зени/, 'зени больше, чем есть, не о�
 ($ok, $why) = economy::startGive({id => 1, to => 'Vera', item => 2301, amount => 1});
 ok(!$ok, 'надетое не отдаю');
 
+# ---- фактическое приближение: pos_to уже цель, но персонаж ещё далеко ----
+$Globals::char->{pos} = {x => 150, y => 180};
+$Globals::char->{pos_to} = {x => 156, y => 185};
+$vera->{pos} = {x => 156, y => 185};
+is(economy::distanceTo($vera), 6, 'цель маршрута не считается прибытием');
+$Globals::char->{pos_to} = {x => 150, y => 180};
+$Globals::char->{pos} = {x => 150, y => 180};
+
 # ---- успешная передача ----
 ($ok, $why) = economy::startGive({id => 7, to => 'Vera', item => 501, amount => 10});
 ok($ok, "передача начата: $why");
@@ -78,6 +86,7 @@ ok($ok, "передача начата: $why");
 $Globals::char->{sitting} = 1;
 Plugins::call('mainLoop_post');
 is_deeply(\@Commands::ran, ['stand', 'move 156 185'], 'далеко — встаю и иду к жителю');
+$Globals::char->{pos} = {x => 155, y => 184};
 $Globals::char->{pos_to} = {x => 155, y => 184};
 @Commands::ran = ();
 Plugins::call('mainLoop_post');
@@ -150,6 +159,7 @@ sub evs { my ($kind) = @_; return map { +{@{$_}[1 .. $#$_]} } grep { $_->[0] eq 
 
 # ---- продажа жителю: одна сделка, оплата проверяется до обмена (ORG-033) ----
 %Globals::incomingDeal = ();
+$Globals::char->{pos} = {x => 155, y => 184};
 $Globals::char->{pos_to} = {x => 155, y => 184};
 ($ok, $why) = economy::startGive({id => 20, to => 'Vera', item => 4001, amount => 1, price => 1250});
 ok($ok, "продажа начата: $why");
