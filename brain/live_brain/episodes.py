@@ -93,6 +93,11 @@ class Episodes:
             f"SELECT id, ts, kind, data FROM events WHERE id > ? AND kind IN ({', '.join('?' * len(kinds))}) "
             "ORDER BY id LIMIT ?", (cursor, *kinds, BATCH)).fetchall()
         if not rows:
+            # soak: своих видов дальше нет — курсор на конец; иначе каждый тик пересматривались все kill/loot после
+            # последнего «своего» события (стоимость тика росла с возрастом памяти: ×9 за 7 суток прогона)
+            last = mem.db.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()[0]
+            if last > cursor:
+                mem.set("episodes_cursor", last)
             return
         eps = self.all()
         added = 0

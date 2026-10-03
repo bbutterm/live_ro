@@ -84,6 +84,7 @@ DEFAULTS = {
     "together_minutes": 30,
     "together_cap": 4,                # habit2: ORG-096 — «вместе» растит отношение только до этого значения
     "together_every_days": 3,         # habit2: и не чаще раза в N дней на пару
+    "burst_per_minute": 4,      # soak: реплик всем жителям за 60 с; лишние — в очередь, не теряются
     "night_hours": [1, 7],
     "night_factor": 3,
     "quiet_wake_minutes": 60,             # hush: ORG-110 личные тихие часы — после пробуждения
@@ -138,6 +139,7 @@ class Social:
         self.spot = None                  # имя текущей точки интереса или None (исходная точка отдыха)
         self.sat = False
         self.queue = []                   # отложенные ответы: (когда, кому, тема, шаг)
+        self.said_at = []                 # soak: когда ушли последние реплики (лимит burst_per_minute)
         self.near_since = {}              # житель -> с какого времени рядом
         self.last_tick = None
         self.last_emote = 0.0
@@ -629,6 +631,13 @@ class Social:
             self.mind.mem.add_event("social_said", {"peer": peer, "topic": "cold", "fact": False})
             self.save()
             return True
+        # soak: при 3+ жителях реакции веером (уровни всех после сна, приветы, соболезнования) давали 13+ шёпотов
+        # за минуту (replay.invariants SPAM_PER_MIN); сверх burst_per_minute реплика ждёт в очереди ответов
+        self.said_at = [t for t in self.said_at if now - t < 60]
+        cap = self.cfg.get("burst_per_minute") or 0
+        if cap and len(self.said_at) >= cap:
+            self.queue.append((self.said_at[0] + 60 + self.rng.uniform(1, 5), peer, topic, step, key))
+            return False
         text, extra = self.compose(peer, topic, key, now)
         if text is None and topic not in ("hello", "bye", "weather"):
             topic, key = "weather", None
@@ -637,6 +646,7 @@ class Social:
             return False
         tag = f"[chat:{topic}:{step}]"
         self.st["pairs"][peer] = now
+        self.said_at.append(now)                            # soak:
         await self.mind.execute([{"action": "whisper", "to": peer, "text": f"{text} {tag}"}],
                                 source="social", reason=f"общение: {topic} жителю {peer}")
         self.mind.mem.add_event("social_said", {"peer": peer, "topic": topic, "fact": topic in FACT_TOPICS,
@@ -808,6 +818,8 @@ class Social:
                 if gain:                                                               # habit2:
                     self.st.setdefault("gained", {})[peer] = now                       # habit2:
                     self.mind.mem.update_relation(peer, 1, "провели время вместе")
+                else:                                                                  # soak: без прибавки встреча та же —
+                    self.mind.mem.touch_relation(peer)                                 # soak: остывание (gossip) не начнётся
                 self.mind.mem.remember(f"Сегодня провёл с {peer} больше {self.cfg['together_minutes']} мин рядом.", 2)
                 self.mind.mem.add_event("social_together", {"peer": peer, "minutes": int(tg[peer] / 60),
                                                             "gain": gain})             # habit2:

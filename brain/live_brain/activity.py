@@ -98,7 +98,7 @@ class Activities:
                 ok = r.st.get("hunted", 0) < r.st.get("budget", 0)
             elif key == "no_leader":
                 party = getattr(self.mind, "party", None)
-                ok = not (party and party.leader_wants())
+                ok = not (party and (party.leader_wants() or party.resting_for()))   # soak: и отдых ради участника
             elif key == "other_maps":
                 ok = len([m for m in self.mind.persona["hunt_maps"] if m not in r.bans()]) > 1
             elif key == "light":                            # home: ORG-018 рюкзак не тяжёлый (вес < heavy_pct)
