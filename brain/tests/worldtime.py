@@ -42,3 +42,10 @@ BOOT = ("import runpy, sys, time; _r = time.time; _s = float(sys.argv.pop(1)); "
 def brain_argv(shift, *args):
     """Аргументы запуска `python3 -m live_brain *args` со сдвигом часов shift (из shift_time)."""
     return [sys.executable, "-c", BOOT, repr(shift), *args]
+
+
+def no_quiet_days(mind):
+    """hush: тихие дни мира (ORG-110) зависят от даты — тест не о них работает в обычный день при любой дате запуска."""
+    cal = getattr(mind, "calendar", None)
+    if cal is not None and isinstance(getattr(cal, "cal", None), dict):
+        cal.cal = dict(cal.cal, quiet={"per_week": 0})

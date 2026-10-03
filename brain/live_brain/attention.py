@@ -2,6 +2,7 @@
 
 Суточный бюджет «инициатив» общий для говорящих модулей (social, gossip, rumors, rivalry, mentor, wed, director):
     база   = (base[0] + (base[1] − base[0]) · общительность) × настроение (1 / mood.talk_factor(), 0.7..1.3)
+             × quiet_factor (0.5) в тихий день мира (world_calendar.is_quiet, ORG-110);
     дела   = deed_bonus за каждое дело дня из журнала событий (DEEDS: уровень, профессия, новое место, карта,
              первая встреча бестиария, гибель, меня вылечили, подарок, продажа, достижение, питомец), не больше
              deed_cap; плюс 1 жетон за каждые hunt_minutes охоты (routine.st["hunted"]) — «есть что рассказать»;
@@ -24,9 +25,12 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 
+from .world_calendar import is_quiet                                   # hush: ORG-110
+
 DEEDS = ("level_up", "job_changed", "explore_found", "card_found", "bestiary_first", "died", "heal_confirmed",
          "gift_received", "trade_sold", "achievement_done", "pet_hatched")
 DEFAULTS = {"enabled": True, "base": [3, 12], "deed_bonus": 1, "deed_cap": 6, "hunt_minutes": 90, "pair_max": 4,
+            "quiet_factor": 0.5,                                        # hush: ORG-110 тихий день мира
             "costs": {"chat": 1, "gossip": 1, "rumor": 0.5, "rival": 1, "mentor": 0.5, "wed": 0, "director": 0}}
 DENY_EVERY = 3600          # отказ одного вида — в журнал не чаще раза в час
 CACHE_SEC = 30
@@ -107,6 +111,8 @@ class Attention:
     def base(self, now):
         lo, hi = self.cfg["base"]
         b = (lo + (hi - lo) * self.trait("sociability")) * self.mood_factor()
+        if is_quiet(self.mind, now):                                    # hush: ORG-110 тихий день — база ×quiet_factor
+            b *= float(self.cfg.get("quiet_factor", 1.0))               # hush:
         return b
 
     def me(self):

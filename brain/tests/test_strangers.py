@@ -21,6 +21,8 @@ from live_brain.routine import load_world
 from live_brain.safety import MAX_TEXT
 from live_brain.strangers import FIELDS, Strangers, fields
 
+from tests.worldtime import no_quiet_days
+
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 ROOT = BRAIN_DIR.parent
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
@@ -63,6 +65,7 @@ class StrangersTest(unittest.TestCase):
                          peers={"Arkady", "Vera"}, world=WORLD)
         self.clock = Clock(at_hour(14))
         self.s = Strangers(self.mind, WORLD, clock=self.clock, rng=random.Random(3))
+        no_quiet_days(self.mind)                         # hush: тест не о тихих днях (ORG-110)
         if self.mind.strangers:
             self.mind.strangers = self.s
         self.mind.safety.whisper_gap = 0                 # safety считает по настоящим часам, тест — по подменным

@@ -35,6 +35,7 @@ from datetime import datetime, timedelta, timezone
 from string import Formatter
 
 from .safety import MAX_TEXT, fit_text
+from .world_calendar import is_quiet                                   # hush: ORG-110
 
 log = logging.getLogger("strangers")
 
@@ -121,6 +122,9 @@ class Strangers:
         h = datetime.fromtimestamp(now, self.tz).hour
         return lo <= h < hi if lo <= hi else (h >= lo or h < hi)
 
+    def same_day(self, ts, now):                                        # hush: ORG-110
+        return bool(ts) and (datetime.fromtimestamp(ts, self.tz).date() == datetime.fromtimestamp(now, self.tz).date())
+
     def decision(self, event, **data):
         self.mind.write_decision({"type": "strangers", "event": event, **data})
 
@@ -182,6 +186,8 @@ class Strangers:
             return
         if now - p.get("emoted", 0) < self.cfg["emote_person_minutes"] * 60:
             return
+        if is_quiet(self.mind, now) and self.same_day(p.get("emoted", 0), now):   # hush: тихий день — машу раз в день
+            return                                                               # hush:
         self.st["emotes"] = [t for t in self.st["emotes"] if now - t < 3600]
         if len(self.st["emotes"]) >= self.cfg["emotes_per_hour"]:
             return

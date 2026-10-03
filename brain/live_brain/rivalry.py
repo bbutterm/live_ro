@@ -20,6 +20,8 @@ import random
 import time
 from datetime import datetime, timedelta, timezone
 
+from .world_calendar import is_quiet                                   # hush: ORG-110
+
 log = logging.getLogger("rivalry")
 
 METRICS = {   # метрика -> как сказать «по чему»
@@ -263,6 +265,8 @@ class Rivalry:
         """Подначка сопернику. True — отправлена. Отношения не трогает."""
         if self.quarrel(name) or self.said_today(now) >= self.cfg["max_per_day"]:
             return False
+        if is_quiet(self.mind, now):                                   # hush: ORG-110 тихий день — без подначек
+            return False                                               # hush:
         att = getattr(self.mind, "attention", None)                    # attention: ORG-109 бюджет инициатив
         if att is not None and not att.may("rival", name, now):        # attention:
             return False                                               # attention:

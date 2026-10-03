@@ -24,6 +24,8 @@ from live_brain.routine import load_world
 from live_brain.safety import SafetyPolicy
 from live_brain.society import Society, fit_title
 
+from tests.worldtime import no_quiet_days
+
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
 TZ = timezone(timedelta(hours=WORLD["timezone_offset_hours"]))
@@ -60,6 +62,7 @@ class SocietyTest(unittest.TestCase):
         self.dec = root / "d.jsonl"
         self.clock = Clock(at_hour(14))
         self.s = Society(self.mind, WORLD, clock=self.clock, rng=random.Random(5))
+        no_quiet_days(self.mind)                         # hush: тест не о тихих днях (ORG-110)
         self.mind.society = self.s
         self.mind.social.clock = self.clock
         self.state(map="prontera", x=156, y=185, lock_map="prontera", lock_x=156, lock_y=185)

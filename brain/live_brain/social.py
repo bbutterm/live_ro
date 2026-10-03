@@ -80,6 +80,8 @@ DEFAULTS = {
     "together_minutes": 30,
     "night_hours": [1, 7],
     "night_factor": 3,
+    "quiet_wake_minutes": 60,             # hush: ORG-110 личные тихие часы — после пробуждения
+    "quiet_sleep_minutes": 60,            # hush: и перед сном (persona.sleep) первым не заговаривает
 }
 MAX_PHRASE = 80
 
@@ -197,6 +199,31 @@ class Social:
         if mood:
             factor *= mood.talk_factor()              # ORG-064: в плохом настроении реже, в хорошем чаще
         return self.cfg["pair_gap_minutes"] * 60 * factor
+
+    def own_quiet(self, now):                                                 # hush: ORG-110
+        """Личные тихие часы: первые quiet_wake_minutes после пробуждения и последние quiet_sleep_minutes до сна
+        (persona.sleep, ночь — как routine.sleep_window, но без записи в распорядок). Нет сна — тихих часов нет."""
+        sl = self.mind.persona.get("sleep")
+        if not isinstance(sl, dict) or not sl.get("start") or not sl.get("hours"):
+            return False
+        try:
+            h, m = map(int, str(sl["start"]).split(":"))
+            local = self.local(now)
+            start = local.replace(hour=h, minute=m, second=0, microsecond=0)
+            if start.timestamp() > now + 12 * 3600:
+                start -= timedelta(days=1)
+            elif start.timestamp() + 18 * 3600 < now:
+                start += timedelta(days=1)
+            st = getattr(getattr(self.mind, "routine", None), "st", None)
+            st = st if isinstance(st, dict) else {}
+            hours = (st.get("sleep_hours") if st.get("sleep_night") == start.strftime("%Y-%m-%d")
+                     else sum(sl["hours"]) / len(sl["hours"]))
+            t0 = start.timestamp()
+            t1 = t0 + float(hours) * 3600
+        except (TypeError, ValueError, ZeroDivisionError):
+            return False
+        return (t1 <= now < t1 + self.cfg["quiet_wake_minutes"] * 60
+                or t0 - self.cfg["quiet_sleep_minutes"] * 60 <= now < t0)
 
     def near_peers(self, state, cells=None):
         cells = cells or self.cfg["near_cells"]
@@ -529,6 +556,8 @@ class Social:
             return
         mood = getattr(self.mind, "mood", None)
         if mood and mood.silent():                         # ORG-064: мрачный — первым не заговаривает (отвечает)
+            return
+        if self.own_quiet(now):                            # hush: ORG-110 личные тихие часы (отвечает как обычно)
             return
         for peer in near:
             if self.quarrel(peer):                        # society: в ссоре — первым не заговаривать

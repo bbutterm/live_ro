@@ -26,5 +26,7 @@
     {"date": "10-31", "id": "lanterns", "name": "Ночь фонарей", "needs": {"social": 1.2, "curiosity": 1.1}},
     {"date": "12-21", "id": "long_night", "name": "Долгая ночь", "needs": {"rest": 1.2, "social": 1.2}}
   ],
-  "world_born": null
+  "world_born": null,
+  "quiet": {"_comment": "ORG-110 тихий день мира: в среднем per_week дней в неделю (детерминированно по дате, у всех жителей одинаково); never — какие дни не бывают тихими (market — дни недели market_weekdays, держать в согласии с goals.json market_day.weekdays; holiday; birthday — день рождения жителя). per_week 0 — тихих дней нет.",
+            "per_week": 1.5, "never": ["market", "holiday", "birthday"], "market_weekdays": [6]}
 }

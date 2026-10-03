@@ -25,6 +25,12 @@
 (caution: 1 − 0.5·смелость; help: 0.5 + 0.5·щедрость; gathering: 0.5 + 0.5·общительность; expedition: любопытство;
 contest и boss_call: (смелость + усердие)/2); итог в пределах 0.7..1.5.
 
+Тишина (ORG-110, Т-39): тишина — нормальное состояние мира. Поводы — только из stir_kinds (по умолчанию help,
+rich_rumor, expedition, boss_call: без contest — его даёт rivalry, и без gathering — его даёт tradition); повод — после
+quiet_hours (8) тишины днём и с шансом stir_chance (0.5): один бросок на окно тишины (пока в шине нет нового события,
+второго броска нет); max_per_day 1, gap_hours 12. Тихий день мира (world_calendar.quiet) — без поводов тишины,
+caution и help разрешены (это последствия). Пропуск — decisions {"type": "director", "event": "let_quiet"}.
+
 Лимиты: один действующий инцидент; между поводами не меньше gap_hours; поводов не больше max_per_day за сутки мира;
 caution — сверх суточного лимита, но не чаще раза в caution_hours. Лимиты считаются по шине (любой автор), поэтому
 смена режиссёра (уснул, пришёл житель с именем меньше) не удваивает события.
@@ -41,10 +47,12 @@ from datetime import datetime, timedelta, timezone
 
 log = logging.getLogger("director")
 
-DEFAULTS = {"enabled": True, "check_minutes": 30, "window_hours": 12, "quiet_hours": 3, "danger_threshold": 3,
-            "max_per_day": 2, "gap_hours": 3, "incident_hours": 3, "caution_hours": 6, "help_hours": 3,
+DEFAULTS = {"enabled": True, "check_minutes": 30, "window_hours": 12, "quiet_hours": 8, "danger_threshold": 3,
+            "max_per_day": 1, "gap_hours": 12, "incident_hours": 3, "caution_hours": 6, "help_hours": 3,
             "rumor_hours": 48, "gathering_lead_hours": 2, "presence_minutes": 15, "night_hours": [1, 7],
-            "cache_seconds": 60}
+            "cache_seconds": 60,
+            # hush: ORG-110 (Т-39) — тишина нормальна: поводы без contest/gathering, один бросок stir_chance на окно
+            "stir_kinds": ["help", "rich_rumor", "expedition", "boss_call"], "stir_chance": 0.5}
 FACTOR_MIN, FACTOR_MAX = 0.7, 1.5
 CAUTION_RISK = 0.8
 SNAPSHOTS = {"rival_score", "presence", "tradition_strength"}     # снимки состояния — не «события» для тишины
@@ -81,6 +89,7 @@ class Director:
         self.next_check = 0.0
         self.cache = (0.0, None)                      # (когда прочитано, действующий инцидент)
         self.heard = None                             # id последнего узнанного инцидента
+        self.roll = (None, None)                      # hush: (окно тишины, повод разрешён?) — один бросок на окно
 
     # ---------- данные ----------
 
@@ -110,6 +119,17 @@ class Director:
         lo, hi = self.cfg["night_hours"]
         h = self.local(now).hour
         return lo <= h < hi if lo <= hi else (h >= lo or h < hi)
+
+    def kinds(self):                                                    # hush: ORG-110 разрешённые поводы
+        kinds = self.cfg.get("stir_kinds")
+        return set(STIR if kinds is None else kinds)
+
+    def quiet_day(self, now):                                           # hush: тихий день мира (calendar)
+        from .world_calendar import is_quiet
+        return is_quiet(self.mind, now)
+
+    def let_quiet(self, why, tension):                                  # hush: тишина — нормальное состояние
+        self.mind.write_decision({"type": "director", "event": "let_quiet", "why": why, "tension": tension})
 
     def awake(self):
         r = getattr(self.mind, "routine", None)
@@ -175,7 +195,7 @@ class Director:
                 last = max(last, e["ts"])
         quiet = (now - last) / 3600 if last else self.cfg["window_hours"]
         return {"score": round(deaths + bans + 0.5 * danger, 2), "deaths": deaths, "bans": bans, "danger": danger,
-                "quiet_hours": round(quiet, 2)}
+                "quiet_hours": round(quiet, 2), "since": last}
 
     def history(self, now):
         """Решения режиссёра (любого) за сутки: для лимитов и чередования видов."""
@@ -262,7 +282,8 @@ class Director:
     def stir_options(self, now):
         """Поводы тишины с фактами: [(вид, params, почему)] в порядке приоритета (help — отдельно, в direct)."""
         out = []
-        g = self.gathering_fact(now)
+        allowed = self.kinds()                                          # hush: stir_kinds
+        g = self.gathering_fact(now) if "gathering" in allowed else None
         if g:
             out.append(("gathering", g, "скоро вечерний круг — позвать всех"))
         rest = []
@@ -278,6 +299,7 @@ class Director:
         last_used = {}
         for row in self.recent("director", now - 7 * 86400):
             last_used[row["data"].get("incident")] = row["ts"]
+        rest = [o for o in rest if o[0] in allowed]                     # hush:
         rest.sort(key=lambda o: (last_used.get(o[0], 0), STIR.index(o[0])))
         return out + rest
 
@@ -306,7 +328,7 @@ class Director:
             else:
                 self.skip(why, t)
             return
-        help_ = self.help_fact(now)                   # гибель — повод сразу, тишину не ждём (сама смерть — событие)
+        help_ = self.help_fact(now) if "help" in self.kinds() else None   # гибель — повод сразу (последствие)
         if help_ and not self.night(now) and self.limits(now, "stir") is None:
             await self.publish(now, "help", help_, f"{help_['who']} погиб(ла) на {help_.get('map')} — помочь и "
                                                    f"поддержать", t, hours=self.cfg["incident_hours"])
@@ -317,12 +339,21 @@ class Director:
             return self.skip("мозг режиссёра работает меньше quiet_hours — тишину не видно", t)
         if self.night(now):
             return self.skip("ночь — поводов нет", t)
+        if self.quiet_day(now):                                         # hush: тихий день — только последствия
+            return self.let_quiet("тихий день мира", t)
         why = self.limits(now, "stir")
         if why:
             return self.skip(why, t)
         options = self.stir_options(now)
         if not options:
             return self.skip("нет повода, подкреплённого фактами", t)
+        window = t.get("since") or self.day_start(now)                        # hush: один бросок на окно тишины
+        if self.roll[0] != window:
+            self.roll = (window, self.rng.random() < float(self.cfg.get("stir_chance", 1.0)))
+            if not self.roll[1]:
+                return self.let_quiet(f"не в этот раз (шанс {self.cfg.get('stir_chance')})", t)
+        if not self.roll[1]:
+            return                                                      # hush: бросок окна уже был — тишина
         kind, params, reason = options[0]
         hours = self.cfg["incident_hours"]
         until = None

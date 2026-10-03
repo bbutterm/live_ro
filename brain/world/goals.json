@@ -88,6 +88,7 @@
     "deed_cap": 6,
     "hunt_minutes": 90,
     "pair_max": 4,
+    "quiet_factor": 0.5,
     "costs": {"chat": 1, "gossip": 1, "rumor": 0.5, "rival": 1, "mentor": 0.5, "wed": 0, "director": 0}
   },
   "social": {
@@ -179,16 +180,18 @@
   },
 
   "director": {
-    "_comment": "ORG-086 рассказчик мира (brain/live_brain/director.py, docs/WORLD_EVENTS.md): один житель (минимальное имя онлайн) раз в check_minutes смотрит шину мира. Напряжение (смерти + исключённые карты + 0.5·слухи danger за window_hours) ≥ danger_threshold → «день осторожности»; тишина quiet_hours днём → один повод (помочь, вечерний сбор, правдивый слух rich, экспедиция, соперничество, мини-босс при boss.enabled). Только множители мотивов и допуск риска, без приказов телу; поводов не больше max_per_day, не чаще gap_hours. Решения — в шине как director (дашборд, не летопись). Выключить — enabled: false или BRAIN_DISABLE=director.",
+    "_comment": "ORG-086 рассказчик мира (brain/live_brain/director.py, docs/WORLD_EVENTS.md): один житель (минимальное имя онлайн) раз в check_minutes смотрит шину мира. Напряжение (смерти + исключённые карты + 0.5·слухи danger за window_hours) ≥ danger_threshold → «день осторожности»; тишина quiet_hours днём → с шансом stir_chance (один бросок на окно тишины) один повод из stir_kinds (помочь, правдивый слух rich, экспедиция, мини-босс при boss.enabled; contest и gathering — только если вписать: их дают rivalry и tradition). ORG-110: тишина нормальна — в тихий день мира (calendar.json quiet) поводов нет, кроме последствий (caution, help); пропуск — decisions let_quiet. Только множители мотивов и допуск риска, без приказов телу; поводов не больше max_per_day, не чаще gap_hours. Решения — в шине как director (дашборд, не летопись). Выключить — enabled: false или BRAIN_DISABLE=director.",
     "enabled": true,
     "check_minutes": 30,
     "window_hours": 12,
-    "quiet_hours": 3,
+    "quiet_hours": 8,
     "danger_threshold": 3,
-    "max_per_day": 2,
-    "gap_hours": 3,
+    "max_per_day": 1,
+    "gap_hours": 12,
     "incident_hours": 3,
-    "caution_hours": 6
+    "caution_hours": 6,
+    "stir_kinds": ["help", "rich_rumor", "expedition", "boss_call"],
+    "stir_chance": 0.5
   },
 
   "boss": {

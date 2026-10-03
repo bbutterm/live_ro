@@ -326,8 +326,10 @@
   в час на вид. Снимок — kv `attention` (`day`, `spent`, `pairs`, `snapshot`), строка в `--report`:
   «внимание (день): потрачено 7 из 11 (база 6, дел +5)» — на момент последней инициативы.
 - Модуль не тикает и не подписан на события тела: дела — события памяти, читаются одним запросом с кэшем 30 с.
+- Тишина (ORG-110, docs/WORLD_EVENTS.md «Тишина»): в тихий день мира база × `quiet_factor` (0.5); личные тихие часы
+  (час после пробуждения и час до сна) — `social.chat` первым не заговаривает вовсе.
 - Настройки — `goals.json` раздел `attention` (`enabled`, `base`, `deed_bonus`, `deed_cap`, `hunt_minutes`,
-  `pair_max`, `costs`). Выключить: `BRAIN_DISABLE=attention` или `"attention": {"enabled": false}` →
+  `pair_max`, `quiet_factor`, `costs`). Выключить: `BRAIN_DISABLE=attention` или `"attention": {"enabled": false}` →
   `mind.attention = None`, строки `# attention:` пропускают проверку — поведение как до ORG-109.
 - Ожидание для проверки в игре: инициированных шёпотов в сутки — в коридоре «живо» раздела 4 IDEAS2.md.
 

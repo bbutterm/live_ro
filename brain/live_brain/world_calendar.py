@@ -8,12 +8,17 @@ world_born — день рождения мира), дни рождения жи
     needs.weighted — множитель мотива дня (need_factor: произведение дня недели и праздников, 0.7..1.5),
                      рядом с aims.boost: в субботу (рыночный день) сильнее wealth и social;
     chronicle      — заголовок дня: «суббота, рыночный день; Праздник урожая»;
+    quiet          — тихий день мира (ORG-110, Т-39): quiet_day() детерминированно по дате (sha256, как weather.py),
+                     в среднем per_week дней в неделю, не в рыночный день, праздник и день рождения жителя;
+                     одинаково у всех жителей без общей БД. Тихий день: режиссёр без поводов (кроме последствий),
+                     без вывесок, подначек и лишних приветствий, бюджет внимания ×0.5; летопись — «тихий день»;
     social         — темы holiday (праздник) и birthday (день рождения собеседника), поставщики
                      holiday_facts / birthday_facts (peer, now) -> dict | None. Поздравление — один раз за день
                      каждому жителю (kv calendar_told: курсор по событиям social_said, тема holiday/birthday).
 Модуль называется world_calendar, чтобы не затенять calendar из стандартной библиотеки.
 Выключатель: BRAIN_DISABLE=calendar или goals.json "calendar": {"enabled": false}.
 """
+import hashlib
 import json
 import time
 from datetime import datetime, timedelta, timezone
@@ -25,6 +30,7 @@ ROSTER = WORLD / "roster.json"
 FACTOR_MIN, FACTOR_MAX = 0.7, 1.5
 WEEKDAYS_RU = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
 TOPICS = ("holiday", "birthday")
+QUIET = {"per_week": 1.5, "never": ["market", "holiday", "birthday"], "market_weekdays": [6]}   # hush: ORG-110
 # фразы по умолчанию, если в персоне нет своих (без метки ≤ 60 символов с самой длинной подстановкой)
 PHRASES = {
     "holiday": ["С праздником! Сегодня {holiday}.", "Сегодня {holiday} — хороший день.",
@@ -106,6 +112,39 @@ def today(now, tz_hours, cal, roster=None, world_born=None):
             "needs": {k: round(clamp(v), 3) for k, v in needs.items()}}
 
 
+def quiet_unit(date):                                                   # hush: ORG-110
+    """Детерминированное число [0, 1) для даты YYYY-MM-DD (одинаково у всех жителей и процессов)."""
+    h = hashlib.sha256(f"quiet|{date}".encode("utf-8")).digest()
+    return int.from_bytes(h[:8], "big") / 2 ** 64
+
+
+def quiet_of(day, cfg=None):                                            # hush:
+    """Тихий ли день мира (day — результат today()). Доля — per_week / (7 − рыночных дней) среди обычных дней,
+    чтобы в среднем по неделе выходило per_week; дни из never (market, holiday, birthday) — не тихие."""
+    cfg = dict(QUIET, **(cfg or {}))
+    never = set(cfg.get("never") or ())
+    market = {int(d) for d in cfg.get("market_weekdays") or ()}
+    if "market" in never and day.get("weekday") in market:
+        return False
+    if "holiday" in never and day.get("holidays"):
+        return False
+    if "birthday" in never and day.get("birthdays"):
+        return False
+    try:
+        per_week = float(cfg.get("per_week") or 0)
+    except (TypeError, ValueError):
+        return False
+    free = 7 - (len(market) if "market" in never else 0)
+    return free > 0 and per_week > 0 and quiet_unit(day["date"]) < per_week / free
+
+
+def quiet_day(now, tz_hours, cfg=None, cal=None, roster=None, world_born=None):   # hush:
+    """Тихий день мира на момент now; cfg — раздел quiet календаря (по умолчанию QUIET)."""
+    cal = load() if cal is None else cal
+    cfg = cfg if cfg is not None else (cal or {}).get("quiet")
+    return quiet_of(today(now, tz_hours, cal, roster if roster is not None else load_roster(), world_born), cfg)
+
+
 def need_factor(day, need):
     """Множитель мотива дня (произведение дня недели и праздников) в пределах 0.7..1.5; нет — 1.0."""
     try:
@@ -114,10 +153,12 @@ def need_factor(day, need):
         return 1.0
 
 
-def header(day):
+def header(day, quiet=False):
     """Строка дня для летописи: «суббота, рыночный день; Праздник урожая; день рождения: Vera (осень)»."""
     head = day["weekday_name"] + (f", {day['day_name']}" if day.get("day_name") else "")
     parts = [head] + [h["name"] for h in day.get("holidays") or [] if h.get("name")]
+    if quiet:                                                           # hush: ORG-110 заголовок летописи
+        parts.append("тихий день")                                      # hush:
     if day.get("birthdays"):
         parts.append("день рождения: " + ", ".join(day["birthdays"]))
     return "; ".join(parts) + (f" ({day['season_name']})" if day.get("season_name") else "")
@@ -130,7 +171,8 @@ def header_for(date, tz_hours, cal=None, roster=None):
     cal = load() if cal is None else cal
     if not cal:
         return None
-    return header(today(noon, tz_hours, cal, load_roster() if roster is None else roster))
+    day = today(noon, tz_hours, cal, load_roster() if roster is None else roster)
+    return header(day, quiet_of(day, cal.get("quiet")))                  # hush: «…; тихий день»
 
 
 class WorldCalendar:
@@ -160,6 +202,10 @@ class WorldCalendar:
 
     def factor(self, need, now=None):
         return need_factor(self.day(now), need)
+
+    def quiet(self, now=None):                                          # hush: ORG-110
+        """Тихий день мира (раздел quiet в calendar.json; нет раздела — QUIET по умолчанию)."""
+        return bool(quiet_of(self.day(now), self.cal.get("quiet")))
 
     # ---------- темы разговора (social.py) ----------
 
@@ -217,7 +263,18 @@ class WorldCalendar:
 
     def summary(self, now=None):
         """Для промпта: какой сегодня день мира."""
-        return header(self.day(now))
+        return header(self.day(now), self.quiet(now))
+
+
+def is_quiet(mind, now=None):                                           # hush: ORG-110 для модулей
+    """Тихий ли сегодня день мира для жителя: нет календаря (BRAIN_DISABLE=calendar), шпион или ошибка — False."""
+    cal = getattr(mind, "calendar", None)
+    if cal is None or not callable(getattr(cal, "quiet", None)):
+        return False
+    try:
+        return cal.quiet(now) is True
+    except Exception:
+        return False
 
 
 def install(social, mind):

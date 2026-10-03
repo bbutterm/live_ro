@@ -49,6 +49,8 @@ import random
 import re
 import time
 
+from .world_calendar import is_quiet                                   # hush: ORG-110
+
 log = logging.getLogger("society")
 
 DEFAULTS = {
@@ -484,6 +486,8 @@ class Society:
         if why or (now < (self.next_room or 0) and not sign):          # healer:
             return
         self.next_room = now + self.interval()
+        if not sign and is_quiet(self.mind, now):                      # hush: ORG-110 тихий день — без вывесок
+            return                                                     # hush: (вывеска лекаря — служба, остаётся)
         if not sign and self.rng.random() >= self.cfg["room_chance"]:  # healer:
             return
         lo, hi = self.cfg["room_minutes"]

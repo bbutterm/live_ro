@@ -50,7 +50,7 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `home` | дом из `homes.json`, сохранение у Kafra (jobChange `path home`, пункт «Save»), отдых в доме, учёт возрождения | вкл. (выключателя в goals нет) | мир; плагин jobChange; Kafra-диалог по тексту | тело: сам идёт к Kafra и говорит с NPC; точка сохранения в БД персонажа (обратимо новым сохранением) | 3 |
 | `mood` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров | вкл. (`mood.enabled` по умолч. true) | — | действий нет; может приглушить разговоры | 1 |
 | `attention` | бюджет внимания (ORG-109): суточный запас инициатив речи (social, gossip, rumors, rivalry, mentor, wed, director) от общительности и дел; ответы и протокол — без ограничений | вкл. (`attention.enabled` по умолч. true) | мир | действий нет; может приглушить речь (deny в decisions) | 2 |
-| `calendar` | день недели, праздники, дни рождения → множители мотивов, темы | вкл. | мир, `calendar.json` | действий нет; меняет выбор занятий | 1 |
+| `calendar` | день недели, праздники, дни рождения → множители мотивов, темы; тихие дни мира (ORG-110, `calendar.json quiet.per_week` 1.5, 0 — выкл.) | вкл. | мир, `calendar.json` | действий нет; меняет выбор занятий; в тихий день меньше речи и вывесок | 1 |
 | `career` | цель прогрессии в report/промпт; этап jobChange — только при `progression.auto_job_change` | вкл., авто-смена **выкл.** | мир; jobChange (при флаге) | при флаге — необратимая смена профессии | 0 (флаг — 7) |
 | `routine` | распорядок: охота/отдых/сон (`relog`)/сервис/лавка, застревание | вкл. | мир; lockMap, sitAuto_idle, relog | тело; сон через relog → возможен «still recognizes» | 0 |
 | `economy` | взаимопомощь `[need:]`, рынок `[offer:]`, почта RODEX, лавка Merchant | вкл. (есть раздел `economy`) | плагин economy, `dealAuto 3`; RODEX-пакеты не проверены | деньги между жителями; почта | 0 |
@@ -91,7 +91,7 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `herbal` | травник: травы не продаются, поездка к Old Pharmacist в Альберту | **выкл.**; и травника нет (`herbal.residents: []`, `persona.herbalist` нет) | routine; jobChange `path herbal`, `buyAuto Empty Bottle` | тело: 11 переходов до Альберты; деньги | 6 |
 | `arrows` | Arrow Crafting для ветки Archer | вкл., **спит** (лучника нет); `quest_auto: false` | routine; пути до `moc_ruins` нет | — пока нет лучника | 0 |
 | `trek` | дальний поход группой в город другого региона, привалы с Kafra-сохранением | **выкл.** | routine, explore, party, crew | тело: дальние карты; точка сохранения | 6 |
-| `director` | режиссёр: «день осторожности», «помочь», повод в тишину | вкл. | мир | множители мотивов; шёпот `[info:rich]` жителю | 2 |
+| `director` | режиссёр: «день осторожности», «помочь», редкий повод в тишину (ORG-110: 8 ч тишины, шанс 0.5, ≤ 1 в сутки, без contest/gathering; в тихий день мира — только последствия) | вкл. | мир | множители мотивов; шёпот `[info:rich]` жителю | 2 |
 
 Ядро (`mind.py`, не выключается): bridge, gate, safety, lifecycle, plans, postmortem, maps, needs, memory, llm/budget.
 LLM выключен по умолчанию (`BRAIN_LLM=off`).
