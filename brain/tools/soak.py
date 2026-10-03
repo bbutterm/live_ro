@@ -524,7 +524,9 @@ class World:
                                    "y": self.bodies[m].s["y"], "leader": m == self.parties[p][0],
                                    "lv": self.bodies[m].s["lv"]}
                                   for m in self.parties.get(p, [])] if p else []
-            self.send(name, 0, **dict(s, items=dict(s["items"]), vend=dict(s["vend"]), players=list(s["players"])))
+            friends = [{"name": f, "online": self.bodies[f].online} for f in s["friends"]]   # как state плагина
+            self.send(name, 0, **dict(s, items=dict(s["items"]), vend=dict(s["vend"]), players=list(s["players"]),
+                                      friends=friends))
 
     def target(self, b):
         s = b.s

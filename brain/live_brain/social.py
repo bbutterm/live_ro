@@ -250,6 +250,11 @@ class Social:
         society = getattr(self.mind, "society", None)
         return bool(society and society.quarrel(peer))
 
+    def offline(self, peer):
+        """soak: житель точно не в игре (mind.peer_offline: группа, друзья, «не доставлено»)."""
+        off = getattr(self.mind, "peer_offline", None)
+        return callable(off) and off(peer) is True
+
     def busy(self):
         """AUT-095: не болтать в разгар аварии и боя."""
         life = getattr(self.mind, "life", None)
@@ -622,6 +627,8 @@ class Social:
 
         key — ключ фраз ответа на тему собеседника (ORG-066: <тема>_re), метка остаётся темой собеседника."""
         now = now or self.clock()
+        if self.offline(peer):                            # soak: спит/офлайн — шёпот не дойдёт, отметки не ставлю
+            return False
         if self.quarrel(peer) and step == 1:              # society: в ссоре — первым не пишу (и весточек нет)
             return False
         if self.quarrel(peer) and topic not in ("condolence", "thanks"):   # society: холодно, коротко, без продолжения
@@ -748,6 +755,8 @@ class Social:
         await self.emote("level", now)
         for peer in sorted(self.mind.ctx.peers):
             if self.quarrel(peer):                        # society: с ним в ссоре — не хвастаюсь
+                continue
+            if self.offline(peer):                        # soak: спит — не пишу и react_due не трачу
                 continue
             if self.react_due(f"level:{peer}", now):
                 await self.say(peer, "level", 3, now)

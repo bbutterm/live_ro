@@ -155,11 +155,13 @@ class Rumors:
         """Свой слух (опыт жителя): записать и рассказать всем жителям старой меткой (hops 0)."""
         self.hear(kind, hmap, self.me(), src="own")
         self.mind.mem.add_event("rumor_shared", {"what": kind, "map": hmap})
+        off = getattr(self.mind, "peer_offline", None)                 # soak: спящим не шлю — расскажу при встрече
+        peers = [p for p in sorted(self.mind.ctx.peers) if not (callable(off) and off(p) is True)]
         rs = self.all()
         if f"{kind}:{hmap}" in rs:
-            rs[f"{kind}:{hmap}"]["told_to"] = sorted(self.mind.ctx.peers)
+            rs[f"{kind}:{hmap}"]["told_to"] = peers
             self.save(rs)
-        for peer in sorted(self.mind.ctx.peers):
+        for peer in peers:
             await self.mind.execute([{"action": "whisper", "to": peer, "text": tag(kind, hmap)}],
                                     source="rule", reason=f"слух жителям: {kind} {hmap}", protocol=True)
 

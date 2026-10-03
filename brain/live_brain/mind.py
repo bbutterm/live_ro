@@ -39,6 +39,7 @@ MODULE_JOB_PATHS += (buying_mod.PATH,)                  # buying:
 log = logging.getLogger("mind")
 
 MAX_ACTIONS = 2
+OFFLINE_TTL = 1800      # soak: шёпот жителю не доставлен («не в игре») — 30 мин считаю его офлайн (peer_offline)
 REASON_PRIO = {"plan": 4, "event": 3, "chat": 2, "diary": 2, "timer": 1}
 REASON_TTL = {"plan": 600, "event": 600, "chat": 300, "diary": 3600, "timer": 120}
 REASON_MAX = 5
@@ -129,6 +130,7 @@ class Mind:
         self.epoch = 0                 # номер подключения тела: растёт на каждый hello (AUT-003)
         self.awake_at = None           # warmup: первый свежий state после hello — от него разогрев модулей (WARMUP)
         self.awake_wait = False        # warmup: hello был, свежего state после него ещё нет
+        self.unreachable = {}          # soak: житель -> когда шёпот ему не доставлен (адресат не в игре)
         self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
         self.plans = PlanExecutor(self, PlanStore(memory.db))
         self.postmortem = Postmortem(self)
@@ -203,10 +205,24 @@ class Mind:
             log.info("доставлено сервером: %s %s", msg.get("action"), msg.get("to") or "")
             if msg.get("action") == "whisper" and msg.get("to") in self.ctx.peers:
                 self.ctx.last[f"talk:{msg['to']}"] = time.time()
+                self.unreachable.pop(msg["to"], None)      # soak: дошло — адресат в игре
         else:
             log.warning("НЕ доставлено: %s %s — %s", msg.get("action"), msg.get("to") or "", msg.get("reason"))
             if msg.get("action") == "whisper" and msg.get("to"):
                 self.mem.add_event("whisper_failed", {"to": msg["to"], "reason": msg.get("reason")})
+                if msg["to"] in self.ctx.peers:
+                    self.unreachable[msg["to"]] = time.time()   # soak: peer_offline — не писать ему OFFLINE_TTL
+
+    def peer_offline(self, name, now=None):
+        """soak: житель точно не в игре — по составу группы и списку друзей (online: false от сервера) или
+        недавнему «не доставлено» (OFFLINE_TTL; снимается, когда он рядом, пишет мне или шёпот дошёл).
+        Неизвестно — False: инициативные шёпоты (поздравления, соперничество, слухи) ему не шлют."""
+        for key in ("party_members", "friends"):
+            for m in self.state.get(key) or []:
+                if isinstance(m, dict) and m.get("name") == name and "online" in m and m["online"] in (False, 0):
+                    return True
+        ts = self.unreachable.get(name)
+        return bool(ts) and (now or time.time()) - ts < OFFLINE_TTL
 
     def remember_players(self, players):
         """Класс/пол/уровень встреченных игроков — чтобы не путать пол и профессию собеседника."""
@@ -228,6 +244,7 @@ class Mind:
             name = p.get("name") if isinstance(p, dict) else None
             if name not in self.ctx.peers:
                 continue
+            self.unreachable.pop(name, None)               # soak: виден рядом — в игре
             key = f"seen:{name}"
             if now - self.ctx.last.get(key, 0) >= 600:
                 where = self.state.get("map")
@@ -246,6 +263,8 @@ class Mind:
         if isinstance(event.get("text"), str):
             event["text"] = event["text"][:200]        # реплика игрока не раздувает память и промпт
         kind = event.get("kind")
+        if kind == "chat_private" and event.get("from") in self.unreachable:
+            self.unreachable.pop(event["from"], None)       # soak: пишет мне — в игре
         if kind == "died" and self.spar and self.spar.arena_fall(event):   # review4: упал(а) в спарринге — не гибель
             kind = event["kind"] = "spar_fall"                               # review4: (spar.arena_fall)
         if kind != "attack":                            # начало боя частое: только отметка времени
@@ -399,6 +418,9 @@ class Mind:
             if a.get("action") == "set_hunt_map" and a.get("map") == self.state.get("lock_map"):
                 continue
             clean, why = self.safety.check(a, self.state, protocol=protocol)
+            if (not why and a.get("action") == "whisper" and a.get("to") in self.ctx.peers   # soak: шёпоты спящим
+                    and self.peer_offline(a["to"])):
+                why = "адресат не в игре (peer_offline)"
             if (not why and source in ("llm", "jev") and a.get("action") in ("say", "whisper")   # review4: подделка
                     and MACHINE_TAG.search(str(a.get("text", "")))):                           # review4: протокола
                 why = "служебная метка [вид:...] — только у правил протокола, не у модели"     # review4:

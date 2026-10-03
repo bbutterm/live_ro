@@ -227,3 +227,58 @@ class WarmupTest(BodyMixin, unittest.TestCase):
         self.state()
         asyncio.run(m.step())
         self.assertEqual(len(calls["social"]), 1, "после relog — снова разогрев")
+
+
+class OfflinePeerTest(BodyMixin, unittest.TestCase):
+    """soak: ≈ 100 шёпотов за 14 суток «НЕ доставлено: адресат не в игре» — social.on_level_up, rivalry и слухи
+    [info:] писали спящим жителям. Теперь mind.peer_offline (группа/друзья online: false, недавнее «не доставлено»)."""
+
+    def whispers(self, start=0):
+        return [a for a in self.sent[start:] if a["action"] == "whisper"]
+
+    def offline_by_party(self):
+        me = {"name": "Arkady", "online": True, "map": "prontera"}
+        self.state(party="LR_Arkady", party_members=[me, {"name": "Vera", "online": False}], players=[])
+
+    def test_sources_of_offline(self):
+        m = self.mind
+        self.state(players=[])
+        self.assertFalse(m.peer_offline("Vera"), "неизвестно — не офлайн")
+        self.offline_by_party()
+        self.assertTrue(m.peer_offline("Vera"), "состав группы: online false")
+        self.state(players=[], friends=[{"name": "Vera", "online": 0}])
+        self.assertTrue(m.peer_offline("Vera"), "список друзей: online 0")
+        self.state(players=[])
+        m.on_delivery({"id": 1, "action": "whisper", "to": "Vera", "ok": False, "reason": "не в игре"})
+        self.assertTrue(m.peer_offline("Vera"), "не доставлено")
+        self.clock.t += 1801
+        self.assertFalse(m.peer_offline("Vera"), "через OFFLINE_TTL — пробую снова")
+        m.on_delivery({"id": 2, "action": "whisper", "to": "Vera", "ok": False, "reason": "не в игре"})
+        asyncio.run(m.on_message({"type": "event", "kind": "chat_private", "from": "Vera", "text": "привет",
+                                  "ts": self.clock.t}))
+        self.assertFalse(m.peer_offline("Vera"), "написала мне — в игре")
+        m.on_delivery({"id": 3, "action": "whisper", "to": "Vera", "ok": False, "reason": "не в игре"})
+        self.state()                                         # Vera рядом (players)
+        self.assertFalse(m.peer_offline("Vera"), "видна рядом — в игре")
+
+    def test_execute_drops_whisper_to_offline(self):
+        self.offline_by_party()
+        asyncio.run(self.mind.execute([{"action": "whisper", "to": "Vera", "text": "эй"}], source="rule",
+                                      reason="тест"))
+        self.assertEqual(self.whispers(), [])
+
+    def test_level_up_skips_sleeping_and_keeps_reaction(self):
+        m = self.mind
+        self.offline_by_party()
+        asyncio.run(m.social.on_level_up({"level": 42}))
+        self.assertEqual(self.whispers(), [])
+        self.assertNotIn("level:Vera", m.social.st["react"], "реакция не потрачена")
+
+    def test_rivalry_and_rumor_skip_offline(self):
+        m = self.mind
+        self.offline_by_party()
+        if m.rivalry:
+            self.assertFalse(asyncio.run(m.rivalry.tease(self.clock.t, "Vera", "rival_behind", lv=40, diff=2)))
+        asyncio.run(m.rumors.share("prt_fild08", "rich"))
+        self.assertEqual(self.whispers(), [])
+        self.assertEqual(m.rumors.all()["rich:prt_fild08"]["told_to"], [], "расскажу при встрече")

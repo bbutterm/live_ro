@@ -268,6 +268,9 @@ class Rivalry:
             return False
         if is_quiet(self.mind, now):                                   # hush: ORG-110 тихий день — без подначек
             return False                                               # hush:
+        off = getattr(self.mind, "peer_offline", None)                 # soak: спит/офлайн — подначка не дойдёт
+        if callable(off) and off(name) is True:                        # soak:
+            return False                                               # soak:
         att = getattr(self.mind, "attention", None)                    # attention: ORG-109 бюджет инициатив
         if att is not None and not att.may("rival", name, now):        # attention:
             return False                                               # attention:
