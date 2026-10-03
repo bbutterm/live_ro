@@ -78,6 +78,7 @@ DEFAULTS = {
     "emote_gap_seconds": 120,
     "friend_affinity": 3,
     "together_minutes": 30,
+    "together_cap": 6,          # soak: «просто рядом» поднимает отношение не выше этого (остальное — поступки)
     "night_hours": [1, 7],
     "night_factor": 3,
 }
@@ -760,6 +761,12 @@ class Social:
             tg[peer] = tg.get(peer, 0) + gap
             if tg[peer] >= self.cfg["together_minutes"] * 60 and self.st["bonded"].get(peer) != day:
                 self.st["bonded"][peer] = day
+                # soak: жители видятся каждый день — +1 в сутки без предела за 10 суток уводил ВСЕ пары в +10
+                # (максимум memory), отношения переставали различаться; выше together_cap растят только поступки
+                if (self.mind.mem.relation(peer) or {}).get("affinity", 0) >= self.cfg.get("together_cap", 6):
+                    self.mind.mem.touch_relation(peer)          # soak: встреча — та же (остывание не начнётся)
+                    self.save()
+                    continue
                 self.mind.mem.update_relation(peer, 1, "провели время вместе")
                 self.mind.mem.remember(f"Сегодня провёл с {peer} больше {self.cfg['together_minutes']} мин рядом.", 2)
                 self.mind.mem.add_event("social_together", {"peer": peer, "minutes": int(tg[peer] / 60)})
