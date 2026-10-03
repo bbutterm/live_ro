@@ -48,6 +48,9 @@
 #   offer_sell {to,item,amount,price} -> economy: как give, но в той же сделке ждёт price зени от покупателя  # market:
 #   offer_buy {from,item,amount,price} -> economy: в сделку продавца положить price зени (deal add z)  # market:
 #   offer_shop {title,items:[{id,price,amount}]} -> economy: тележка (cart_add) и %shop для openshop  # market:
+#   buyer_open {title,items:[{id,price,amount}]} / buyer_close {} / buyer_sell {from,items:[{id,keep,min}]}  # buying:
+#                         -> плагин buyer: своя скупка (openbuyershop/closebuyershop) и продажа в скупку жителя  # buying:
+#                            (ORG-036); в state — buyer (навык, лицензии, тележка, открыта, скупки рядом).  # buying:
 #   mail_send {to,title,body,zeny?,item?,amount?} / mail_check {} / mail_take {mail_id} -> economy: RODEX  # market:
 #   bank_check {} / bank_deposit {zeny} / bank_withdraw {zeny} -> банк rAthena (ORG-073, savings.py): пакеты  # dreams:
 #                            09AB/09A7/09A9 через $messageSender->sendBanking* (cmdBank требует $bankingopened —   # dreams:
@@ -266,6 +269,7 @@ sub sendState {
 		(defined &economy::itemCounts ? (items => economy::itemCounts(), vend => economy::vendStatus(),
 		                                 give => economy::giveStatus()) : ()),
 		(defined &economy::buyStatus ? (buy => economy::buyStatus()) : ()),   # market: жду продавца
+		(defined &buyer::status ? (buyer => buyer::status()) : ()),           # buying: скупка (ORG-036)
 		(defined &survival::status ? (survival => survival::status()) : ()),
 		dead      => ($char->{dead} ? JSON::PP::true : JSON::PP::false),
 		chat_room => chatTitle(),                                                 # society: комната, где я сейчас
@@ -538,7 +542,8 @@ our %EMOTES = (1 => '?', 2 => 'ho', 3 => 'lv', 5 => 'ic', 9 => '...', 12 => 'wav
 my %MOVES = map { $_ => 1 } qw(follow meet_point hunt unstuck service give offer_sell offer_buy job_change
                                sleep shop_open explore skill_on_player);   # explore: экспедиция двигает тело; healer: каст
 $MOVES{refine} = 1;                                                           # refine: идёт к продавцу руды и кузнецу
-$MOVES{spar} = 1;                                                              # spar: поход к Gate Keeper
+$MOVES{spar} = 1;
+$MOVES{$_} = 1 for qw(buyer_open buyer_sell);                                 # buying: скупка — не в чат-комнате                                                              # spar: поход к Gate Keeper
 # spar: пока плагин spar ведёт тело (арена, бой), от мозга — только реплики и стоп; остальное отклоняется.
 our %SPAR_OK = map { $_ => 1 } qw(say whisper emote party_say guild_say spar_stop);   # spar:
 my %CHAT_BUSY = map { $_ => 1 } qw(route move attack follow sellAuto buyAuto storageAuto take items_take
@@ -720,6 +725,7 @@ sub actionToCommand {
 		my $v = defined &economy::vendStatus ? economy::vendStatus() : undef;
 		return (0, 'нет навыка лавки или тележки') unless $v && $v->{can};
 		return (0, 'лавка уже открыта') if $v->{open};
+		return (0, 'открыта скупка') if $Globals::buyershopstarted;          # buying: rAthena — либо лавка, либо скупка
 		return (1, 'openshop');
 	} elsif ($kind eq 'shop_close') {
 		my $v = defined &economy::vendStatus ? economy::vendStatus() : undef;
@@ -738,6 +744,11 @@ sub actionToCommand {
 		return (0, 'плагин economy не загружен') unless defined &economy::setupShop;              # market:
 		my ($ok, $desc) = economy::setupShop($a);                                                 # market:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'buyer_open' || $kind eq 'buyer_close' || $kind eq 'buyer_sell') {   # buying: скупка (ORG-036)
+		return (0, 'плагин buyer не загружен') unless defined &buyer::startOpen;            # buying:
+		my ($ok, $desc) = $kind eq 'buyer_open' ? buyer::startOpen($a)                       # buying:
+		                : $kind eq 'buyer_close' ? buyer::startClose() : buyer::startSell($a);   # buying:
+		return $ok ? (1, {note => $desc}) : (0, $desc);                                     # buying:
 	} elsif ($kind eq 'mail_send') {                                      # market: письмо RODEX жителю
 		return (0, 'плагин economy не загружен') unless defined &economy::startMail;              # market:
 		my ($ok, $desc) = economy::startMail($a);                                                 # market:

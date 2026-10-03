@@ -175,7 +175,7 @@
     "Merchant": {
       "jobs": [5, 4006], "archetype": "melee",
       "stats": "40 str, 30 vit, 30 dex, 70 str, 50 vit, 50 dex",
-      "skills": "MC_INCCARRY 10, MC_DISCOUNT 10, MC_OVERCHARGE 10, MC_PUSHCART 10, MC_MAMMONITE 10, MC_LOUD 1",
+      "skills": "MC_INCCARRY 5, MC_PUSHCART 3, MC_VENDING 3, MC_DISCOUNT 3, MC_OVERCHARGE 5, MC_MAMMONITE 5, MC_OVERCHARGE 10, MC_MAMMONITE 10, MC_PUSHCART 5, MC_VENDING 5, MC_INCCARRY 10, MC_PUSHCART 10, MC_DISCOUNT 4",
       "attack": [{"skill": "MC_MAMMONITE", "sp": "> 30%", "dist": 1, "maxUses": 1}],
       "self": [{"skill": "MC_LOUD", "sp": "> 30%", "timeout": 30, "whenStatusInactive": "Loud Exclamation", "inLockOnly": 1}],
       "party": []

@@ -62,6 +62,8 @@ trek (ORG-078) — метка [trek:] 45, событие job_change_result 17 (c
 wed (ORG-062) — метка [wed:] 57, тик 143, промпт 227; объявление о браке — из rumors.on_world_msg.  # wed:
 legacy (ORG-083) — тик 232 (после memoir), без поля промпта; по умолчанию выключен.  # legacy:
 fest (ORG-087) — тик 122, событие kill 76; объявление — из rumors.on_world_msg (on_announce).  # events2:
+buying (ORG-036) — тик 27, события job_change_result 18 (consume "result", path buying), buyer_* 18 (own), промпт 145;
+по умолчанию выключен.  # buying:
 """
 import inspect
 import re
@@ -95,6 +97,7 @@ from .collection import Collection
 from .director import Director          # director: ORG-086 рассказчик мира
 from .healer import Healer           # healer: ORG-069 лекарь у собора
 from .orders import Orders           # orders: ORG-070 заказы между жителями
+from .buying import Buying                # buying: ORG-036 скупка и снаряжение торговца
 from .dream import Dream             # dreams: ORG-081 жизненный путь
 from .savings import Savings         # dreams: ORG-073 копилка мечты и банк
 from .memoir import Memoir           # dreams: ORG-082 мемуары жителя
@@ -148,6 +151,7 @@ MODULES = (
     Habits,            # habits: ORG-068 (activity.scores, social.pick_point читают mind.habits)
     Healer,            # healer: ORG-069 (тик 135, метка [heal:] 65, события support/чат 25)
     Orders,            # orders: ORG-070 после economy и шины (тик 25, метка [order:] 25)
+    Buying,            # buying: ORG-036 после economy, orders, routine (тик 27; по умолчанию выключен)
     MarketDay,         # market: ORG-071 после calendar, economy, orders, society, social (тик 15 — до economy)
     Refine,            # refine: ORG-072 (тик 105, событие refine_result 65 own; по умолчанию выключен)
     Gaze,              # look: ORG-067 после social (тик 75, эхо [chat:] 20)

@@ -9,6 +9,8 @@
 #               (ordered — строго по порядку). Меню не из сценария — «talk no» и провал этапа.
 #               «Далее» нажимает OpenKore: на время этапа autoTalkCont 1. expect_map / expect_map_xy —
 #               после диалога ждать перехода (warp из скрипта);
+#               input_text / input_number — ответ на ввод строки/числа (input в скрипте: «talk text» / «talk num»;  # buying:
+#               Mr. Hugh, npc/merchants/buying_shops.txt:221 и :126 — скупка ORG-036);  # buying:
 #   chat_join — войти в чат-комнату с заголовком title (комната ожидания арены Knight);
 #   fight     — attackAuto 2; готово, когда скрипт перенёс на next_xy / next_map (все убиты); иначе
 #               таймаут time_limit + 15 с (скрипт сам выкидывает по своему таймеру);
@@ -39,6 +41,8 @@ my $hooks = Plugins::addHooks(
 	['npc_talk',           \&onNpcText],
 	['npc_talk_responses', \&onResponses],
 	['npc_talk_done',      \&onTalkDone],
+	['packet/npc_talk_text',   \&onInputText],                    # buying: input .@name$
+	['packet/npc_talk_number', \&onInputNumber],                  # buying: input .@input
 );
 
 # Квесты смены профессии (журнал для мозга): Knight 9000-9012, Priest 8009-8016 (db/re/quest_db.yml).
@@ -66,6 +70,8 @@ sub start {
 		return (0, 'неверные координаты') if $s->{do} =~ /^(move|talk|walk)$/
 			&& !(($s->{x} // '') =~ /^\d{1,3}$/ && ($s->{y} // '') =~ /^\d{1,3}$/);
 		return (0, 'неверная карта') if defined $s->{map} && $s->{map} !~ /^[a-z0-9_]{3,16}$/;
+		return (0, 'неверный ввод') if (defined $s->{input_text} && $s->{input_text} !~ /^[A-Za-z0-9 ]{1,23}$/)   # buying:
+			|| (defined $s->{input_number} && $s->{input_number} !~ /^\d{1,3}$/);                               # buying:
 	}
 	%run = (id => $a->{id}, path => $a->{path} // '', stage => $a->{stage} // '', steps => $steps,
 	        success => $a->{success} || {}, i => 0, phase => 'begin', since => time, step_since => time,
@@ -244,7 +250,8 @@ sub do_talk {
 	}
 	return if $run{issued};
 	$run{pos} = 0;
-	$run{talking} = {answers => $s->{answers} || [], ordered => $s->{ordered}};
+	$run{talking} = {answers => $s->{answers} || [], ordered => $s->{ordered},
+	                 input_text => $s->{input_text}, input_number => $s->{input_number}};   # buying:
 	Commands::run("talknpc $s->{x} $s->{y}");
 	$run{issued} = $now;
 }
@@ -352,6 +359,21 @@ sub onResponses {
 	return finish(0, 'меню не из сценария: ' . join(' | ', @opts)) unless $n;
 	$run{pos}++ if defined $pos;
 	Commands::run('talk resp ' . ($n - 1));
+}
+
+# buying: ввод в диалоге — только из шага сценария; без него этап проваливается (не угадываем).
+sub onInputText {
+	return unless %run && $run{talking};
+	my $t = $run{talking}{input_text};
+	return finish(0, 'NPC просит ввести текст — нет в сценарии') unless defined $t;
+	Commands::run("talk text $t");
+}
+
+sub onInputNumber {
+	return unless %run && $run{talking};
+	my $n = $run{talking}{input_number};
+	return finish(0, 'NPC просит ввести число — нет в сценарии') unless defined $n;
+	Commands::run("talk num $n");
 }
 
 sub onTalkDone {

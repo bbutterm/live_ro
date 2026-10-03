@@ -89,6 +89,7 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `achieve` | достижения сервера по пакетам 0A23/0A24; награда — флаг | вкл., **`claim_rewards: false`** | `feature.achievement` сервера | без флага действий нет | 0 (флаг — 7) |
 | `herbal` | травник: травы не продаются, поездка к Old Pharmacist в Альберту | **выкл.**; и травника нет (`herbal.residents: []`, `persona.herbalist` нет) | routine; jobChange `path herbal`, `buyAuto Empty Bottle` | тело: 11 переходов до Альберты; деньги | 6 |
 | `arrows` | Arrow Crafting для ветки Archer | вкл., **спит** (лучника нет); `quest_auto: false` | routine; пути до `moc_ruins` нет | — пока нет лучника | 0 |
+| `buying` | скупка торговца (ORG-036); продажа жителей в скупку; снаряжение Merchant: тележка у Kafra, навык и лицензии у Mr. Hugh | **выкл.**; `setup.license/permits: false` | economy, routine, orders; плагин buyer (загружен всегда), jobChange `path buying` | деньги (до `max_budget`, тележка 800 z, навык 10 000 z); тело: Альберта | 7 |
 | `trek` | дальний поход группой в город другого региона, привалы с Kafra-сохранением | **выкл.** | routine, explore, party, crew | тело: дальние карты; точка сохранения | 6 |
 | `director` | режиссёр: «день осторожности», «помочь», повод в тишину | вкл. | мир | множители мотивов; шёпот `[info:rich]` жителю | 2 |
 
@@ -169,7 +170,7 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episod
 ```
 Включены остаются: `career`, `routine`, `economy`, `party`, `activity`, `bonds`, `crew`, `pets`, `social`, `rumors`,
 `society`, `aims`, `world_bus` (база №14–16) и пассивные летописцы `collection`, `places`, `bestiary`, `achieve`,
-`memoir`, `arrows` (спит). `guild`, `boss`, `refine`, `spar`, `herbal`, `trek` выключены в `goals.json`.
+`memoir`, `arrows` (спит). `guild`, `boss`, `refine`, `spar`, `herbal`, `trek`, `buying` выключены в `goals.json`.
 
 Смотреть: пункты задания №16 (1–8) и №15 (1–7); плюс тело на новом профиле — `doctor` видит плагины `refine`, `spar`,
 `pets`; в `console.log` нет ошибок загрузки; маршруты к Tool Dealer `prt_in 126,76`, Kafra и на карты охоты

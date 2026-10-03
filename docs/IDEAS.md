@@ -2304,6 +2304,80 @@ kv fest {cur {event, map, since, until, gathered, kills, round}, last {event: ts
 **Готово.** Тесты зелёные; `server/README.md`, `docs/WORLD_EVENTS.md`; статус ORG-087 «код; конфиг сервера готов,
 не включён — решение владельца».
 
+### Т-38 · ORG-036 · Скупка (Buying Store) и снаряжение торговца
+
+**Цель.** Торговец открывает в городе скупку того, что нужно жителям (заказы, свой список желаний, травы травнику, руда
+для заточки), а жители сами продают в неё лишнее дороже, чем дал бы NPC. Так лут жителей идёт жителям, а не NPC.
+Заодно закрыть разрывы цепочки «Novice → Merchant → тележка → лавка → скупка», из-за которых лавка ORG-034 спит даже с
+Merchant в мире. По умолчанию выключено.
+
+**Данные (сверено, upstream/rathena e985006, upstream/openkore 51de1dd).**
+
+| Что | Где | Значение |
+|---|---|---|
+| навык | `db/re/skill_db.yml:29272` ALL_BUYING_STORE | SP 30 и 1 × Buy Market Permit (6377) на каждое открытие, 5 мест (`skills/other/openbuyingstore.cpp`), флаг IsQuest — очками не учится |
+| учитель | `npc/merchants/buying_shops.txt:104` Mr. Hugh, `alberta_in,58,52` | Merchant-ветка и MC_VENDING ≥ 1; свободный вес ≥ 2400 (`:105`); три меню (`:154`, `:175`, `:205`), ввод имени `input .@name$` (`:221`), 10 000 z (`:198`), +5 × 6377 (`:227`); дальше 6377 по 200 z (`:122`, ввод числа `:126`) |
+| без навыка | `item_db_usable.yml:11082` 12548 Shabby Purchase Street Stall License | `buyingstore 2;` — 2 места; продаёт Mr. Jass `que_job01,68,84` (`:20`) по 500 z — карта квестовая, туда не ходим |
+| правила | `src/map/buyingstore.cpp` | `feature.buying_store: on` (`conf/battle/feature.conf:12`); хотя бы 1 штука каждого предмета в рюкзаке (`:185`); предмет с флагом BuyingStore (руда, травы, лут — да, снаряжение — нет) (`:178`); цена 1..99 990 000 (`:173`); своё + покупка ≤ 9999 (`:190`); лимит ≤ зени; не рядом с NPC; лавка и скупка взаимоисключающие (`:72`) |
+| продавец | `buyingstore_trade` | тот же map и видимость (AREA_SIZE); предмет без карт и не привязан |
+| пакеты (PACKETVER 20180620) | `clif_shuffle.hpp:4754-4757`, `packets_struct.hpp:3098-3266` | 0811 open (len, zeny, result, name[80], items: itemId 2, amount 2, price 4), 0815 close, 0817 click, 0819 trade (len, AID, storeId, items: index, itemId, amount); ответы 0810, 0812, 0813, 0818, 081A, 081C, 0824, 09E6 |
+| OpenKore | `Commands.pm:431/177` openbuyershop/closebuyershop, `Misc.pm:6380` makeBuyerShop | товары по ИМЕНИ из `%buyer_shop`; навык + 6377 или предмет 12548; лимит = Σ цена × кол-во, не больше зени |
+| ошибка OpenKore | `Send/kRO/RagexeRE_2018_04_04b.pm:27-29` (наследует `RagexeRE_2018_06_20e`) | 0811 `'a4 c a*'` — нет len и названия, лимит упакован как текст; 0819 `'a4 a4 a*'` — нет len. Сервер такой пакет не разберёт. Верный формат — `Send/kRO/Sakexe_0.pm:228,231` |
+| 09E6 | `Receive.pm` | обработчика нет — покупку скупщик видит только по рюкзаку и зени |
+| тележка | `npc/kafras/functions_kafras.txt:337` F_KafCart | Merchant-ветка, MC_PUSHCART ≥ 1; меню «Rent a Pushcart» (`:142`) → «Rent a Pushcart.» (`:379`) → снова главное меню → «Cancel»; плата — arg 4 F_Kafra (800 z в Пронтере, `kafras.txt:298`) |
+
+**Файлы.** `bots/plugins/buyer/buyer.pl` (новый плагин: `buyer_open`/`buyer_close`/`buyer_sell`, `state.buyer`,
+исправление формата 0811/0819 в `$messageSender->{packet_list}`), `bots/tests/buyer.t`; `brainBridge.pl` (действия,
+`state.buyer`, лавка не открывается при скупке, `# buying:`); `jobChange.pl` (`input_text`/`input_number` в шаге talk);
+`sys.txt` bot01/bot02 и `scripts/lab doctor` — плагин buyer; `brain/live_brain/buying.py` (модуль реестра),
+`safety.py` (`check_buyer`), `economy.py` (`keep_items`, сделки в скупке невозможны), `routine.py` (лавка не
+открывается при скупке, скупка закрывается перед охотой), `mind.py` (`MODULE_JOB_PATHS`), `modules.py`, `goals.json`
+(`buying`), `bots/combat/classes.json` (Merchant учит MC_VENDING); `brain/tests/test_buying.py`.
+
+**Протокол.**
+```text
+действия: buyer_open {title, items:[{id, price, amount}]}   1..5 предметов, Σ цена × кол-во ≤ зени (safety)
+          buyer_close {}                                     всегда
+          buyer_sell {from, items:[{id, keep, min}]}         только в скупку жителя
+state.buyer {can, skill, permits, shabby, slots, vending, pushcart, cart, open, items, bought, spent,
+             stores:[{name, title}], selling}
+события тела: buyer_result {ok, reason, items, limit} · buyer_bought {item, amount, zeny, price} ·
+              buyer_closed {why, bought, spent} · buyer_sell_result {from, ok, reason, sold:[{item, amount, price}], zeny_gain}
+память: buying_open / buying_opened / buying_open_failed / buying_bought / buying_closed / buying_sold /
+        buying_unverified / buying_setup / buying_setup_done / buying_setup_failed; kv buying
+этапы jobChange: path "buying", stage cart | license | permits (итог забирает модуль, не career)
+```
+- **Скупщик.** Спрос: чужие открытые заказы шины (`orders.open_orders`) > `economy.wishlist` > `buying.goods`
+  {ID: держать штук}. Цена штуки — `value × (1 + bid_markup)`, не ниже NPC + 1 и не выше потолка (`buy_limit`; по
+  заказу — награда/n × (1 − `order_margin`)); потолок ниже NPC + 1 — не скупаю. Бюджет — `budget_share` от
+  (зени − `keep_zeny` − копилка мечты), ≤ `max_budget`, ≥ `min_budget`. Сначала предметы с образцом в рюкзаке.
+  Открывает на отдыхе в городе (дошёл), без встречи, квеста, сделки, экспедиции, сна, SP ≥ 30, не чаще
+  `open_gap_minutes`; держит `open_minutes`; закрывает раньше при уходе на охоту, встрече, смерти. Лавка открыта
+  дольше `vend_turn_minutes` — закрыть её (очередь скупки), распорядок не откроет лавку, пока открыта скупка.
+- **Продавец** (любой житель): скупка жителя рядом (`state.buyer.stores`), город отдыха, тело свободно, к одной
+  скупке не чаще `sell_gap_minutes`, не в ссоре (affinity > −3). Продаёт то, что не в `economy.keep_items` (share,
+  желания, взятый заказ, ремесло, крыло арены), не карты альбома, не зелья/крылья/лицензии; цена штуки ≥ NPC со
+  своим Overcharge + 1 (карта ≥ value). Плагин сам режет количество по лимиту скупки.
+- **Доказательства.** Скупщик «купил» — рост предмета из списка и убыль зени, пока скупка открыта (09E6 OpenKore не
+  разбирает). Продавец «продал» — пакеты 081C И прирост зени ≥ Σ количество × цена; меньше — `buying_unverified`.
+- **Снаряжение торговца** (Merchant-ветка, `buying.setup`): `cart` — Kafra своего города (homes.json), ordered-ответы
+  «Rent a Pushcart» → «Rent a Pushcart.» → «Cancel», факт — `state.buyer.cart`; `license` — Mr. Hugh (дорога —
+  точки move этапа first_job пути merchant, стоять `alberta_in 58,49`), ввод имени, успех — фраза «approved to open
+  the Bulk Buyer Shop», факт — навык в state; `permits` — «Purchase Bulk Buyer Shop License», ввод `permits_buy`,
+  факт — рост 6377. Перед поездкой: зени ≥ плата + `reserve_zeny`, свободный вес ≥ 2400, отдых в городе.
+- **Образцы.** При открытии плагин ставит `items_control <id> keep 1` для предметов списка: склад и продажа не
+  заберут последнюю штуку — следующая скупка откроется.
+
+**Тесты.** Perl: статус (навык, лицензии, места), отказы (лавка, нет образца, SP, название), формат 0811/0819 после
+исправления — раскладка байт против `packets_struct.hpp`, подтверждение 0813, покупки по рюкзаку, закрытие и разрыв,
+продажа в скупку (лимит, keep, min, 081C, прирост зени), ввод строки/числа в jobChange. Python: план (цены, бюджет,
+порядок, заказы с маржой), открытие/закрытие, очередь с лавкой, занятость, продавец (что продаёт, проверка зени),
+этапы cart/license/permits и их итог не в career, safety, профиль Merchant (MC_VENDING, ≤ 49 очков, без MC_LOUD),
+сверка строк скриптов rAthena и клетки у Mr. Hugh по полям OpenKore.
+
+**Готово.** Тесты зелёные; docs/ECONOMY.md (раздел «Скупка»), docs/POPULATION.md (§9 «Торговец»), статус ORG-036
+«код (выкл.)». В игре — после рождения Bram и решения владельца (`buying.enabled`, `setup.license`).
+
 ---
 
 ## 3. Слабые места текущей системы, мешающие органичности

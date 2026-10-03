@@ -306,3 +306,35 @@ ok, поэтому житель на iz_int*/int_land* получает обыч
 
 Освободившийся слот онлайна может занять новый житель (§4, «кого родить следующим» — §7). Персонаж и его память
 остаются: вернуть жителя — `active: true`, `roster sync --write`, `LAB_BOTS`, `scripts/lab start`.
+
+## 9. Торговец: от Novice до лавки и скупки (ORG-034, ORG-036)
+
+Перепись (§7) советует родить Bram (`bots/templates/merchant`), потому что без Merchant спят лавка `offer_shop`
+(ORG-034) и скупка (ORG-036). Проверка цепочки по коду (ветка `agent/buying`, upstream rAthena e985006, OpenKore
+51de1dd). «Исправлено» — в этой ветке; в игре не проверено ничего.
+
+| Звено | Что нужно | Состояние |
+|---|---|---|
+| Novice → Merchant | job 10 (NV_BASIC 9), гильдия `alberta_in 53,43`, одно меню, платы нет (`progression.json paths.merchant`, маршрут ok) | есть; ждёт `progression.auto_job_change: true` (§6.3, решение владельца) |
+| навыки | MC_VENDING (требует MC_PUSHCART 3, тот — MC_INCCARRY 5; `db/re/skill_tree.yml`) | **разрыв, исправлено**: в `classes.json` у Merchant не было MC_VENDING вовсе (51 очко при 49 доступных, последним — квестовый MC_LOUD, очками не учится). Теперь: INCCARRY 5 → PUSHCART 3 → VENDING 3 (лавка к job 12) → … всего 49 очков; тест `test_buying.MerchantProfileTest` |
+| тележка | Kafra «Rent a Pushcart», MC_PUSHCART ≥ 1, 800 z в Пронтере (`functions_kafras.txt:337`) | **разрыв, исправлено (выкл.)**: аренды не было нигде; теперь этап `buying/cart` (jobChange, Kafra своего города из `homes.json`) — при `buying.enabled: true` |
+| лавка | MC_VENDING и тележка → `vend.can`, распорядок `vend_in_town` открывает, economy готовит товары | код есть (ORG-034); оживёт после двух строк выше |
+| скупка | навык ALL_BUYING_STORE у Mr. Hugh (`alberta_in 58,52`, 10 000 z, ввод имени) и лицензии 6377 | **новое (выкл.)**: модуль `buying` и плагин `buyer`; навык — этап `buying/license` (`setup.license: false`), лицензии — `buying/permits` (`setup.permits: false`); jobChange научен вводу строки и числа |
+| пакеты OpenKore | 0811/0819 для `kRO_RagexeRE_2018_06_20e` | **ошибка upstream, обход в плагине** (формат подменяется в памяти OpenKore; подмодуль не тронут) |
+
+Что остаётся разрывом (кода нет — решение или отдельная работа):
+
+1. **Включение.** `progression.auto_job_change` (смена профессии), `buying.enabled` (тележка и продажа жителей в
+   скупку), `buying.setup.license` (10 000 z и поездка в Альберту), `buying.setup.permits`. Без них Bram останется
+   Merchant без тележки: лавка и скупка спят.
+2. **Товар лавки со склада.** Шаблон кладёт Iron Ore 1002 и Iron 998 в `economy_storeIds` «на будущую лавку», но
+   ничего не забирает их со склада Kafra в тележку — до лавки они не дойдут. Так же купленная скупкой руда из
+   `economy_storeIds` уйдёт на склад при обслуживании (кроме образца: плагин ставит `items_control keep 1`).
+3. **Образец для скупки.** Сервер открывает скупку только для предметов, которых хотя бы 1 штука в рюкзаке. Первый
+   образец торговец должен добыть сам (охота) или купить; заранее положить его некому.
+4. **Mammonite тратит зени** (100 × ур. за удар, rAthena) — боевой профиль Merchant расходует деньги, которые
+   торговец копит; менять бой — отдельное решение.
+5. **Upstream OpenKore.** Правильный формат 0811/0819 в `Send/kRO/RagexeRE_2018_04_04b.pm` — патчем в
+   `server/patches/openkore` или fork; пока обход в плагине `buyer` (`fixPackets`).
+6. **Проверка в игре**: всё звено «тележка → лавка → скупка → продажа жителя» — после рождения Bram
+   (`scripts/lab new-resident bot03 merchant Bram`, §4) и включения флагов.

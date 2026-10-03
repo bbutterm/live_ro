@@ -56,9 +56,9 @@ ORG — за «житель живёт: у него свой ритм, мест�
 | 031 | код | слухи v2: виды, автор, hops, доверие, затухание | test_rumors |
 | 032 | код | проверка слуха (занятие `check_rumor`) | test_rumors |
 | 033 | код | лут жителю до NPC: метки `[offer:]`, двусторонняя сделка с проверкой | test_economy, economy.t |
-| 034 | код (спит) | лавка `offer_shop`; без Merchant в мире не включается | test_economy, economy.t |
+| 034 | код (спит) | лавка `offer_shop`; без Merchant в мире не включается; разрывы цепочки (MC_VENDING в профиле, аренда тележки) закрыты в ORG-036 (тележка — при `buying.enabled`) | test_economy, economy.t |
 | 035 | код | почта RODEX: подарок на расстоянии, итог недели, ≤ 5 писем в сутки | test_economy, economy.t |
-| 036 | нет | следующие циклы | — |
+| 036 | код (выкл.) | скупка: модуль `buying` (спрос заказов/желаний/товаров, цена ≥ NPC+1 ≤ buy_limit, бюджет из копилки), плагин `buyer` (open/close/sell, исправление формата 0811/0819 OpenKore), продажа жителей в скупку; снаряжение торговца: тележка у Kafra, навык и лицензии у Mr. Hugh (jobChange ввод); `classes.json` Merchant учит MC_VENDING (ТЗ Т-38, docs/POPULATION.md §9); в игре не проверено | test_buying, buyer.t, job_change.t |
 | 037 | код | `economy_metrics`: в `scripts/lab report` и хронике | test_economy, test_chronicle |
 | 038 | код | цели недели (aims.py), усиливают мотивы | test_aims, test_needs |
 | 039 | код | объявления сервера: packet_sysMsg/packet_localBroadcast → события мира | test_world_bus, brain_bridge.t |

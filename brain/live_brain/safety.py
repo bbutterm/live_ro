@@ -22,6 +22,9 @@
   заточка (refine) — только от правил (refine.py): руда, цель, точки NPC (refine:).
 - банк (bank_check/bank_deposit/bank_withdraw) — только от правил (savings.py): сумма 1..MAX_BANK_OP, вклад
   не больше зени в кармане, не больше BANK_PER_DAY в сутки (dreams:).
+- скупка (buyer_open/buyer_close/buyer_sell) — только от правил (buying.py): 1..BUYER_SLOTS предметов, цена и
+  количество в пределах rAthena, лимит (Σ цена × кол-во) не больше зени; продавать — только в скупку жителя;
+  закрыть — всегда (buying:).
 """
 import re
 import time
@@ -58,6 +61,10 @@ PLAN_ACTIONS += ("look_at",)     # look: повернуться к собесе�
 LOOK_GAP = 20                    # look: не чаще раза в 20 с
 BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
+PLAN_ACTIONS += ("buyer_open", "buyer_close", "buyer_sell")   # buying: скупка (buying.py, ORG-036)
+BUYER_SLOTS = 5                  # buying: rAthena MAX_BUYINGSTORE_SLOTS (buyingstore.hpp:14)
+BUYER_MAX_PRICE = 99_990_000     # buying: buyingstore.cpp BUYINGSTORE_MAX_PRICE
+BUYER_MAX_AMOUNT = 9999          # buying: buyingstore.cpp BUYINGSTORE_MAX_AMOUNT
 CHAT_TITLE_MAX = 36              # society: символов и байт UTF-8 (rAthena CHATROOM_TITLE_SIZE 36+1)
 MAX_PRICE = 100_000_000          # market: цена лота между жителями
 MAIL_PER_DAY = 5                 # market: писем в сутки от одного жителя (rAthena mail_daily_count 100 — наш лимит строже)
@@ -127,6 +134,8 @@ class SafetyPolicy:
             return self.check_chat_room(action, state, now)       # society:
         if kind in ("clear_point", "stand", "shop_close"):
             return {"action": kind}, None                     # вернуть к охоте / встать можно всегда
+        if kind == "buyer_close":                                 # buying: закрыть скупку можно всегда
+            return {"action": "buyer_close"}, None                # buying:
         if kind == "spar_stop":                                   # spar: остановить спарринг можно всегда
             return {"action": "spar_stop", "why": fit_text(str(action.get("why") or "стоп"), 40)}, None   # spar:
         if state.get("dead"):
@@ -203,6 +212,8 @@ class SafetyPolicy:
             return self.check_look(action, state, now)                                               # look:
         if kind == "refine":                                                                          # refine:
             return self.check_refine(action, state)                                                  # refine:
+        if kind in ("buyer_open", "buyer_sell"):                                                      # buying:
+            return self.check_buyer(kind, action, state)                                             # buying:
         if kind == "craft_setup":                                                                     # herbal:
             return self.check_craft_setup(action)                                                    # herbal:
         if kind == "arrowcraft":                                                                      # arrows:
@@ -523,6 +534,43 @@ class SafetyPolicy:
         if kind == "offer_buy" and state.get("zeny") is not None and int(state["zeny"]) < price:
             return None, "не хватает зени"
         return {"action": kind, who: action[who], "item": item, "amount": amount, "price": price}, None
+
+    def check_buyer(self, kind, action, state):                                                   # buying:
+        """buying: скупка (ORG-036) — числа в пределах rAthena (buyingstore.cpp), лимит не больше зени;
+        продавать — только в скупку жителя."""
+        def num(v, lo, hi):
+            return v if isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi else None
+
+        items = action.get("items")
+        if kind == "buyer_open":
+            title = " ".join(str(action.get("title", "")).replace("#", "").replace('"', "").split())[:36]
+            if not title or not isinstance(items, list) or not 0 < len(items) <= BUYER_SLOTS:
+                return None, f"скупка: название и 1..{BUYER_SLOTS} предметов"
+            clean, seen = [], set()
+            for it in items:
+                it = it if isinstance(it, dict) else {}
+                iid, price = num(it.get("id"), 1, 999999), num(it.get("price"), 1, BUYER_MAX_PRICE)
+                amount = num(it.get("amount"), 1, BUYER_MAX_AMOUNT)
+                if not (iid and price and amount) or iid in seen:
+                    return None, "скупка: неверный предмет, цена или количество"
+                seen.add(iid)
+                clean.append({"id": iid, "price": price, "amount": amount})
+            total = sum(i["price"] * i["amount"] for i in clean)
+            if state.get("zeny") is not None and total > int(state["zeny"]):
+                return None, "скупка: лимит больше зени в кармане"
+            return {"action": "buyer_open", "title": title, "items": clean}, None
+        if action.get("from") not in self.peers:
+            return None, "продавать в скупку — только жителю"
+        if not isinstance(items, list) or not 0 < len(items) <= 20:
+            return None, "продажа в скупку: 1..20 предметов"
+        clean = []
+        for it in items:
+            it = it if isinstance(it, dict) else {}
+            iid, keep, low = num(it.get("id"), 1, 999999), num(it.get("keep", 0), 0, 30000), num(it.get("min"), 1, BUYER_MAX_PRICE)
+            if not iid or keep is None or not low:
+                return None, "продажа в скупку: неверный предмет"
+            clean.append({"id": iid, "keep": keep, "min": low})
+        return {"action": "buyer_sell", "from": action["from"], "items": clean}, None
 
     def pause_expired(self, now=None):
         now = now or time.time()
