@@ -64,6 +64,9 @@ usage() {
                         СПИСОК — примерка этапа), goals.json, нужные модули/жители; опечатки в BRAIN_DISABLE
                         (только чтение, docs/ROLLOUT.md)
   alerts [N]            последние оповещения владельцу (тупик, восстановление невозможно, сторож сдался)
+  organic [BOT|all] [--days N] [--json] [--alerts]   метрики органичности M1–M22 «мёртво/живо/шумно» по жителю и
+                        миру, «кто вёл тело»; --alerts — «шумно/мертво» 2 дня подряд в run/alerts.log (ORG-113/114;
+                        только чтение памяти, шины и decisions.jsonl; docs/ROLLOUT.md)
   gift BOT ITEM N       BOT сейчас просит у жителя рядом N предметов ITEM (ID, например 501, или z — зени);
                         для проверки обмена: оба в городе (routine BOT rest), правила отдающего действуют
 Боты: LAB_BOTS в env-файле (по умолчанию "bot01"). LAB_MAX_ONLINE=N — сторож и up держат онлайн не больше N
@@ -1272,6 +1275,8 @@ main() {
     census) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain.census --repo "$(profile_root)" \
               --lab-root "$LAB_ROOT" --bots $(lab_bots) --max-online "${LAB_MAX_ONLINE:-}" "$@" ) ;;   # census: ORG-088
     alerts) load_env; if [[ -s "$LAB_ROOT/run/alerts.log" ]]; then tail -n "${1:-30}" "$LAB_ROOT/run/alerts.log"; else info "оповещений нет"; fi ;;
+    organic) load_env; ( cd "$(profile_root)/brain" && python3 -m live_brain.organic "$@" \
+               --lab-root "$LAB_ROOT" --bots $(lab_bots) ) ;;   # organic: ORG-113/114 метрики v2 и детектор машинности
     supervise) cmd_supervise ;;
     routine)
       case "${2:-}" in

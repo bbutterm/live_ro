@@ -24,6 +24,7 @@ from .mind import Mind
 from . import resources  # ops: ORG-047 замер ресурсов
 from .collection import album_size  # collect: ORG-074 метрика альбома
 from .bestiary import species as bestiary_species   # bestiary: ORG-077 метрика бестиария
+from .organic import deeds as organic_deeds         # organic: ORG-113 дела для «слов на дело»
 
 log = logging.getLogger("live_brain")
 RESOURCE_EVERY = 600      # ops: ORG-047 — замер RSS/CPU мозга раз в 10 мин
@@ -210,7 +211,8 @@ def organic_metrics(memory, since, now=None):
             "карт в альбоме": album_size(memory), "трофеев за период": trophies,                         # collect: ORG-074
             "видов в бестиарии": bestiary_species(memory), "открытий первым": firsts,                    # bestiary: ORG-077
             "разнообразие занятий": round(len(acts - {None}) / starts, 2) if starts else 0.0,           # crowd: ORG-089
-            "повторов реплик, %": repeat_share(texts)}                                                 # grammar: ORG-065
+            "повторов реплик, %": repeat_share(texts),                                                 # grammar: ORG-065
+            "дел": organic_deeds(memory, since, now or time.time())}                                   # organic: ORG-113
 
 
 def repeat_share(texts):

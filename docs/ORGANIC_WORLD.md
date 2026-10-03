@@ -377,6 +377,13 @@ ttl)`. Мозг каждого жителя читает новые событи
 в памяти есть реплики людей. Секретов нет (env, пароли, IP не читаются). Модуль `brain/live_brain/dashboard.py`,
 тест `brain/tests/test_dashboard.py`.
 
+#### Метрики органичности v2 и детектор машинности (ORG-113/114: код, в игре не проверено)
+`brain/live_brain/organic.py` — чистые функции `body_owners`, `speech`, `deeds`, `regularity`, `hotspot_share`,
+`pingpong`, `similarity`, `grade`, `world_report`; пороги M1–M22 «мёртво / живо / шумно» — `brain/world/organic.json`
+(гипотеза из docs/IDEAS2.md §4.2, пересмотреть после первой недели). Команда `scripts/lab organic`, полоса «кто вёл
+тело» и цветная таблица в дашборде, оповещения `--alerts` — как пользоваться: docs/ROLLOUT.md §5. Только чтение
+памяти, шины, `decisions.jsonl` и `brain.log`; тест `brain/tests/test_organic2.py`.
+
 ### 4.16. Как добавить модуль (реестр модулей, W8)
 Раньше каждый модуль правил `mind.py` в четырёх местах: блок создания в `__init__`, звено цепочки `if` в `on_event`
 (метки шёпота и виды событий), строку в `step()` и поле в `build_prompt()`. Параллельные агенты конфликтовали там при
