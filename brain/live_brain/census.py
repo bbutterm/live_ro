@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import resources
+from . import flaws as flaws_mod                                        # traits: ORG-101
 from . import drift as drift_mod                                        # traits: ORG-092
 from . import interests as interests_mod                                # interests: ORG-103
 from .atlas import ARCHETYPES
@@ -126,6 +127,11 @@ def persona_interests(repo, persona):                                   # intere
     return interests_mod.interests(p) if isinstance(p, dict) and p else []
 
 
+def persona_flaw(repo, persona):                                        # traits: ORG-101
+    p = _json(Path(repo) / "brain" / "personas" / f"{persona}.json")
+    return flaws_mod.label(p) if isinstance(p, dict) else None
+
+
 def residents(repo, lab_root, lab_bots, now):
     doc = _json(Path(repo) / "brain" / "world" / "roster.json", {}) or {}
     reg = doc.get("residents") or {}
@@ -146,6 +152,7 @@ def residents(repo, lab_root, lab_bots, now):
             "activities": sorted(((mem or {}).get("activities") or {}).items(), key=lambda kv: -kv[1])[:3],
             "legacy": (mem or {}).get("legacy"),                                  # legacy: ORG-083
             "interests": persona_interests(repo, o.get("persona") or bot),        # interests: ORG-103
+            "flaw": persona_flaw(repo, o.get("persona") or bot),                  # traits: ORG-101
             "drift": drift_mod.report_line((mem or {}).get("drift")) if (mem or {}).get("drift") else None,  # traits:
         })
     return out
@@ -349,6 +356,8 @@ def render(data):
             lines.append("      интересы: " + ", ".join(interests_mod.RU.get(x, x) for x in r["interests"]))
         if r.get("drift"):                                                  # traits: ORG-092
             lines.append("      " + r["drift"])                                 # traits:
+        if r.get("flaw"):                                                   # traits: ORG-101
+            lines.append("      " + r["flaw"])                                  # traits:
         if r["relations"]:
             lines.append("      связи: " + ", ".join(f"{n} {a:+d}" for n, a in sorted(r["relations"].items())))
         if r["activities"]:

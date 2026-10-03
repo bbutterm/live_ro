@@ -288,9 +288,11 @@
     ]
   },
   "interests": ["places"],
+  "flaw": "silent",
+  "_flaw_comment": "ORG-101 (brain/live_brain/flaws.py): Rook — молчун: сам почти не заговаривает (бюджет внимания ×0.3), но отвечает. Крайняя черта — общительность 0.1.",
   "traits": {
     "bravery": 0.5,
-    "sociability": 0.4,
+    "sociability": 0.1,
     "greed": 0.7,
     "curiosity": 0.7,
     "diligence": 0.4,

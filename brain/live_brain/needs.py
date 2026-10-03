@@ -123,7 +123,9 @@ class Needs:
     def risk_tolerance(self):
         """Допустимый риск карты (atlas.danger_for 0..1): смелый терпит больше; «день осторожности» режиссёра — ниже."""
         director = getattr(self.mind, "director", None)                         # director: ORG-086
-        return (0.25 + 0.5 * self.t["bravery"]) * (director.risk_factor() if director else 1.0)   # director:
+        fl = getattr(self.mind, "flaw", None)                                    # flaw: ORG-101 трус ×0.7
+        return ((0.25 + 0.5 * self.t["bravery"]) * (director.risk_factor() if director else 1.0)   # director:
+                * (fl.factor("risk") if fl else 1.0))                           # flaw:
 
     def noise(self):
         """Доля случайности в выборе: причудливые менее предсказуемы."""

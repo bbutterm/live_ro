@@ -289,10 +289,12 @@
     ]
   },
   "interests": ["cards", "trade"],
+  "flaw": "miser",
+  "_flaw_comment": "ORG-101 (brain/live_brain/flaws.py): Bram — скряга: зени по просьбе не даёт (зелья — даёт), в ценах жаднее на 0.2. Крайняя черта — жадность 0.95.",
   "traits": {
     "bravery": 0.3,
     "sociability": 0.6,
-    "greed": 0.8,
+    "greed": 0.95,
     "curiosity": 0.5,
     "diligence": 0.7,
     "generosity": 0.4,

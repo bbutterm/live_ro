@@ -64,6 +64,7 @@ legacy (ORG-083) — тик 232 (после memoir), без поля промп�
 fest (ORG-087) — тик 122, событие kill 76; объявление — из rumors.on_world_msg (on_announce).  # events2:
 buying (ORG-036) — тик 27, события job_change_result 18 (consume "result", path buying), buyer_* 18 (own), промпт 145;
 по умолчанию выключен.  # buying:
+flaw (ORG-101) — только создание (brain_create: None без persona.flaw), строки `# flaw:`.  # traits:
 scars (ORG-093) — события died/kill 95 (не поглощают), без тика; maps.choose — avoid/revenge.  # traits:
 drift (ORG-092) — тик 3 (раз в 10 мин, сдвиг раз в неделю), без меток и событий.  # traits:
 attention (ORG-109) — без тика, меток и событий: бюджет инициатив, строки `# attention:` в говорящих модулях.  # attention:
@@ -87,6 +88,7 @@ from .habits import Habits                # habits: ORG-068
 from .guild import Guild
 from .home import Home
 from .mood import Mood
+from .flaws import Flaw                 # traits: ORG-101 изъян характера (без тика)
 from .scars import Scars                # traits: ORG-093 шрамы, страх места, реванш
 from .drift import TraitDrift          # traits: ORG-092 дрейф характера (до всех, кто читает черты)
 from .interests import Interests   # interests: ORG-103 увлечения жителя (без тика)
@@ -131,6 +133,7 @@ from .world_calendar import WorldCalendar
 MODULES = (
     Home,              # EARLY: до SafetyPolicy
     TraitDrift,        # traits: ORG-092 — первым: применяет сдвиг черт к persona.traits и needs.t
+    Flaw,              # traits: ORG-101 — до attention, economy, explorer (читают mind.flaw при вызове)
     Mood,
     Interests,         # interests: ORG-103 — до хобби-модулей (они читают mind.interests при вызове)
     Attention,         # attention: ORG-109 после mood (только создание; routine/calendar читает при вызове)

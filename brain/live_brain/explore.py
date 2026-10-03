@@ -186,8 +186,10 @@ class Explorer:
         r = self.reach_maps().get(hmap)
         if not r:
             return None, "OpenKore не дойдёт пешком из города (нет в explore_reach.json)"
-        if r["hops"] > cfg["max_hops"]:
-            return None, f"дальше {cfg['max_hops']} переходов"
+        fl = getattr(self.mind, "flaw", None)                       # flaw: ORG-101 домосед — не дальше 1 перехода
+        hops = fl.cap("hops", cfg["max_hops"]) if fl else cfg["max_hops"]   # flaw:
+        if r["hops"] > hops:
+            return None, f"дальше {hops} переходов"
         m = a.maps.get(hmap)
         if not m:
             return None, "нет в атласе"

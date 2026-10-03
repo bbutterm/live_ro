@@ -288,6 +288,8 @@
     ]
   },
   "interests": ["bestiary", "explore"],
+  "flaw": "chatterbox",
+  "_flaw_comment": "ORG-101 (brain/live_brain/flaws.py): Ilsa — болтун: о том, что видела вдали, заговаривает первой вдвое чаще (бюджет внимания ×2). Крайняя черта — любопытство 0.9.",
   "traits": {
     "bravery": 0.6,
     "sociability": 0.5,

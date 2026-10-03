@@ -322,6 +322,9 @@ class Economy:
         if self.gifts_today(now) >= self.per_day:
             return f"за сутки уже отдал {self.per_day} раз"
         rule = self.zeny if item == "z" else self.share.get(item)
+        fl = getattr(self.mind, "flaw", None)                                 # flaw: ORG-101 скряга
+        if item == "z" and fl and fl.refuses_zeny():                          # flaw:
+            return "деньги не даю"                                            # flaw:
         if not rule:
             return "этим не делюсь"
         if amount > int(rule.get("ask", 0)):
@@ -398,7 +401,9 @@ class Economy:
         return int(((state or self.state).get("vend") or {}).get("overcharge") or 0)
 
     def greed(self):
-        return float((((getattr(self.mind, "persona", None) or {}).get("traits")) or {}).get("greed", 0.5))
+        g = float((((getattr(self.mind, "persona", None) or {}).get("traits")) or {}).get("greed", 0.5))
+        fl = getattr(self.mind, "flaw", None)                                 # flaw: ORG-101 скряга +0.2
+        return fl.greed(g) if fl else g                                       # flaw:
 
     def affinity(self, peer):
         return int((self.mind.mem.relation(peer) or {}).get("affinity") or 0)

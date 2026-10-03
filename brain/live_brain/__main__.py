@@ -17,6 +17,7 @@ from .bridge import Bridge
 from .budget import SharedBudget
 from .config import Settings, load_env, load_persona
 from . import interests as interests_mod                                       # interests: ORG-103
+from .flaws import label as flaws_label                                      # traits: ORG-101
 from .drift import report_line as drift_report                                # traits: ORG-092
 from .wealth import report_line as wealth_line                                 # wealth: ORG-100
 from .economy import economy_metrics
@@ -159,6 +160,9 @@ def report(args, memory, state_dir):
     try:                                                                       # interests: ORG-103
         mine = interests_mod.interests(load_persona(args.persona))             # interests:
         print("   интересы: " + ", ".join(interests_mod.RU.get(x, x) for x in mine))   # interests:
+        flaw_line = flaws_label(load_persona(args.persona))                    # traits: ORG-101
+        if flaw_line:                                                          # traits:
+            print("   " + flaw_line)                                           # traits:
     except (OSError, ValueError, AttributeError, TypeError):                   # interests: нет персоны — молча
         pass                                                                   # interests:
     att_line = attention_mod.report_line(memory.get("attention"))              # attention: ORG-109

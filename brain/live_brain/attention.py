@@ -113,7 +113,8 @@ class Attention:
         b = (lo + (hi - lo) * self.trait("sociability")) * self.mood_factor()
         if is_quiet(self.mind, now):                                    # hush: ORG-110 тихий день — база ×quiet_factor
             b *= float(self.cfg.get("quiet_factor", 1.0))               # hush:
-        return b
+        fl = getattr(self.mind, "flaw", None)                           # flaw: ORG-101 болтун ×2, молчун ×0.3
+        return b * fl.factor("talk") if fl else b                       # flaw:
 
     def me(self):
         return (self.mind.state or {}).get("name") or self.mind.persona.get("name")

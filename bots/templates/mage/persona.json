@@ -288,6 +288,8 @@
     ]
   },
   "interests": ["places", "craft"],
+  "flaw": "homebody",
+  "_flaw_comment": "ORG-101 (brain/live_brain/flaws.py): Odette — домосед: экспедиции не дальше 1 перехода от города. Крайняя черта — терпение 0.95.",
   "traits": {
     "bravery": 0.3,
     "sociability": 0.5,
@@ -295,7 +297,7 @@
     "curiosity": 0.8,
     "diligence": 0.6,
     "generosity": 0.6,
-    "patience": 0.8,
+    "patience": 0.95,
     "whimsy": 0.4,
     "_comment": "0..1: смелость, общительность, жадность, любопытство, усердие, щедрость, терпение, причудливость. Определяют мотивы и выбор (needs.py), не текст."
   },
