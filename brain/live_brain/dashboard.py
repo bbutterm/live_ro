@@ -25,6 +25,7 @@ from . import episode as episode_mod                    # serial: серия н�
 from .chronicle import LINES, day_bounds
 from .economy import metrics_from_rows
 from .bestiary import world_bestiary                    # bestiary: общий бестиарий (ORG-077)
+from . import organic as organic_mod                    # organic: ORG-113/114 метрики v2, «кто вёл тело»
 
 WORLD = Path(__file__).resolve().parents[1] / "world"
 KV_KEYS = ("last_state", "status", "needs", "aims", "activity", "mood", "pets", "party", "crew", "society",
@@ -194,7 +195,12 @@ def collect(lab_root, bots, day=None, tz_hours=0, now=None):
         best = world_bestiary(lab_root, bots, now=now)                    # bestiary:
     except (sqlite3.Error, ValueError, OSError):                          # bestiary:
         best = None                                                       # bestiary:
-    return {"day": day, "tz_hours": tz_hours, "episode": ep, "bestiary": best, "generated": datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d %H:%M"),
+    try:                                                                  # organic: ORG-113/114 (только чтение)
+        org2 = organic_mod.world_report(lab_root, start, min(now, end), [r["bot"] for r in residents], now=now)
+    except (sqlite3.Error, ValueError, OSError, KeyError, TypeError):    # organic:
+        org2 = None                                                       # organic:
+    return {"organic2": org2,                                             # organic:
+            "day": day, "tz_hours": tz_hours, "episode": ep, "bestiary": best, "generated": datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d %H:%M"),
             "today": day == datetime.fromtimestamp(now, tz).strftime("%Y-%m-%d"),
             "residents": residents, "missing": missing, "relations": relations(residents),
             "events": events[cut:], "events_cut": cut}
@@ -241,6 +247,62 @@ thead th{border-top:0;color:var(--muted);font-weight:600}td.n{text-align:right;f
 .empty{color:var(--muted);font-style:italic;padding:8px 14px}
 @media (max-width:600px){.grid{grid-template-columns:1fr}main{padding:14px 12px 40px}h1{font-size:19px}}
 """
+
+
+CSS += """
+.band{display:flex;height:16px;border-radius:5px;overflow:hidden;background:var(--chip);margin-top:4px}
+.band span{display:block;height:100%}.bandrow{margin:8px 14px}.bandrow .k{font-size:13px}
+.lg{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 8px;vertical-align:middle}
+td.g-dead{background:color-mix(in srgb,var(--neu) 28%,transparent)}
+td.g-noisy{background:color-mix(in srgb,var(--neg) 22%,transparent)}
+td.g-alive{background:color-mix(in srgb,var(--pos) 16%,transparent)}
+"""                                                                       # organic: ORG-113/114
+OWNER_COLORS = {"routine": "#7d8a9c", "social": "#3a8fb7", "tradition": "#a46cc0", "healer": "#3f9e68",
+                "economy": "#c9a227", "fest": "#e07a5f", "market": "#b8862f", "director": "#9e6b4a",
+                "mentor": "#5b7fd6", "plan": "#2aa198", "unknown": "#b5b3ab"}   # organic:
+
+
+def _organic2(rep):                                                       # organic: ORG-113/114
+    """Оценки M1–M22 с цветом (мёртво / живо / шумно) и полоса «кто вёл тело» у каждого жителя."""
+    if not rep or not rep.get("residents"):
+        return '<div class="tbl"><div class="empty">Органичность v2: нет данных.</div></div>'
+    cfg = organic_mod.load_config()
+    labels = cfg.get("metrics") or {}
+    rs = list(rep["residents"].values())
+    bands = []
+    for r in rs:
+        segs = "".join(f'<span style="width:{v * 100:.2f}%;background:{OWNER_COLORS.get(k, "#8f8d86")}" '
+                       f'title="{esc(organic_mod.OWNER_RU.get(k, k))} {round(v * 100)} %"></span>'
+                       for k, v in r["owners"].items())
+        legend = "".join(f'<span class="lg" style="background:{OWNER_COLORS.get(k, "#8f8d86")}"></span>'
+                         f'{esc(organic_mod.OWNER_RU.get(k, k))} {round(v * 100)} %' for k, v in r["owners"].items())
+        bands.append(f'<div class="bandrow"><b>{esc(r["name"])}</b> <span class="k">день: '
+                     f'{esc(organic_mod.GRADE_RU[r["grade"]])}</span>'
+                     + (f'<div class="band" role="img" aria-label="кто вёл тело">{segs}</div>'
+                        f'<div class="k">{legend}</div>' if r["owners"] else '<div class="k">кто вёл тело: нет данных '
+                                                                            '(нет decisions.jsonl)</div>')
+                     + '</div>')
+    w = rep["world"]
+    head = "".join(f"<th>{esc(r['name'])}</th>" for r in rs) + "<th>мир</th>"
+    body = ""
+    for k in sorted(labels, key=organic_mod._mkey):
+        cells = ""
+        for r in rs:
+            if k in organic_mod.WORLD_ONLY:
+                cells += '<td class="n">·</td>'
+                continue
+            g = r["grades"].get(k)
+            cells += f'<td class="n g-{g or "none"}" title="{esc(organic_mod.GRADE_RU[g])}">{esc(r["metrics"].get(k))}</td>'
+        g = w["grades"].get(k)
+        cells += f'<td class="n g-{g or "none"}" title="{esc(organic_mod.GRADE_RU[g])}">{esc(w["metrics"].get(k))}</td>'
+        body += f"<tr><th>{esc(k)} {esc(labels[k].get('label', ''))}</th>{cells}</tr>"
+    return (f'<div class="sub">мир: день {esc(organic_mod.GRADE_RU[w["grade"]])}'
+            f' ({esc(organic_mod.why_text(w.get("why")))}) · '
+            '<span style="color:var(--neg)">шумно</span> / <span style="color:var(--pos)">живо</span> / '
+            '<span style="color:var(--muted)">мёртво</span>; пороги — гипотеза до первой недели</div>'
+            f'<div class="tbl"><div class="sub" style="margin:8px 14px 0">Кто вёл тело</div>{"".join(bands)}</div>'
+            f'<div class="tbl" style="margin-top:10px"><table><thead><tr><th>метрика</th>{head}</tr></thead>'
+            f'<tbody>{body}</tbody></table></div>')
 
 
 def _card(r):
@@ -419,6 +481,8 @@ def render(data):
 <h2>Бестиарий</h2>
 {_bestiary(data.get('bestiary'), data['tz_hours'])}
 <h2>Органичность <span class="sub">({esc(since)})</span></h2>
+{_organic2(data.get('organic2'))}
+<h2>Органичность ORG-046 <span class="sub">({esc(since)})</span></h2>
 {_table(res, 'organic', 'метрика')}
 <h2>Экономика <span class="sub">(за день)</span></h2>
 {_table(res, 'economy', 'метрика')}
