@@ -15,6 +15,8 @@
 """
 import time
 
+from .memory import KIND_TS_WHERE        # soak: частичный индекс events(kind, ts)
+
 TRAITS = ("bravery", "sociability", "greed", "curiosity", "diligence", "generosity", "patience", "whimsy")
 DEFAULT_TRAIT = 0.5
 HEAL_IDS = ("569", "501", "502", "503", "504")
@@ -57,7 +59,10 @@ class Needs:
         return base + 0.5 * self.t[trait]
 
     def since(self, kind, default=86400):
-        row = self.mind.mem.db.execute("SELECT MAX(ts) FROM events WHERE kind = ?", (kind,)).fetchone()
+        # soak: терм KIND_TS_WHERE — частичный индекс events(kind, ts); без него MAX(ts) шёл по индексу ts с конца до
+        # первого события вида: у редкого вида (давно не было level_up) — проход всей памяти (1,5 мс за 7 суток)
+        row = self.mind.mem.db.execute(f"SELECT MAX(ts) FROM events WHERE kind = ? AND {KIND_TS_WHERE}",
+                                       (kind,)).fetchone()
         return self.clock() - row[0] if row and row[0] else default
 
     def values(self):

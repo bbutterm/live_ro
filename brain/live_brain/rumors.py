@@ -28,6 +28,8 @@ import logging
 import re
 import time
 
+from .memory import KIND_TS_WHERE        # soak: частичный индекс events(kind, ts)
+
 log = logging.getLogger("rumors")
 
 KINDS = ("danger", "rich", "cheap", "event", "new")
@@ -238,7 +240,10 @@ class Rumors:
             self.save(keep)
 
     def deaths_on(self, hmap, since):
-        rows = self.mind.mem.db.execute("SELECT data FROM events WHERE kind = 'death_report' AND ts >= ?", (since,))
+        # soak: терм KIND_TS_WHERE включает частичный индекс events(kind, ts) (memory.py); без него — индекс ts и
+        # проход всех событий с момента слуха на каждый непроверенный слух (тик rumors рос с возрастом памяти)
+        rows = self.mind.mem.db.execute("SELECT data FROM events WHERE kind = 'death_report' AND ts >= ? "
+                                        f"AND {KIND_TS_WHERE}", (since,))
         return sum(1 for (d,) in rows if json.loads(d).get("map") == hmap)
 
     def check(self, now=None):
