@@ -630,7 +630,8 @@ class Routine:
         econ = getattr(self.mind, "economy", None)
         trading = bool(econ and econ.body_busy())             # review: лавка и поход к NPC рвут сделку жителей
         if (self.st["arrived"] and self.cfg.get("vend_in_town") and vend.get("can") and not vend.get("open")
-                and now - self.last_vend >= RESEND and not trading):
+                and now - self.last_vend >= RESEND and not trading
+                and not (state.get("buyer") or {}).get("open")):   # buying: rAthena — либо лавка, либо скупка
             self.last_vend = now
             await self.send({"action": "shop_open"}, "распорядок: открыть лавку в городе")
         if not trading:                                      # review:
@@ -691,6 +692,10 @@ class Routine:
             self.last_sent = now
             await self.send({"action": "shop_close"}, "распорядок: закрыть лавку перед охотой")
             return
+        if self.st["mode"] == "hunt" and (state.get("buyer") or {}).get("open"):          # buying: скупка держит
+            self.last_sent = now                                                         # buying: тело в городе
+            await self.send({"action": "buyer_close"}, "распорядок: закрыть скупку перед охотой")   # buying:
+            return                                                                       # buying:
         if self.st["mode"] == "hunt":
             ok = state.get("lock_map") == self.hunt_map() and state.get("lock_x") is None
             action = {"action": "hunt", "map": self.hunt_map()}

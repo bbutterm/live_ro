@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from . import llm
 from . import modules                                   # W8: реестр модулей (создание, тик, метки, события, промпт)
 from . import arrows as arrows_mod, herbal as herbal_mod, trek as trek_mod   # review4: MODULE_JOB_PATHS
+from . import buying as buying_mod                      # buying: path этапов снаряжения торговца
 from . import topics                                    # talk: темы разговора из жизни мира (ORG-066)
 from .gate import GateContext, JevGate
 from .lifecycle import STALE_SEC, Lifecycle
@@ -33,6 +34,7 @@ from .safety import SafetyPolicy
 # review4: path этапов jobChange, чьи итоги забирают модули реестра (consume "result"); выключенный модуль не отдаёт
 # свой итог карьере — career.on_result записал бы «этап herbal/pharmacist пройден» или копил бы провалы до паузы.
 MODULE_JOB_PATHS = (herbal_mod.PATH, arrows_mod.PATH, trek_mod.PATH)
+MODULE_JOB_PATHS += (buying_mod.PATH,)                  # buying:
 
 log = logging.getLogger("mind")
 

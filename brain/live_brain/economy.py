@@ -432,6 +432,8 @@ class Economy:
             return "занят квестом профессии"
         if (self.state.get("refine") or {}).get("running"):                # refine: тело у кузнеца (ORG-072)
             return "точу снаряжение"
+        if (self.state.get("buyer") or {}).get("open"):                   # buying: rAthena — в скупке сделок нет
+            return "стою со скупкой"                                      # buying: (trade.cpp: state.buyingstore)
         explorer = getattr(self.mind, "explorer", None)                   # review3: экспедиция — не до сделок
         if explorer and explorer.busy():
             return "в походе"
@@ -485,15 +487,21 @@ class Economy:
     def for_sale(self, state=None):
         """Ценные лоты рюкзака, которые можно продать: не share, не из своего списка желаний."""
         state = state or self.state
+        keep = self.keep_items(state)                                      # buying: общий список «не продавать»
+        coll = getattr(self.mind, "collection", None)                      # collect: ORG-074 карта альбома
+        items = coll.sellable(state.get("items") or {}) if coll else state.get("items") or {}   # collect: дубли — можно
+        return self.prices.valuables(items, keep=keep)
+
+    def keep_items(self, state=None):                                      # buying: и для скупки (buying.py)
+        """ID, которые жителю продавать нельзя: share, список желаний, взятый заказ, ремесло, крыло арены."""
+        state = state or self.state
         keep = set(self.share) | set(self.wishlist(state))
         orders = getattr(self.mind, "orders", None)                        # orders: ORG-070 взятый заказ —
         keep |= set(orders.reserved()) if orders else set()                # orders: не продаю другим
         keep |= {str(i) for i in ((state.get("craft") or {}).get("kept") or [])}   # review4: craft_setup keep (травник,
         spar = getattr(self.mind, "spar", None)                                     # review4: Roberto) — и от жителей;
         keep |= set(getattr(spar, "KEEP", ())) if spar else set()                   # review4: крыло — выход с арены
-        coll = getattr(self.mind, "collection", None)                      # collect: ORG-074 карта альбома
-        items = coll.sellable(state.get("items") or {}) if coll else state.get("items") or {}   # collect: дубли — можно
-        return self.prices.valuables(items, keep=keep)
+        return keep
 
     def declined(self, item, now):
         ts = (self.mind.mem.get("market_declined") or {}).get(str(item), 0)

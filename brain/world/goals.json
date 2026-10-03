@@ -293,5 +293,16 @@
     "enabled": true,
     "gather": true,
     "min_hp": 60, "chance_min": 0.3, "chance_trait": 0.6
+  },
+  "buying": {
+    "_comment": "ORG-036 скупка (brain/live_brain/buying.py, плагин bots/plugins/buyer, docs/ECONOMY.md, ТЗ Т-38). ВЫКЛЮЧЕНО: в игре не проверено. Скупщик (навык ALL_BUYING_STORE + лицензия 6377 или предмет 12548) в городе скупает спрос жителей: заказы шины (orders) > свой список желаний > goods {ID: держать штук}; цена value × (1 + bid_markup), не ниже NPC + 1, не выше buy_limit (по заказу — награда/n × (1 − order_margin)); бюджет budget_share свободных зени (минус keep_zeny и копилка мечты), не больше max_budget. Продавец — любой житель: лишнее в скупку жителя рядом. setup — снаряжение Merchant: cart (Kafra своего города, cart_fee), license (Mr. Hugh alberta_in 58,52: 10000 z, путь в Альберту) и permits (200 z за 6377) — решение владельца.",
+    "enabled": false,
+    "open_gap_minutes": 120, "open_minutes": 45, "vend_turn_minutes": 60,
+    "budget_share": 0.3, "max_budget": 30000, "min_budget": 500, "keep_zeny": 5000,
+    "bid_markup": 0.2, "order_margin": 0.1, "max_amount": 50,
+    "goods": {"984": 5, "985": 5, "1010": 10, "1011": 10, "507": 20, "508": 10, "509": 10, "510": 5},
+    "sell_gap_minutes": 60,
+    "setup": {"cart": true, "license": false, "permits": false},
+    "cart_fee": 800, "min_permits": 1, "permits_buy": 10, "reserve_zeny": 2000
   }
 }
