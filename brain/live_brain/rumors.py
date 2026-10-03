@@ -335,6 +335,11 @@ class Rumors:
             key = self.pick(peer, now)
             if not key:
                 continue
+            att = getattr(self.mind, "attention", None)                # attention: ORG-109 бюджет инициатив
+            if att is not None and not att.may("rumor", peer, now):    # attention:
+                continue                                               # attention:
+            if att is not None:                                        # attention:
+                att.spend("rumor", peer, now)                          # attention:
             rs = self.all()
             r = rs[key]
             if r.get("src") == "own":

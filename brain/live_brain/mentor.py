@@ -309,6 +309,11 @@ class Mentor:
             for topic, mark, text in self.tips():
                 if self.st["tips"].get(topic) == mark:
                     continue
+                att = getattr(self.mind, "attention", None)            # attention: ORG-109 бюджет инициатив
+                if att is not None and not att.may("mentor", self.peer, now):   # attention: совет позже
+                    break                                              # attention:
+                if att is not None:                                    # attention:
+                    att.spend("mentor", self.peer, now)                # attention:
                 self.st["tips"][topic] = mark
                 self.st["last_tip"] = now
                 self.save()
@@ -413,6 +418,12 @@ class Mentor:
                 self.st["cheered"].append(max(hit))
                 cheer = f"Уже {lv} уровень! Так держать."
         if cheer:
+            att = getattr(self.mind, "attention", None)                # attention: ORG-109 бюджет инициатив
+            if att is not None and not att.may("mentor", self.peer, now):   # attention: промолчал(а)
+                self.save()                                            # attention:
+                return                                                 # attention:
+            if att is not None:                                        # attention:
+                att.spend("mentor", self.peer, now)                    # attention:
             self.save()
             self.note("mentor_cheer_sent", f"Поздравил(а) {self.peer}: {cheer}", 1, peer=self.peer, lv=lv, job=job)
             await self.whisper(self.peer, cheer, "[mentor:cheer]", "поздравление ученику")

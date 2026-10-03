@@ -22,6 +22,8 @@ from live_brain.mind import Mind
 from live_brain.rivalry import Rivalry
 from live_brain.routine import load_world
 
+from tests.worldtime import no_quiet_days
+
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
 TZ = timezone(timedelta(hours=WORLD["timezone_offset_hours"]))
@@ -55,6 +57,7 @@ class RivalryTest(unittest.TestCase):
         self.dec = root / "d.jsonl"
         self.clock = Clock(time.time())
         self.r = Rivalry(self.mind, WORLD, clock=self.clock, rng=random.Random(3))
+        no_quiet_days(self.mind)                         # hush: тест не о тихих днях (ORG-110)
         self.mind.rivalry = self.r
         self.state(lv=41)
 

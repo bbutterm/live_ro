@@ -51,7 +51,8 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `mood` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров | вкл. (`mood.enabled` по умолч. true) | — | действий нет; может приглушить разговоры | 1 |
 | `interests` | увлечения жителя (ORG-103): шанс тем хобби, приручения, экспедиции, выбор мечты × вес интереса | вкл. (`interests.enabled`) | — | действий нет; меняет частоту тем и выбор | 1 |
 | `wealth` | мотив `wealth` от копилки мечты и медианы зени мира вместо порога 50 000 (ORG-100) | вкл. (`wealth.enabled`) | шина (медиана), dream | действий нет; меняет выбор занятий | 1 |
-| `calendar` | день недели, праздники, дни рождения → множители мотивов, темы | вкл. | мир, `calendar.json` | действий нет; меняет выбор занятий | 1 |
+| `attention` | бюджет внимания (ORG-109): суточный запас инициатив речи (social, gossip, rumors, rivalry, mentor, wed, director) от общительности и дел; ответы и протокол — без ограничений | вкл. (`attention.enabled` по умолч. true) | мир | действий нет; может приглушить речь (deny в decisions) | 2 |
+| `calendar` | день недели, праздники, дни рождения → множители мотивов, темы; тихие дни мира (ORG-110, `calendar.json quiet.per_week` 1.5, 0 — выкл.) | вкл. | мир, `calendar.json` | действий нет; меняет выбор занятий; в тихий день меньше речи и вывесок | 1 |
 | `career` | цель прогрессии в report/промпт; этап jobChange — только при `progression.auto_job_change` | вкл., авто-смена **выкл.** | мир; jobChange (при флаге) | при флаге — необратимая смена профессии | 0 (флаг — 7) |
 | `routine` | распорядок: охота/отдых/сон (`relog`)/сервис/лавка, застревание | вкл. | мир; lockMap, sitAuto_idle, relog | тело; сон через relog → возможен «still recognizes» | 0 |
 | `economy` | взаимопомощь `[need:]`, рынок `[offer:]`, почта RODEX, лавка Merchant | вкл. (есть раздел `economy`) | плагин economy, `dealAuto 3`; RODEX-пакеты не проверены | деньги между жителями; почта | 0 |
@@ -93,7 +94,7 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `arrows` | Arrow Crafting для ветки Archer | вкл., **спит** (лучника нет); `quest_auto: false` | routine; пути до `moc_ruins` нет | — пока нет лучника | 0 |
 | `buying` | скупка торговца (ORG-036); продажа жителей в скупку; снаряжение Merchant: тележка у Kafra, навык и лицензии у Mr. Hugh | **выкл.**; `setup.license/permits: false` | economy, routine, orders; плагин buyer (загружен всегда), jobChange `path buying` | деньги (до `max_budget`, тележка 800 z, навык 10 000 z); тело: Альберта | 7 |
 | `trek` | дальний поход группой в город другого региона, привалы с Kafra-сохранением | **выкл.** | routine, explore, party, crew | тело: дальние карты; точка сохранения | 6 |
-| `director` | режиссёр: «день осторожности», «помочь», повод в тишину | вкл. | мир | множители мотивов; шёпот `[info:rich]` жителю | 2 |
+| `director` | режиссёр: «день осторожности», «помочь», редкий повод в тишину (ORG-110: 8 ч тишины, шанс 0.5, ≤ 1 в сутки, без contest/gathering; в тихий день мира — только последствия) | вкл. | мир | множители мотивов; шёпот `[info:rich]` жителю | 2 |
 
 Ядро (`mind.py`, не выключается): bridge, gate, safety, lifecycle, plans, postmortem, maps, needs, memory, llm/budget.
 LLM выключен по умолчанию (`BRAIN_LLM=off`).
@@ -168,7 +169,7 @@ grep -h '"source": "<модуль>"' $L/state/bot0*/decisions.jsonl | tail      
 перезапускаются).
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention
 ```
 Включены остаются: `career`, `routine`, `economy`, `party`, `activity`, `bonds`, `crew`, `pets`, `social`, `rumors`,
 `society`, `aims`, `world_bus` (база №14–16) и пассивные летописцы `collection`, `places`, `bestiary`, `achieve`,
@@ -186,7 +187,7 @@ Andrew; `achieve`: события `achievement_list`, если пакет при
 ### Этап 1 — внутренний мир без новых действий
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest,attention
 ```
 Включаются: `mood`, `calendar`, `crowd`, `habits`, `dream`, `interests` (ORG-103: веса тем хобби, приручения,
 экспедиций и выбора мечты), `wealth` (ORG-100: мотив денег от копилки и медианы мира). Ни одного нового действия моста — только мотивы, выбор
@@ -202,6 +203,8 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episod
 BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,savings,fest
 ```
 Включаются: `episodes`, `gossip`, `rivalry`, `director`, `mentor`. Всё — шёпоты жителю (или чат группы у `rivalry`).
+Вместе с речью включается `attention` (бюджет внимания ORG-109): `report` — строка «внимание», отказы
+`type: attention` в decisions. Откат — `BRAIN_DISABLE=...,attention` (речь как без бюджета).
 Смотреть: `grep -h '"action": "whisper"' …decisions.jsonl | wc -l` по дням против этапа 1; метки `[gossip:`,
 `[mentor:`, `[info:` в `console.log`; `rival_overtook` в `chronicle`; режиссёр — `type: director`, раздел в
 `dashboard`. `mentor`: Vera — «новичок», если её уровень < 20 и Arkady выше на 15+; иначе модуль спит — «не наблюдалось».
@@ -221,7 +224,7 @@ BRAIN_DISABLE=explore,strangers,healer,orders,market_day,savings
 (`revived_in_place` — подняли на месте, это не возрождение).
 Прошло: сохранение подтверждено фразой и картой; тело после этапа вернулось к распорядку; круг у фонтана не мешает
 сну. Откатить: повторные провалы `job_change` у Kafra, житель застревает у NPC. `BRAIN_DISABLE=home` — точка отдыха
-снова из `goals.json` (`prontera 156,185`); точка сохранения на сервере остаётся последней сохранённой.
+снова из `goals.json` (`prontera 106,188`, западный квартал — тот же, что `rest` в `homes.json`); точка сохранения на сервере остаётся последней сохранённой.
 
 ### Этап 4 — экономика
 
@@ -295,7 +298,7 @@ BRAIN_DISABLE=
 
 Первый прогон — строка этапа 0:
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention
 ```
 Почему так, а не «всё по умолчанию» (по умолчанию включено 40 модулей реестра из 46 — с `interests` и `wealth`):
 - **Неизвестна сама база.** Отчётов по №10–16 нет; на VPS последний проверенный код — cbeb2a9. Если включить всё,

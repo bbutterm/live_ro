@@ -118,7 +118,7 @@ class ThresholdsTest(unittest.TestCase):
 
     def test_point_in_social_copy(self):
         m = self.lab.mind
-        self.assertEqual(m.social.cfg["points"]["market"]["x"], 155)
+        self.assertEqual(m.social.cfg["points"]["market"]["x"], WORLD["market_day"]["point"]["x"])
         self.assertNotIn("market", WORLD["social"]["points"], "общий словарь мира не тронут")
 
     def test_walk_prefers_market(self):
@@ -165,7 +165,8 @@ class GatherTest(unittest.TestCase):
         lab.tick()
         asyncio.run(lab.mind.economy.tick())
         self.assertFalse([a for a in lab.out if a["action"] == "offer_shop"], "не у площади — ждём")
-        lab.state(vend=vend, x=156, y=181)
+        p = WORLD["market_day"]["point"]
+        lab.state(vend=vend, x=p["x"], y=p["y"] + 1)
         lab.tick()
         asyncio.run(lab.mind.economy.tick())
         self.assertEqual(len([a for a in lab.out if a["action"] == "offer_shop"]), 1, "у площади — лавка здесь")

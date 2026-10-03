@@ -64,6 +64,7 @@ legacy (ORG-083) — тик 232 (после memoir), без поля промп�
 fest (ORG-087) — тик 122, событие kill 76; объявление — из rumors.on_world_msg (on_announce).  # events2:
 buying (ORG-036) — тик 27, события job_change_result 18 (consume "result", path buying), buyer_* 18 (own), промпт 145;
 по умолчанию выключен.  # buying:
+attention (ORG-109) — без тика, меток и событий: бюджет инициатив, строки `# attention:` в говорящих модулях.  # attention:
 """
 import inspect
 import re
@@ -85,6 +86,7 @@ from .guild import Guild
 from .home import Home
 from .mood import Mood
 from .interests import Interests   # interests: ORG-103 увлечения жителя (без тика)
+from .attention import Attention       # attention: ORG-109 бюджет внимания
 from .party import Party
 from .pets import Pets
 from .rivalry import Rivalry
@@ -126,6 +128,7 @@ MODULES = (
     Home,              # EARLY: до SafetyPolicy
     Mood,
     Interests,         # interests: ORG-103 — до хобби-модулей (они читают mind.interests при вызове)
+    Attention,         # attention: ORG-109 после mood (только создание; routine/calendar читает при вызове)
     WorldCalendar,
     Career,
     Routine,

@@ -24,6 +24,10 @@ from live_brain.routine import load_world
 BRAIN_DIR = Path(__file__).resolve().parents[1]
 WORLD = load_world(BRAIN_DIR / "world" / "goals.json")
 TZ = timezone(timedelta(hours=WORLD.get("timezone_offset_hours", 0)))
+# hush: механика режиссёра (лимиты, чередование, факты поводов) проверяется на прежних числах ORG-086 — частый
+# режиссёр без броска и тихих дней; новые умолчания ORG-110 (8 ч, шанс 0.5, 1 в сутки, 12 ч, тихий день) — test_hush.
+LEGACY = json.loads(json.dumps(WORLD))
+LEGACY["director"].update(quiet_hours=3, max_per_day=2, gap_hours=3, stir_kinds=list(STIR), stir_chance=1.0)
 
 
 def at(hour, minute=0, day=1):
@@ -39,7 +43,7 @@ class Clock:
 
 
 class DirectorTest(unittest.TestCase):
-    def setUp(self, peers=("Arkady", "Vera", "Bram"), env=None, world=WORLD):
+    def setUp(self, peers=("Arkady", "Vera", "Bram"), env=None, world=LEGACY):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
         self.root = root
@@ -66,6 +70,8 @@ class DirectorTest(unittest.TestCase):
             self.mind.director = self.d
         if self.mind.crowd is not None:
             self.mind.crowd.clock = self.clock
+        if self.mind.calendar is not None:                         # hush: без тихих дней мира (их — test_hush)
+            self.mind.calendar.cal = dict(self.mind.calendar.cal, quiet={"per_week": 0})
         asyncio.run(self.mind.on_message({"type": "state", "name": "Arkady", "map": "prontera", "x": 156, "y": 185,
                                           "hp_pct": 100, "lv": 41, "dead": False, "players": []}))
         if self.mind.routine is not None and isinstance(self.mind.routine.st, dict):

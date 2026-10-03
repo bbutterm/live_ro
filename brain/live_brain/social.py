@@ -17,7 +17,7 @@
     Шаг 1 — приветствие (с эмоцией), 2 — ответ на приветствие, 3 — тема по фактам памяти
     (уровень, победы за день, добыча, гибель, усталость, погода мира — weather.py), 4 — прощание или поздравление/
     сочувствие. На шаг 4 не отвечают: не больше max_exchanges (2) обменов подряд.
-    Пара говорит не чаще pair_gap_minutes (15 мин); не друзьям — реже, ночью — ещё реже.
+    Пара говорит не чаще pair_gap_minutes (40 мин, было 15 — риск R1 IDEAS2); не друзьям — реже, ночью — ещё реже.
     Фразы не повторяются, пока не исчерпаны варианты ключа (история used в kv "social").
     При включённом LLM модуль не говорит шаблонами, а только даёт повод mind.trigger(kind="chat").
 Реакции на события (по шаблону, с лимитом react_gap_minutes на вид и жителя):
@@ -75,7 +75,7 @@ DEFAULTS = {
     "point_weights": {},
     "join_friend_chance": 0.4,
     "near_cells": 6,
-    "pair_gap_minutes": 15,
+    "pair_gap_minutes": 40,
     "max_exchanges": 2,
     "reply_delay_seconds": [3, 8],
     "react_gap_minutes": 30,
@@ -86,6 +86,8 @@ DEFAULTS = {
     "together_every_days": 3,         # habit2: и не чаще раза в N дней на пару
     "night_hours": [1, 7],
     "night_factor": 3,
+    "quiet_wake_minutes": 60,             # hush: ORG-110 личные тихие часы — после пробуждения
+    "quiet_sleep_minutes": 60,            # hush: и перед сном (persona.sleep) первым не заговаривает
 }
 MAX_PHRASE = 80
 
@@ -194,7 +196,7 @@ class Social:
         return (rel or {}).get("affinity", 0)
 
     def pair_gap(self, peer, now):
-        """Друзья общаются чаще: 15 мин — минимум; нейтральным ×1.5, неприятным ×3; ночью ещё ×night_factor."""
+        """Друзья общаются чаще: pair_gap_minutes (40) — минимум; нейтральным ×1.5, неприятным ×3; ночью ×night_factor."""
         aff = self.affinity(peer)
         factor = 1.0 if aff >= self.cfg["friend_affinity"] else (3.0 if aff < 0 else 1.5)
         if self.is_night(now):
@@ -203,6 +205,31 @@ class Social:
         if mood:
             factor *= mood.talk_factor()              # ORG-064: в плохом настроении реже, в хорошем чаще
         return self.cfg["pair_gap_minutes"] * 60 * factor
+
+    def own_quiet(self, now):                                                 # hush: ORG-110
+        """Личные тихие часы: первые quiet_wake_minutes после пробуждения и последние quiet_sleep_minutes до сна
+        (persona.sleep, ночь — как routine.sleep_window, но без записи в распорядок). Нет сна — тихих часов нет."""
+        sl = self.mind.persona.get("sleep")
+        if not isinstance(sl, dict) or not sl.get("start") or not sl.get("hours"):
+            return False
+        try:
+            h, m = map(int, str(sl["start"]).split(":"))
+            local = self.local(now)
+            start = local.replace(hour=h, minute=m, second=0, microsecond=0)
+            if start.timestamp() > now + 12 * 3600:
+                start -= timedelta(days=1)
+            elif start.timestamp() + 18 * 3600 < now:
+                start += timedelta(days=1)
+            st = getattr(getattr(self.mind, "routine", None), "st", None)
+            st = st if isinstance(st, dict) else {}
+            hours = (st.get("sleep_hours") if st.get("sleep_night") == start.strftime("%Y-%m-%d")
+                     else sum(sl["hours"]) / len(sl["hours"]))
+            t0 = start.timestamp()
+            t1 = t0 + float(hours) * 3600
+        except (TypeError, ValueError, ZeroDivisionError):
+            return False
+        return (t1 <= now < t1 + self.cfg["quiet_wake_minutes"] * 60
+                or t0 - self.cfg["quiet_sleep_minutes"] * 60 <= now < t0)
 
     def near_peers(self, state, cells=None):
         cells = cells or self.cfg["near_cells"]
@@ -540,6 +567,8 @@ class Social:
         mood = getattr(self.mind, "mood", None)
         if mood and mood.silent():                         # ORG-064: мрачный — первым не заговаривает (отвечает)
             return
+        if self.own_quiet(now):                            # hush: ORG-110 личные тихие часы (отвечает как обычно)
+            return
         for peer in near:
             if self.quarrel(peer):                        # society: в ссоре — первым не заговаривать
                 continue
@@ -549,6 +578,11 @@ class Social:
                 continue                          # одновременно не начинать: первым заговаривает меньшее имя
             if now - last < gap or any(q[1] == peer for q in self.queue):
                 continue
+            att = getattr(self.mind, "attention", None)                # attention: ORG-109 бюджет инициатив
+            if att is not None and not att.may("chat", peer, now):     # attention: как будто пауза не прошла
+                continue                                               # attention:
+            if att is not None:                                        # attention:
+                att.spend("chat", peer, now)                           # attention:
             self.st["pairs"][peer] = now
             if self.llm():
                 f = self.facts(peer, now)

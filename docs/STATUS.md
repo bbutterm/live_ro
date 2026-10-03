@@ -109,6 +109,7 @@ survival > plan > economy > party > routine), `plans.py` (план встреч�
 | `mood.py` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров (ORG-064) | `BRAIN_DISABLE=mood`; `mood.enabled` (умолч. true) | вкл. | — |
 | `interests.py` | интересы жителя (ORG-103): 1–3 увлечения из каталога, веса тем хобби, приручения, экспедиции и мечты | `BRAIN_DISABLE=interests`; `interests.enabled` (умолч. true) | вкл. | — |
 | `wealth.py` | относительная бедность (ORG-100, ч. 1): мотив `wealth` от копилки мечты и медианы зени мира (presence) вместо порога 50 000 | `BRAIN_DISABLE=wealth`; `wealth.enabled` (умолч. true) | вкл. | шина мира (медиана) |
+| `attention.py` | бюджет внимания: суточный запас инициатив речи от общительности и дел, ответы и протокол не ограничиваются (ORG-109) | `BRAIN_DISABLE=attention`; `attention.enabled` (умолч. true) | вкл. | мир |
 | `world_calendar.py` | день недели, праздники, дни рождения — множитель мотивов, темы разговора (ORG-059) | `BRAIN_DISABLE=calendar`; `calendar.enabled` (умолч. true) | вкл. | мир |
 | `career.py` | цель прогрессии и этапы смены профессии (сам идёт к NPC только при `progression.auto_job_change`) | `BRAIN_DISABLE=career` | вкл. | мир |
 | `routine.py` | распорядок: охота/отдых, сон по хронотипу, восстановление, застревание, лавка в городе | `BRAIN_DISABLE=routine` | вкл. | мир |
