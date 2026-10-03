@@ -249,6 +249,11 @@ class Party:
         elif state.get("follow") == self.leader and self.due("unfollow", 30, now):
             await self.act([{"action": "unfollow"}], "группа: лидер не охотится рядом")
 
+    def resting_for(self, now=None):
+        """soak: лидер отдыхает ради участника ([party:recover:]) — имя участника до конца перерыва, иначе None."""
+        rf = self.st.get("rest_for") or {}
+        return rf.get("who") if self.is_leader and (now or self.clock()) < rf.get("until", 0) else None
+
     async def need_recover(self):
         """Распорядок участника: мне нужно восстановиться — пусть лидер тоже отдохнёт."""
         if not self.is_leader and self.st.get("confirmed") and self.due("recover", SIGNAL_GAP, self.clock()):
@@ -289,8 +294,14 @@ class Party:
             r = self.mind.routine
             if r and r.st and r.st.get("mode") == "hunt":
                 self.note("party_recover", f"{sender} нужно восстановиться — отдыхаем вместе.", 2, who=sender)
-                await r.to_town(now, rest_minutes=r.cfg.get("after_death_rest_minutes", 10))
+                rest = r.cfg.get("after_death_rest_minutes", 10)
+                await r.to_town(now, rest_minutes=rest)
                 r.save()
+                # soak: отдых ради участника — до конца перерыва; занятие hunt_early лидера (activity no_leader)
+                # не обнуляет его через 5 с: иначе лидер снова звал на охоту, участник — [party:recover:],
+                # и так каждые 30 с (дребезг hunt/town, > SPAM_PER_MIN действий в минуту)
+                self.st["rest_for"] = {"who": sender, "until": now + rest * 60}
+                self.save()
 
     async def on_my_death(self, event):
         """Я погиб — сказать жителям группы (срочно, свой лимит)."""
