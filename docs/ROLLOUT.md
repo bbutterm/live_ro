@@ -51,6 +51,7 @@ scripts/lab modules bot02 --disable "home,explore"          # примерка �
 | `mood` | настроение −1..1 из фактов 48 ч: окраска фраз, пауза разговоров | вкл. (`mood.enabled` по умолч. true) | — | действий нет; может приглушить разговоры | 1 |
 | `interests` | увлечения жителя (ORG-103): шанс тем хобби, приручения, экспедиции, выбор мечты × вес интереса | вкл. (`interests.enabled`) | — | действий нет; меняет частоту тем и выбор | 1 |
 | `drift` | дрейф характера (ORG-092): черты сдвигаются раз в неделю от смертей, охоты, подарков, разговоров; ±0.2 от персоны, kv `traits_drift` | вкл. (`drift.enabled`) | — | действий нет; меняет мотивы и риск карты через черты | 1 |
+| `scars` | шрамы (ORG-093): осторожный обходит карту смерти ~2 недели, смелый через 2–14 дн. возвращается на реванш (уровень +2, HP ≥ 90 %, ≤ 3 попыток) | вкл. (`scars.enabled`) | — | тело: меняет выбор карты охоты (только из `hunt_maps`, фильтр атласа остаётся) | 2 |
 | `wealth` | мотив `wealth` от копилки мечты и медианы зени мира вместо порога 50 000 (ORG-100) | вкл. (`wealth.enabled`) | шина (медиана), dream | действий нет; меняет выбор занятий | 1 |
 | `attention` | бюджет внимания (ORG-109): суточный запас инициатив речи (social, gossip, rumors, rivalry, mentor, wed, director) от общительности и дел; ответы и протокол — без ограничений | вкл. (`attention.enabled` по умолч. true) | мир | действий нет; может приглушить речь (deny в decisions) | 2 |
 | `calendar` | день недели, праздники, дни рождения → множители мотивов, темы; тихие дни мира (ORG-110, `calendar.json quiet.per_week` 1.5, 0 — выкл.) | вкл. | мир, `calendar.json` | действий нет; меняет выбор занятий; в тихий день меньше речи и вывесок | 1 |
@@ -170,7 +171,7 @@ grep -h '"source": "<модуль>"' $L/state/bot0*/decisions.jsonl | tail      
 перезапускаются).
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,drift
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,drift,scars
 ```
 Включены остаются: `career`, `routine`, `economy`, `party`, `activity`, `bonds`, `crew`, `pets`, `social`, `rumors`,
 `society`, `aims`, `world_bus` (база №14–16) и пассивные летописцы `collection`, `places`, `bestiary`, `achieve`,
@@ -188,7 +189,7 @@ Andrew; `achieve`: события `achievement_list`, если пакет при
 ### Этап 1 — внутренний мир без новых действий
 
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest,attention
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,wed,fest,attention,scars
 ```
 Включаются: `mood`, `calendar`, `crowd`, `habits`, `dream`, `interests` (ORG-103: веса тем хобби, приручения,
 экспедиций и выбора мечты), `wealth` (ORG-100: мотив денег от копилки и медианы мира), `drift` (ORG-092: черты от опыта раз в неделю). Ни одного нового действия моста — только мотивы, выбор
@@ -204,6 +205,8 @@ BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episod
 BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,orders,market_day,savings,fest
 ```
 Включаются: `episodes`, `gossip`, `rivalry`, `director`, `mentor`. Всё — шёпоты жителю (или чат группы у `rivalry`).
+Здесь же `scars` (ORG-093, шрамы и реванш): меняет только выбор карты из `hunt_maps`; смотреть `routine_map_choice` с
+«реванш» и `revenge`/`revenge_try` в событиях; откат — `BRAIN_DISABLE=...,scars`.
 Вместе с речью включается `attention` (бюджет внимания ORG-109): `report` — строка «внимание», отказы
 `type: attention` в decisions. Откат — `BRAIN_DISABLE=...,attention` (речь как без бюджета).
 Смотреть: `grep -h '"action": "whisper"' …decisions.jsonl | wc -l` по дням против этапа 1; метки `[gossip:`,
@@ -299,9 +302,9 @@ BRAIN_DISABLE=
 
 Первый прогон — строка этапа 0:
 ```
-BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,drift
+BRAIN_DISABLE=home,explore,strangers,healer,gaze,tradition,rivalry,gossip,episodes,mentor,director,orders,market_day,savings,dream,mood,calendar,crowd,habits,interests,wealth,wed,fest,attention,drift,scars
 ```
-Почему так, а не «всё по умолчанию» (по умолчанию включено 41 модуль реестра из 47 — с `interests`, `wealth` и `drift`):
+Почему так, а не «всё по умолчанию» (по умолчанию включено 42 модуля реестра из 48 — с `interests`, `wealth`, `drift` и `scars`):
 - **Неизвестна сама база.** Отчётов по №10–16 нет; на VPS последний проверенный код — cbeb2a9. Если включить всё,
   любой сбой придётся делить между 30+ модулями и новым телом (мост, таблицы переходов, продажа лута).
 - **`home` ведёт к Kafra** этапом jobChange в первый же отдых — новое движение и диалог с NPC, ещё и меняет точку

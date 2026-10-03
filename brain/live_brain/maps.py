@@ -86,8 +86,14 @@ class MapStats:
     def choose(self, maps, bans, level=None, needs=None, rng=None):
         """Карта на сессию. needs (needs.py) — характер: допустимый риск по смелости и шум по причудливости."""
         allowed = [m for m in maps if m not in bans] or list(maps)
+        scars = getattr(self.mind, "scars", None)               # scars: ORG-093 страх места у осторожного
+        if scars:                                               # scars:
+            allowed = scars.avoid(allowed)                      # scars:
         if level:
             allowed = self.safe_for_level(allowed, level, needs.risk_tolerance() if needs else None)
+        rev = scars.revenge(allowed) if scars else None         # scars: смелый возвращается сильнее
+        if rev:                                                 # scars:
+            return rev["map"], scars.take(rev)                  # scars:
         rng = rng or random
         unexplored = [m for m in allowed if self.score(m) is None]
         crowd = getattr(self.mind, "crowd", None)               # crowd: ORG-089 людные карты чуть хуже

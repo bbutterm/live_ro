@@ -181,6 +181,19 @@
     "limit": 0.2
   },
 
+  "scars": {
+    "_comment": "traits: ORG-093 шрамы и реванш (brain/live_brain/scars.py, docs/LIFE.md, ТЗ Т-48): смерть на карте — шрам (kv scars). Осторожный (смелость < brave_min) не выбирает карту, пока страх 0.5^(возраст/half_life_days) ≥ avoid_min; смелый через revenge_after_days…revenge_until_days идёт туда на реванш при уровне ≥ уровня смерти + revenge_levels и HP ≥ revenge_hp, не больше revenge_tries попыток. Победа над тем же монстром там же — событие revenge. Выключить: enabled=false или BRAIN_DISABLE=scars.",
+    "enabled": true,
+    "half_life_days": 7,
+    "avoid_min": 0.25,
+    "brave_min": 0.5,
+    "revenge_after_days": 2,
+    "revenge_until_days": 14,
+    "revenge_levels": 2,
+    "revenge_hp": 90,
+    "revenge_tries": 3
+  },
+
   "dream": {
     "_comment": "dreams: ORG-081 жизненный путь (live_brain/dream.py, docs/LIFE.md): мечта на месяцы из черт характера, этапы по фактам питают цели недели (aims) и мотивы. stale_days без нового этапа — мечта оставлена; region_hops — окрестности города для мечты explorer; save — цель копилки (ORG-073) по виду мечты, у rich — вся сумма.",
     "enabled": true,
