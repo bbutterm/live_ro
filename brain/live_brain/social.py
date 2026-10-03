@@ -27,6 +27,9 @@
 Отношения по поступкам (AUT-102): время рядом с жителем (в городе или на охоте) от
     together_minutes за сутки — affinity +1, не чаще раза в сутки. Проигнорированное сообщение —
     ничего. Отношение задаёт частоту общения и шанс пойти к другу.
+Привыкание (ORG-096, Т-41): «вместе» даёт +1 только пока affinity < together_cap (4) и не чаще раза в
+    together_every_days (3) дня на пару; выше растут только поступки (подарок, лечение, помолвка, примирение).
+    Событие social_together пишется как прежде, с полем gain 0|1; история отношений — только при gain 1.
 Ссора (society.py, ORG-027): с жителем «в ссоре» не заговаривают первым и не идут к нему на прогулке;
     ответ ему — холодная короткая реплика (тема cold, шаг 4 — без продолжения), кроме сочувствия.
 Ночь (night_hours по timezone_offset_hours мира): не гуляют, сидят, говорят в night_factor раз реже.
@@ -48,6 +51,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import weather
+from . import interests as interests_mod                 # interest: ORG-103 вес темы хобби
 from . import grammar as grammar_mod                       # grammar: ORG-065 слой реплик поверх фраз персон
 from .world_calendar import PHRASES as CALENDAR_PHRASES   # calendar: фразы тем holiday/birthday по умолчанию
 
@@ -78,6 +82,8 @@ DEFAULTS = {
     "emote_gap_seconds": 120,
     "friend_affinity": 3,
     "together_minutes": 30,
+    "together_cap": 4,                # habit2: ORG-096 — «вместе» растит отношение только до этого значения
+    "together_every_days": 3,         # habit2: и не чаще раза в N дней на пару
     "night_hours": [1, 7],
     "night_factor": 3,
 }
@@ -292,18 +298,21 @@ class Social:
 
     # ---------- реестр тем (ORG-066) ----------
 
-    def register_topic(self, name, provider, reply=None, said=None, chance=1.0, opener=False, fallback=False):
+    def register_topic(self, name, provider, reply=None, said=None, chance=1.0, opener=False, fallback=False,
+                       interest=None):                                         # interest: ORG-103
         """Тема разговора: provider(peer, now) -> факты (dict) или None — темы нет.
 
         reply — ключ фраз ответа собеседника (по умолчанию <name>_re); said(peer, facts, now) — после реплики
         (отметить «уже рассказал»); chance — шанс предложить тему, если она доступна; opener — может заменить
         приветствие на шаге 1 (с тем же шансом); fallback — только когда других тем нет (погода).
         Ключ "_key" в фактах — другой ключ фраз (weather_rain, remember_heal); ключи с "_" в фразы не идут.
+        interest — увлечение (interests.CATALOG): шанс темы × вес интереса (ORG-103; не увлечён — × 0.2).
         """
         if not re.fullmatch(r"[a-z]{3,12}", name):
             raise ValueError(f"тема {name!r}: нужно [a-z]{{3,12}} (метка [chat:<тема>:<шаг>])")
         self.topics[name] = {"provider": provider, "reply": reply or f"{name}_re", "said": said,
-                             "chance": chance, "opener": opener, "fallback": fallback}
+                             "chance": chance, "opener": opener, "fallback": fallback,
+                             "interest": interest}                                    # interest:
 
     def provide(self, name, peer, now):
         """Факты одной темы реестра; ошибка поставщика — в лог, темы нет."""
@@ -335,7 +344,8 @@ class Social:
         for name, t in self.topics.items():
             if t["fallback"] or (opener and not t["opener"]):
                 continue
-            if t["chance"] < 1 and self.rng.random() >= t["chance"]:
+            chance = t["chance"] * interests_mod.weight(self.mind, t.get("interest"))    # interest: ORG-103
+            if chance < 1 and self.rng.random() >= chance:
                 continue
             f = self.provide(name, peer, now)
             if f is None:
@@ -760,9 +770,22 @@ class Social:
             tg[peer] = tg.get(peer, 0) + gap
             if tg[peer] >= self.cfg["together_minutes"] * 60 and self.st["bonded"].get(peer) != day:
                 self.st["bonded"][peer] = day
-                self.mind.mem.update_relation(peer, 1, "провели время вместе")
+                gain = self.together_gain(peer, now)                                   # habit2: ORG-096
+                if gain:                                                               # habit2:
+                    self.st.setdefault("gained", {})[peer] = now                       # habit2:
+                    self.mind.mem.update_relation(peer, 1, "провели время вместе")
                 self.mind.mem.remember(f"Сегодня провёл с {peer} больше {self.cfg['together_minutes']} мин рядом.", 2)
-                self.mind.mem.add_event("social_together", {"peer": peer, "minutes": int(tg[peer] / 60)})
-                self.mind.write_decision({"type": "social", "event": "together", "peer": peer})
-                log.info("время вместе с %s: отношение +1", peer)
+                self.mind.mem.add_event("social_together", {"peer": peer, "minutes": int(tg[peer] / 60),
+                                                            "gain": gain})             # habit2:
+                self.mind.write_decision({"type": "social", "event": "together", "peer": peer, "gain": gain})
+                log.info("время вместе с %s: отношение %s", peer, "+1" if gain else "без изменений (привыкание)")
                 self.save()
+
+    def together_gain(self, peer, now):                                                # habit2: ORG-096, Т-41
+        """1 — «вместе» ещё растит отношение: affinity < together_cap и прошлый +1 был ≥ together_every_days назад."""
+        if self.affinity(peer) >= self.cfg["together_cap"]:
+            return 0
+        last = (self.st.get("gained") or {}).get(peer)
+        if last is not None and now - last < self.cfg["together_every_days"] * 86400:
+            return 0
+        return 1

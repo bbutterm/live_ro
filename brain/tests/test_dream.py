@@ -157,6 +157,7 @@ class DreamLifeTest(Base):
 
     def test_impossible_module_off(self):
         self.mind.needs.t = dict(LOW, generosity=0.9, sociability=0.9)
+        self.mind.interests = None                     # interests: ORG-103 — Arkady не увлечён питомцами
         self.tick()
         self.assertEqual(self.d.st["kind"], "pet")
         self.mind.pets = None

@@ -84,6 +84,7 @@ from .habits import Habits                # habits: ORG-068
 from .guild import Guild
 from .home import Home
 from .mood import Mood
+from .interests import Interests   # interests: ORG-103 увлечения жителя (без тика)
 from .party import Party
 from .pets import Pets
 from .rivalry import Rivalry
@@ -100,6 +101,7 @@ from .orders import Orders           # orders: ORG-070 заказы между �
 from .buying import Buying                # buying: ORG-036 скупка и снаряжение торговца
 from .dream import Dream             # dreams: ORG-081 жизненный путь
 from .savings import Savings         # dreams: ORG-073 копилка мечты и банк
+from .wealth import Wealth           # wealth: ORG-100 относительная бедность (без тика)
 from .memoir import Memoir           # dreams: ORG-082 мемуары жителя
 from .mentor import Mentor           # mentor: ORG-057 наставничество новичков
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
@@ -123,6 +125,7 @@ from .world_calendar import WorldCalendar
 MODULES = (
     Home,              # EARLY: до SafetyPolicy
     Mood,
+    Interests,         # interests: ORG-103 — до хобби-модулей (они читают mind.interests при вызове)
     WorldCalendar,
     Career,
     Routine,
@@ -159,6 +162,7 @@ MODULES = (
     Wed,               # wed: ORG-062 после social (тема wed), society, episodes; до dream (мечта wedding)
     Dream,             # dreams: после social (тема dream) и collection/pets/guild (условия мечты)
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты
+    Wealth,            # wealth: ORG-100 после dream, savings, crowd (мотив wealth в needs.values)
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
     Legacy,            # legacy: ORG-083 после mentor, wed, dream, memoir, economy (наследник, посылки, прощание)

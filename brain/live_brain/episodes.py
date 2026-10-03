@@ -136,6 +136,11 @@ class Episodes:
     def with_peer(self, peer):
         return sorted((e for e in self.all() if e["peer"] == peer), key=lambda e: -e["ts"])
 
+    def weight_with(self, peer, now=None):                                             # habit2: ORG-096
+        """Сумма весов эпизодов пары с затуханием HALF_LIFE_DAYS (как score): мера общей истории для wed."""
+        now = now or self.clock()
+        return round(sum(self.score(e, now) for e in self.all() if e["peer"] == peer), 2)
+
     def quarrel(self, peer):
         society = getattr(self.mind, "society", None)
         return bool(society and society.quarrel(peer))

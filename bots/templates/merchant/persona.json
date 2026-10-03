@@ -288,6 +288,7 @@
       "{hours} ч в поле. Убыток сил и времени."
     ]
   },
+  "interests": ["cards", "trade"],
   "traits": {
     "bravery": 0.3,
     "sociability": 0.6,

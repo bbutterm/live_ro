@@ -400,6 +400,7 @@ class NewModulesJointsTest(BodyMixin, unittest.TestCase):
         """Охота, рядом монстр любимца и предмет приручения (state.pet от плагина pets)."""
         pets = self.mind.pets
         pets.caring = lambda: True
+        self.mind.interests = None                     # interests: ORG-103 — Arkady приручает лишь с шансом 0.2
         self.state(map="prt_fild08", lock_map="prt_fild08", lock_x=None, lock_y=None, x=100, y=100)
         fav = pets.favorites()
         self.assertTrue(fav, "у Arkady есть любимцы на картах охоты")

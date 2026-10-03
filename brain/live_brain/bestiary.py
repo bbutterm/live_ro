@@ -71,7 +71,8 @@ class Bestiary:
         if social is not None and hasattr(social, "register_topic"):
             for key, pool in PHRASES.items():
                 social.phrases.setdefault(key, pool)
-            social.register_topic("bestiary", self.facts, said=self.said, chance=self.cfg["brag_chance"])
+            social.register_topic("bestiary", self.facts, said=self.said, chance=self.cfg["brag_chance"],
+                                  interest="bestiary")   # interest: ORG-103
 
     # ---------- данные ----------
 

@@ -68,7 +68,8 @@ class Collection:
         if social is not None and hasattr(social, "register_topic"):
             for key, pool in PHRASES.items():
                 social.phrases.setdefault(key, pool)
-            social.register_topic("card", self.facts, said=self.said, chance=self.cfg["brag_chance"])
+            social.register_topic("card", self.facts, said=self.said, chance=self.cfg["brag_chance"],
+                                  interest="cards")   # interest: ORG-103
 
     # ---------- данные ----------
 

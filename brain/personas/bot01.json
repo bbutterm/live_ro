@@ -289,6 +289,7 @@
       "{hours} ч махал мечом. Ни сил, ни настроения."
     ]
   },
+  "interests": ["achieve", "explore"],
   "traits": {
     "bravery": 0.7,
     "sociability": 0.4,

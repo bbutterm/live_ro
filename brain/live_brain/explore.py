@@ -40,6 +40,8 @@ import re
 import time
 from pathlib import Path
 
+from . import interests as interests_mod                 # interest: ORG-103
+
 log = logging.getLogger("explore")
 
 REACH_PATH = Path(__file__).resolve().parents[1] / "world" / "explore_reach.json"
@@ -271,6 +273,7 @@ class Explorer:
         if not joining:
             needs = getattr(m, "needs", None)
             cur = needs.weighted().get("curiosity", 0) if needs else 1.0
+            cur *= interests_mod.weight(m, "explore", "explore_other")                 # interest: ORG-103
             if cur < cfg["min_curiosity"]:
                 return f"любопытство {cur:.2f} < {cfg['min_curiosity']}"
         return None

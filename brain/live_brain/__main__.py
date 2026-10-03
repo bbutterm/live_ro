@@ -16,6 +16,8 @@ from . import llm
 from .bridge import Bridge
 from .budget import SharedBudget
 from .config import Settings, load_env, load_persona
+from . import interests as interests_mod                                       # interests: ORG-103
+from .wealth import report_line as wealth_line                                 # wealth: ORG-100
 from .economy import economy_metrics
 from .gate import RuleGate, make_fast_gate
 from .routine import load_world
@@ -142,10 +144,18 @@ def report(args, memory, state_dir):
     if needs:
         top = sorted(needs.items(), key=lambda kv: -kv[1])[:3]
         print("   мотивы сейчас: " + ", ".join(f"{k} {v:.2f}" for k, v in top))
+    line = wealth_line(memory.get("wealth"))                                   # wealth: ORG-100
+    if line:                                                                   # wealth:
+        print("   " + line)                                                    # wealth:
     mood = memory.get("mood") or {}                                            # talk: ORG-064
     if mood:                                                                   # talk:
         print(f"   настроение: {mood.get('label')} ({mood.get('value', 0):+.2f})"  # talk:
               + (": " + ", ".join(mood["reasons"]) if mood.get("reasons") else ""))   # talk:
+    try:                                                                       # interests: ORG-103
+        mine = interests_mod.interests(load_persona(args.persona))             # interests:
+        print("   интересы: " + ", ".join(interests_mod.RU.get(x, x) for x in mine))   # interests:
+    except (OSError, ValueError, AttributeError, TypeError):                   # interests: нет персоны — молча
+        pass                                                                   # interests:
     party = memory.get("party") or {}
     if party:
         print(f"   группа: {'подтверждена сервером' if party.get('confirmed') else 'нет'}; "

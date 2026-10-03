@@ -289,6 +289,7 @@
       "{hours} ч на ногах. Хочется просто тишины."
     ]
   },
+  "interests": ["people", "pets"],
   "traits": {
     "bravery": 0.3,
     "sociability": 0.8,
