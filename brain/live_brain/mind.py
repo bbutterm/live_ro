@@ -28,7 +28,7 @@ from .maps import MapStats
 from .needs import Needs
 from .plans import TAG, PlanExecutor, PlanStore
 from .postmortem import Postmortem
-from .routine import diary_only                         # ops: ORG-049 фильтр ответа на повод diary
+from .routine import diary_only, merged_routine                         # ops: ORG-049 фильтр ответа на повод diary
 from .safety import SafetyPolicy
 
 # review4: path этапов jobChange, чьи итоги забирают модули реестра (consume "result"); выключенный модуль не отдаёт
@@ -107,7 +107,7 @@ class Mind:
                                last=memory.get("gate_last", {}),
                                peers=set(peers) - {persona["name"]},
                                peer_replies_per_hour=settings.peer_replies_per_hour)
-        town = ((world or {}).get("routine") or {}).get("town", {}).get("map")
+        town = (merged_routine(world or {}, persona).get("town") or {}).get("map")
         self.world_bus_db = world_bus_db       # events: шина мира, переданная извне (иначе — по раскладке лаборатории)
         self.registry = modules.REGISTRY       # W8: модули объявляют себя атрибутами класса (modules.py)
         self.registry.build(self, world, early=True)                               # home: до распорядка (точка отдыха)
