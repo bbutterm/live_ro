@@ -60,15 +60,31 @@ class InboxTest(unittest.TestCase):
         self.assertTrue(self.inbox.exists(), "тело ещё не прислало состояние — команда ждёт")
         self.assertEqual(self.operator_results(), [])
         self.state()
+        asyncio.run(self.mind.read_inbox())              # забрал (rename), исполнит на следующем тике
         asyncio.run(self.mind.read_inbox())
         asyncio.run(self.mind.read_inbox())
         self.assertFalse(self.inbox.exists())
         self.assertEqual(self.operator_results(), ["ok"])
         self.assertEqual(self.mind.routine.st["mode"], "town")
 
+    def test_command_written_after_open_not_lost(self):
+        # flaky: писатель открыл/создал inbox (`>>` в bash, open("a")), мозг прочитал его в этот момент,
+        # и лишь потом писатель записал строку. Раньше пустой файл удалялся и команда терялась.
+        self.state()
+        with open(self.inbox, "a") as f:
+            asyncio.run(self.mind.read_inbox())
+            f.write(json.dumps({"cmd": "rest", "with": "", "ts": time.time()}) + "\n")
+        asyncio.run(self.mind.read_inbox())
+        asyncio.run(self.mind.read_inbox())
+        self.assertEqual(self.operator_results(), ["ok"])
+        self.assertEqual(self.mind.routine.st["mode"], "town")
+        self.assertFalse(self.inbox.exists())
+        self.assertFalse(Path(str(self.inbox) + ".taken").exists())
+
     def test_stale_command_rejected(self):
         self.state()
         self.put("rest", ts=time.time() - 3600)
+        asyncio.run(self.mind.read_inbox())
         asyncio.run(self.mind.read_inbox())
         self.assertIn("устарела", self.operator_results()[0])
         self.assertNotEqual((self.mind.routine.st or {}).get("mode"), "town")

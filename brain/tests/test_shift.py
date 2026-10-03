@@ -125,6 +125,7 @@ class InboxSleepTest(unittest.TestCase):
                                              "y": 100, "hp_pct": 100, "lock_map": "prt_fild08", "dead": False}))
                 mind.fresh_state = True
                 inbox.write_text(json.dumps({"cmd": "sleep", "hours": 1.5, "ts": time.time()}) + "\n")
+                asyncio.run(mind.read_inbox())           # забрал (rename), исполнит на следующем тике
                 asyncio.run(mind.read_inbox())
                 self.assertIn("nap_until", mind.routine.st)
                 self.assertAlmostEqual(mind.routine.st["nap_until"] - time.time(), 1.5 * 3600, delta=60)

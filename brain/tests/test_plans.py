@@ -276,7 +276,7 @@ class LlmPlanActionTest(BrainHarness):
                          "lock_map": "prt_fild08", "dead": False, "players": []})
             plugin.send({"type": "event", "kind": "chat_private", "from": "Tester", "text": "Ты давно видел Vera?"})
             whisper = plugin.recv()
-            time.sleep(1)
+            self.wait_for(lambda: self.count("plan_decision") >= 1, "решение плана в журнале")
             plugin.close()
             self.stop(proc)
         finally:

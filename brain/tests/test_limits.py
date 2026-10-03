@@ -44,10 +44,11 @@ class LiveLimitsTest(BrainHarness):
         proc = self.start_brain(env)
         plugin = self.connect()
         plugin.send(dict(STATE, type="state"))
-        for who in ("Tester", "Other"):
-            plugin.send({"type": "event", "kind": "chat_private", "from": who, "text": "привет"})
-            time.sleep(1.6)
-        time.sleep(1)
+        plugin.send({"type": "event", "kind": "chat_private", "from": "Tester", "text": "привет"})
+        self.wait_for(lambda: self.count("decision") >= 1, "первое решение модели")
+        plugin.send({"type": "event", "kind": "chat_private", "from": "Other", "text": "привет"})
+        self.wait_for(lambda: any("денежный лимит" in r.get("why", "") for r in self.decisions()
+                                  if r["type"] == "fallback"), "fallback по денежному лимиту")
         plugin.close()
         self.stop(proc)
         self.assertEqual(self.models(), ["test/model"])             # второй вызов не сделан
@@ -66,7 +67,7 @@ class LiveLimitsTest(BrainHarness):
         plugin.send(dict(STATE, type="state"))
         for who in ("A", "B", "C"):
             plugin.send({"type": "event", "kind": "chat_private", "from": who, "text": "привет"})
-        time.sleep(2)
+        self.wait_for(lambda: self.count("jev_skip") >= 2, "два пропуска JEV по лимиту")
         plugin.close()
         self.stop(proc)
         self.assertEqual(self.models().count("test/jev"), 1)
@@ -90,7 +91,7 @@ class IdentityDeliveryTest(BrainHarness):
                      "code": 0, "reason": "эхо сервера"})
         plugin.send({"type": "delivery", "id": 99, "action": "whisper", "to": "Ghost", "ok": False,
                      "code": 1, "reason": "адресат не в сети"})
-        time.sleep(1)
+        self.wait_for(lambda: self.count("delivery") >= 2, "обе доставки в журнале")
         plugin.close()
         self.stop(proc)
         prompt = FakeOpenRouter.requests[0]["body"]["messages"]
