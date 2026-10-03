@@ -130,6 +130,8 @@ class Mind:
         self.epoch = 0                 # номер подключения тела: растёт на каждый hello (AUT-003)
         self.awake_at = None           # warmup: первый свежий state после hello — от него разогрев модулей (WARMUP)
         self.awake_wait = False        # warmup: hello был, свежего state после него ещё нет
+        self.warm_hold = 0.0           # warmup: до какого времени разогреваемые модули ждут (modules.WARMUP_GAP)
+        self.actions_sent = 0          # warmup: счётчик отправленных телу действий (кто «выстрелил» в разогреве)
         self.unreachable = {}          # soak: житель -> когда шёпот ему не доставлен (адресат не в игре)
         self.inbox_path = inbox_path   # локальные команды оператора (scripts/lab plan)
         self.plans = PlanExecutor(self, PlanStore(memory.db))
@@ -178,6 +180,7 @@ class Mind:
         if self.awake_wait:                            # warmup: отсчёт разогрева — с первого свежего state
             self.awake_wait = False
             self.awake_at = self.state_received
+            self.warm_hold, self.warm_self = 0.0, {}
             self.write_decision({"type": "warmup", "epoch": self.epoch,
                                  "until": round(max(getattr(self.registry, "warmup", {}).values(), default=0))})
 
@@ -436,6 +439,7 @@ class Mind:
                 continue
             a["id"] = action_id
             self.sent[action_id] = a
+            self.actions_sent += 1                     # warmup:
             sent.append(a)
             if a.get("action") == "whisper" and a.get("to") in self.ctx.peers:
                 self.ctx.last[f"talk:{a['to']}"] = time.time()

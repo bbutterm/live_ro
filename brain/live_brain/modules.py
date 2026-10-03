@@ -25,7 +25,10 @@ mind.<атрибут> шпионом или None, диспетчер кажды�
   WARMUP      warmup: разогрев после нового подключения тела (soak, «шторм после пробуждения»): модуль с
               необязательной инициативой (общение, хобби, вывески, взгляд) не тикает WARMUP + разнос секунд после
               первого свежего state за hello (mind.awake_at). Разнос — от 0 до WARMUP_SPREAD по месту модуля среди
-              разогреваемых (TICK_ORDER), чтобы инициативы не выходили одной минутой. Служебное (выживание,
+              разогреваемых (TICK_ORDER), чтобы инициативы не выходили одной минутой. Первые WARMUP_PHASE с после
+              пробуждения разогреваемый модуль, отправивший действие (mind.actions_sent), придерживает остальные
+              разогреваемые на WARMUP_GAP с, а себя — на WARMUP_SELF с (очередь — другим): не больше 3 «залпов»
+              инициатив в минуту. Служебное (выживание,
               распорядок, группа, экономика, протоколы, ack) WARMUP не ставит — без задержки. None — без разогрева.
   TAGS        [(regex, "метод")] — метки в шёпоте ДРУГОГО ЖИТЕЛЯ; метод(sender, text). Совпавшая метка
               поглощает шёпот: дальше (gate/LLM) он не идёт. TAG_ORDER — место модуля в цепочке меток.
@@ -81,6 +84,9 @@ import re
 import time
 
 WARMUP_SPREAD = 60       # warmup: разогреваемые модули выходят на интервале WARMUP … WARMUP + 60 с
+WARMUP_PHASE = 300       # warmup: столько секунд после пробуждения инициативы разогреваемых модулей разнесены
+WARMUP_GAP = 20          # warmup: после действия разогреваемого модуля остальные ждут столько секунд
+WARMUP_SELF = 90         # warmup: а он сам — столько (чтобы первый вышедший не забирал все залпы)
 
 from .activity import Activities
 from .aims import Aims
@@ -320,7 +326,12 @@ class Registry:
         for attr in self.ticks:
             module = getattr(mind, attr, None)
             if module and not self.warming(mind, attr) and self.due(mind, attr, module):
+                sent = getattr(mind, "__dict__", {}).get("actions_sent")
                 await call(module.tick)
+                if attr in self.warmup and isinstance(sent, int) and mind.actions_sent != sent \
+                        and self.warm_phase(mind):
+                    mind.warm_hold = time.time() + WARMUP_GAP          # warmup: следующий залп — не раньше
+                    mind.__dict__.setdefault("warm_self", {})[attr] = time.time() + WARMUP_SELF
 
     def warming(self, mind, attr):
         """warmup: модуль ещё разогревается после пробуждения тела (mind.awake_at + его задержка)."""
@@ -330,7 +341,21 @@ class Registry:
         since = getattr(mind, "__dict__", {}).get("awake_at")
         if not isinstance(since, (int, float)) or isinstance(since, bool):
             return False
-        return time.time() < since + delay
+        now = time.time()
+        if now < since + delay:
+            return True
+        if now >= since + WARMUP_PHASE:
+            return False
+        own = getattr(mind, "__dict__", {})
+        hold = own.get("warm_hold")
+        if isinstance(hold, (int, float)) and now < hold:
+            return True
+        return now < (own.get("warm_self") or {}).get(attr, 0)
+
+    @staticmethod
+    def warm_phase(mind):
+        since = getattr(mind, "__dict__", {}).get("awake_at")
+        return isinstance(since, (int, float)) and not isinstance(since, bool) and time.time() < since + WARMUP_PHASE
 
     def due(self, mind, attr, module):
         """perf: TICK_EVERY — пора ли звать tick (см. описание атрибута в начале файла)."""

@@ -217,6 +217,31 @@ class WarmupTest(BodyMixin, unittest.TestCase):
             self.assertLessEqual(d, 121, a)
         self.assertEqual(len(set(firsts.values())), 4, f"вразнос: {firsts}")
 
+    def test_warm_bursts_are_spread(self):
+        """Разогреваемые модули, вышедшие из разогрева, не стреляют одной минутой: после действия одного остальные
+        ждут WARMUP_GAP (первые WARMUP_PHASE с); служебные — не ждут."""
+        from live_brain import modules
+        m = self.mind
+        shots = []
+        for attr in ("social", "gaze", "pets", "rivalry", "bonds", "crew"):
+            module = getattr(m, attr)
+
+            async def tick(_a=attr):
+                shots.append((self.clock.t, _a))
+                m.actions_sent += 1                     # модуль «выстрелил» (действие ушло телу)
+            module.tick = tick
+        asyncio.run(m.on_message({"type": "hello", "char": "Arkady"}))
+        t0 = self.clock.t
+        self.state()
+        for _ in range(modules.WARMUP_PHASE + 30):
+            asyncio.run(m.step())
+            self.clock.t += 1
+            self.state()
+        early = [t for t, _ in shots if t < t0 + modules.WARMUP_PHASE]
+        self.assertGreaterEqual(len({a for t, a in shots}), 6, "все вышли из разогрева")
+        for i in range(1, len(early)):
+            self.assertGreaterEqual(early[i] - early[i - 1], modules.WARMUP_GAP, shots)
+
     def test_no_warmup_without_hello_and_again_after_relog(self):
         m = self.mind
         calls = self.ticks(["social"])
