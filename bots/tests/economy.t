@@ -368,4 +368,22 @@ Plugins::call('vending_item_sold', {amount => 1, zenyEarned => 1250, vendArticle
 ($res) = evs('vend_sold');
 is($res->{zeny}, 1250, 'продажа из лавки');
 
+# ---- sinks: покупки NPC (buyAuto) — сток для M18 (Т-46) ----
+@brainBridge::events = ();
+$Globals::char->{zeny} = 2000;
+Plugins::call('AI_buy_auto');
+$Globals::char->{zeny} = 1700;
+Plugins::call('AI_buy_auto');                       # такт последовательности — замер не сдвигается
+$Globals::char->{zeny} = 1400;
+Plugins::call('AI_buy_auto_completed', {});
+($res) = evs('npc_bought');
+is($res->{zeny}, 600, 'sinks: потрачено на автозакупку NPC');
+@brainBridge::events = ();
+Plugins::call('AI_buy_auto');
+$Globals::char->{zeny} = 1500;
+Plugins::call('AI_buy_auto_completed', {});
+is(scalar(evs('npc_bought')), 0, 'sinks: зени не убыли — нет события');
+Plugins::call('AI_buy_auto_completed', {});
+is(scalar(evs('npc_bought')), 0, 'sinks: без начала — нет события');
+
 done_testing();

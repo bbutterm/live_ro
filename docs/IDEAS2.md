@@ -14,7 +14,7 @@ M (день), L (несколько дней или сервер/проверк�
 Содержание:
 1. Критический взгляд: риски «машинности» и что упростить, объединить, выключить.
 2. Новые идеи ORG-092…ORG-116.
-3. Топ-5 на ближайшие дни (после первой проверки в игре) с ТЗ Т-38…Т-42; Т-43 (ORG-100, относительная бедность) — дополнение по риску R8.
+3. Топ-5 на ближайшие дни (после первой проверки в игре) с ТЗ Т-38…Т-42; Т-43 (ORG-100, относительная бедность) и Т-44…Т-46 (стоки: снаряжение ORG-097, угощение ORG-099, метрика трат) — дополнение по риску R8.
 4. Метрики органичности первой недели: что считать, пороги «мертво / живо / шумно».
 
 ---
@@ -729,6 +729,95 @@ class Scars:
 
 **Готово.** Тесты зелёные; LIFE.md («Изъяны»); ROLLOUT.md — этап 1; статус ORG-101 «код, в игре не проверено».
 Ожидание: метрика «сходство жителей» (M21) ниже.
+
+### Т-44 · ORG-097 · Снаряжение: что купить и надеть лучшее из рюкзака
+
+Добавлено вне топ-5 по риску R8 (стоки). Первая часть ORG-097: житель **знает**, какое снаряжение NPC ему по
+карману и по профессии, говорит об этом (событие, совет в промпте) и надевает лучшее, что уже лежит в рюкзаке.
+Сама покупка у NPC (диалог магазина или разовый блок `buyAuto` + защита от `sellAuto`/`storageAuto` economy.pl)
+— вторая часть: новое действие моста с деньгами, проверка в игре обязательна.
+
+**Цель.** Деньги сверх запасов и копилки получают понятный выход: «мне по карману Scimitar (ATK 85, 17 000 z) у
+Weapon Dealer prt_in». Владелец видит в `report`, что жители хотят купить и на сколько им не хватает.
+
+**Файлы.** `bots/plugins/brainBridge/brainBridge.pl` (в `state` — `equip {weapon, Armor, Left_Hand, Shoes, Garment,
+Head_Top: nameID}` и `bag [nameID]` неподнятого снаряжения; действие `equip {item}` → `eq <binID>`; строки
+`# sinks:`), `brain/live_brain/gear.py` (новый: модуль реестра `Gear`, тик), `modules.py` (строка после `Wealth`),
+`safety.py` (`equip` в `PLAN_ACTIONS`), `goals.json` (раздел `gear`, выключен), `bots/tests/brain_bridge.t`,
+`brain/tests/test_gear.py`, `docs/ECONOMY.md`, `docs/ROLLOUT.md`.
+
+**Данные.** `brain/world/jobs/catalog.json` (`scripts/gen_progression.py`: магазины Пронтеры/Изюда из `npc/merchants`,
+`Jobs`, `EquipLevelMin`, `Attack`, `Defense`, `Locations`, `Gender` из `db/re/item_db_equip.yml`) и уже
+готовый `progression.next_equipment(state, budget)` — слоты, тип оружия профессии, щит, двуручное.
+Слот OpenKore → маска rAthena: `EQP_HAND_R 0x2`, `EQP_HAND_L 0x20`, `EQP_ARMOR 0x10`, `EQP_SHOES 0x40`,
+`EQP_GARMENT 0x4`, `EQP_HEAD_TOP 0x100` (`src/map/pc.hpp`; поле `equipped` предмета OpenKore).
+
+**Интерфейсы.**
+```python
+class Gear:
+    ATTR = FEATURE = CONFIG = "gear"; ENABLED = False; ARGS = "world"; REQUIRES = ("economy",)
+    TICK_ORDER = 148; PROMPT = [("снаряжение", "summary", 137)]
+    def budget(self, state) -> int      # зени − keep_zeny − копилка (savings.reserve); жадный × 1/(1 + 0.5·greed)
+    def pick(self, state) -> dict|None  # next_equipment(state, budget); state без equip — None (не гадать)
+    def wear(self, state) -> dict|None  # лучшее из bag по ATK/DEF, профессия и уровень по каталогу
+```
+- Совет — kv `gear {pick, ts, told}`, событие `gear_wish {item, name, slot, price, gain, shop}` — один раз на
+  предмет (новый лучший — новое событие), поле промпта «снаряжение: купить Scimitar (+40 ATK) за 17000z».
+- Надеть: в рюкзаке вещь из каталога лучше надетой — действие `equip`, событие `gear_worn` после того, как
+  `state.equip` показал её в слоте (факт — состояние тела, не ack). Не чаще раза в `tick_seconds`, только в городе
+  и вне боя.
+- Не тратит ничего: покупки нет. Бюджет ниже `keep_zeny` и копилки — совета нет.
+
+**Тесты.** Бюджет вычитает keep и копилку; жадный видит меньший бюджет; без `equip` — нет совета; совет и
+событие один раз на предмет; вещь из рюкзака лучше надетой → `equip`, хуже → нет; выключатель; Perl — `equip`
+в state по маскам и команда `eq`.
+
+**Готово.** ROLLOUT.md — этап 4 (действие тела `equip`; по умолчанию выключено); статус ORG-097 «код (часть 1:
+выбор и надеть из рюкзака), покупка у NPC — нет; в игре не проверено».
+
+### Т-45 · ORG-099 · Угощение по поводу
+
+**Цель.** Видимый поступок вместо слов (R12) и повод потратить запасы: житель отдаёт другу зелья по поводу —
+день рождения друга (календарь), примирение после ссоры (`society_reconciled`), выпуск ученика
+(`mentor_graduated`). Отданное докупит `buyAuto` у NPC — это и есть сток (метрика Т-46).
+
+**Файлы.** `brain/live_brain/treat.py` (новый: модуль `Treat`, тик), `modules.py` (строка после `Gear`),
+`economy.py` (`on_give_result`: событие `treat_given` для угощения, 3 строки `# sinks:`), `goals.json` (раздел
+`treat`, включён), `brain/tests/test_treat.py`, `docs/ECONOMY.md`, `docs/ROLLOUT.md`.
+
+**Правила.**
+- Повод: сегодня день рождения жителя `P` (`calendar.day().birthdays`); `society_reconciled` с `P` за
+  `occasion_hours` (24); я наставник и мой ученик `P` выпустился (`mentor_graduated`) за `occasion_hours`.
+- `P` виден рядом (≤ 8 клеток), я в режиме отдыха, тело свободно (как у банка: нет сделки, письма, лавки, квеста,
+  сна), отношение к `P` ≥ `min_affinity` (1; у выпуска и дня рождения — 0).
+- Что: первый предмет из `items` (`[502, 501]`) в рюкзаке; количество — `amount` (3), но после передачи у меня
+  остаётся ≥ `economy.share[id].keep`; стоимость по цене NPC ≤ `budget_share` (5 %) от зени сверх keep и копилки.
+- Лимиты: одно угощение на `cooldown_days` (7) у дарящего; один и тот же повод (вид + жителю + день) — один раз;
+  щедрость < `min_generosity` (0.3) — не угощает.
+- Исполнение — общий канал economy (`economy.giving`, действие `give`); итог — `give_result` ok → `gift_given`
+  (как раньше) и `treat_given {peer, item, amount, zeny, occasion}`, отношение +1, воспоминание.
+
+**Тесты.** Каждый повод даёт `give`; нет повода/далеко/занято/кулдаун/мало зелий/скупой — нет; повторный повод —
+нет; итог ok → `treat_given` со стоимостью; отказ тела — без события; выключатель.
+
+**Готово.** ROLLOUT.md — этап 3 (существующее действие `give`); статус ORG-099 «код, в игре не проверено».
+
+### Т-46 · ORG-100 (часть 2) · Стоки в метриках: что купили у NPC и сколько заплатили за услуги
+
+**Цель.** M18 (сток/приток) перестаёт быть «—»: в памяти появляются события трат, которые `organic.py`
+уже ждёт (`organic.json sink_kinds`: `npc_bought`, `service_paid`).
+
+**Файлы.** `bots/plugins/economy/economy.pl` (хуки `AI_buy_auto` / `AI_buy_auto_completed` → событие
+`npc_bought {zeny}` — убыль зени за последовательность автозакупки, как `npc_sold`), `bots/tests/economy.t`,
+`economy.py` (`EVENTS` — `npc_bought` own; `on_mail_result` — `service_paid {zeny, service: "mail"}`: сбор RODEX
+2 % вложенных зени + 2500 за предмет, `conf/battle/misc.conf`; `metrics_from_rows` — «покупки NPC, z», «услуги, z»,
+«угощений»), `organic.json` без изменений (`mail_sent`/`trade_bought` — отток жителя, но не мира; `seen_sink`
+их и так не считает доказательством трат), `brain/tests/test_sinks.py`, `docs/ECONOMY.md`.
+
+**Тесты.** Perl: зени 2000 → 1400 за автозакупку — `npc_bought 600`; рост зени — без события. Python: метрики
+считают покупки NPC и сбор почты; M18 = сток/приток по `npc_bought` + `service_paid`.
+
+**Готово.** Статус M18 «считается по событиям тела»; в игре не проверено.
 
 ---
 

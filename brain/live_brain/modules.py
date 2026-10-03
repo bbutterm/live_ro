@@ -67,6 +67,8 @@ buying (ORG-036) — тик 27, события job_change_result 18 (consume "re
 flaw (ORG-101) — только создание (brain_create: None без persona.flaw), строки `# flaw:`.  # traits:
 scars (ORG-093) — события died/kill 95 (не поглощают), без тика; maps.choose — avoid/revenge.  # traits:
 drift (ORG-092) — тик 3 (раз в 10 мин, сдвиг раз в неделю), без меток и событий.  # traits:
+gear (ORG-097) — тик 148, промпт 137; по умолчанию выключен.  # sinks:
+treat (ORG-099) — тик 149, без меток и промпта; итог — economy.on_give_result (treat_given).  # sinks:
 attention (ORG-109) — без тика, меток и событий: бюджет инициатив, строки `# attention:` в говорящих модулях.  # attention:
 """
 import inspect
@@ -110,6 +112,8 @@ from .buying import Buying                # buying: ORG-036 скупка и сн
 from .dream import Dream             # dreams: ORG-081 жизненный путь
 from .savings import Savings         # dreams: ORG-073 копилка мечты и банк
 from .wealth import Wealth           # wealth: ORG-100 относительная бедность (без тика)
+from .treat import Treat             # sinks: ORG-099 угощение по поводу
+from .gear import Gear               # sinks: ORG-097 снаряжение: совет и надеть из рюкзака (по умолчанию выключен)
 from .memoir import Memoir           # dreams: ORG-082 мемуары жителя
 from .mentor import Mentor           # mentor: ORG-057 наставничество новичков
 from .bestiary import Bestiary       # bestiary: ORG-077 бестиарий и первооткрыватели
@@ -175,6 +179,8 @@ MODULES = (
     Savings,           # dreams: REQUIRES dream — цель копилки от мечты
     Scars,             # traits: ORG-093 (без тика; события died/kill 95; maps.choose читает mind.scars)
     Wealth,            # wealth: ORG-100 после dream, savings, crowd (мотив wealth в needs.values)
+    Treat,             # sinks: ORG-099 после economy, calendar, society, mentor-событий; тик 149
+    Gear,              # sinks: ORG-097 после economy и savings (бюджет сверх keep и копилки); тик 148, промпт 137
     Memoir,            # dreams: мемуары раз в неделю (только чтение памяти и файл memoir.md)
     Mentor,            # mentor: ORG-057 (тик 95, метка [mentor:] 55; читает economy, party, routine, society, шину)
     Legacy,            # legacy: ORG-083 после mentor, wed, dream, memoir, economy (наследник, посылки, прощание)

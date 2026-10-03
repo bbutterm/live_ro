@@ -22,7 +22,9 @@
 #    (fail 0 = отправлено) -> событие mail_result. Входящие: хук rodex_unread_mail или действие
 #    mail_check -> rodex open -> хук rodex_mail_list -> событие mail_received (непрочитанные, от жителей).
 #    Забрать (mail_take): rodex open -> read -> хук rodex_mail -> getzeny / getitems -> close -> mail_taken.
-# 6. Для метрик (ORG-037): npc_sold (зени за автопродажу NPC), vend_sold (продажа из лавки).
+# 6. Для метрик (ORG-037): npc_sold (зени за автопродажу NPC), vend_sold (продажа из лавки);
+#    npc_bought {zeny} — убыль зени за последовательность buyAuto (хуки AI_buy_auto / AI_buy_auto_completed,
+#    AI/CoreLogic.pm processAutoBuy) — сток для M18 (ORG-100, Т-46).   # sinks:
 package economy;
 
 use strict;
@@ -52,6 +54,8 @@ my $hooks = Plugins::addHooks(
 	['packet/rodex_get_item',     \&onMailGot],
 	['AI_sell_auto',           \&onNpcSellStart],
 	['AI_sell_auto_completed', \&onNpcSellDone],
+	['AI_buy_auto',            \&onNpcBuyStart],    # sinks: сток — покупки NPC (Т-46)
+	['AI_buy_auto_completed',  \&onNpcBuyDone],     # sinks:
 	['vending_item_sold',      \&onVendSold],
 );
 
@@ -645,6 +649,25 @@ sub onNpcSellDone {
 	my $got = ($char->{zeny} // 0) - $npcSellZeny;
 	undef $npcSellZeny;
 	mailEvent('npc_sold', zeny => $got + 0) if $got > 0;
+}
+
+# sinks: покупки NPC (buyAuto). AI_buy_auto зовётся каждый такт последовательности — запоминаю первые зени;
+# последовательность без AI_buy_auto_completed (прервана) — старый замер забываю через $NPC_BUY_STALE с.
+our ($npcBuyZeny, $npcBuyTime);                                                                   # sinks:
+our $NPC_BUY_STALE = 900;                                                                         # sinks:
+
+sub onNpcBuyStart {                                                                               # sinks:
+	return unless $char;
+	undef $npcBuyZeny if defined $npcBuyTime && time - $npcBuyTime > $NPC_BUY_STALE;
+	return if defined $npcBuyZeny;
+	($npcBuyZeny, $npcBuyTime) = ($char->{zeny}, time);
+}
+
+sub onNpcBuyDone {                                                                                # sinks:
+	return unless defined $npcBuyZeny && $char;
+	my $spent = $npcBuyZeny - ($char->{zeny} // 0);
+	undef $npcBuyZeny;
+	mailEvent('npc_bought', zeny => $spent + 0) if $spent > 0;
 }
 
 sub onVendSold {

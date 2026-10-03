@@ -92,6 +92,9 @@
 #                            Misc::items_control); bottles — блок buyAuto «Empty Bottle»/713 профиля: maxAmount N,   # herbal:
 #                            minAmount N-1, disabled 0 (N=0 — disabled 1). В state — craft {items {id: n} по          # herbal:
 #                            @CRAFT_IDS и keep, kept [id], weight_free, skills {AC_MAKINGARROW: ур.}}.                # herbal:
+#   equip {item}          -> надеть вещь из рюкзака по nameID: «eq <номер в рюкзаке>» (ORG-097, Т-44). В state —   # sinks:
+#                            equip {weapon, Armor, Left_Hand, Shoes, Garment, Head_Top: nameID} по маскам EQP_*        # sinks:
+#                            (rAthena mmo.hpp; двуручное — в weapon и Left_Hand) и equip_bag [nameID] (до 20).        # sinks:
 #   arrowcraft {item}     -> Arrow Crafting (ORG-075): навык AC_MAKINGARROW выучен, предмет в рюкзаке ->           # arrows:
 #                            «arrowcraft use»; сервер присылает список (01AD, хук packet/arrowcraft_list) — предмет  # arrows:
 #                            в нём -> sendArrowCraft(ID); событие arrowcraft_result {item, ok, reason} (ok — отправил;  # arrows:
@@ -277,6 +280,7 @@ sub sendState {
 		support_skills => supportSkills(),                                        # healer: ORG-069
 		achievements => achState(),                                               # achieve: ORG-080
 		craft     => craftStatus(),                                               # herbal: ремесло (ORG-076/075)
+		%{equipFields()},                                                         # sinks: снаряжение (ORG-097, Т-44)
 	});
 }
 
@@ -761,6 +765,8 @@ sub actionToCommand {
 		return (0, 'плагин economy не загружен') unless defined &economy::startMailTake;          # market:
 		my ($ok, $desc) = economy::startMailTake($a);                                             # market:
 		return $ok ? (1, {note => $desc}) : (0, $desc);                                           # market:
+	} elsif ($kind eq 'equip') {                                          # sinks: надеть из рюкзака (ORG-097)
+		return equipAction($a);                                               # sinks:
 	} elsif ($kind eq 'craft_setup') {                                    # herbal: ремесло (ORG-076/075)
 		return craftSetup($a);                                                # herbal:
 	} elsif ($kind eq 'arrowcraft') {                                     # arrows: Arrow Crafting (ORG-075)
@@ -935,6 +941,44 @@ sub craftStatus {
 	        kept => [sort { $a <=> $b } grep { ($items_control{$_} || {})->{_craft} } keys %craftKept],
 	        weight_free => (defined $char->{weight_max} ? ($char->{weight_max} - ($char->{weight} // 0)) + 0 : undef),
 	        skills => {AC_MAKINGARROW => ($sk->{AC_MAKINGARROW} && $sk->{AC_MAKINGARROW}{lv} ? $sk->{AC_MAKINGARROW}{lv} + 0 : 0)}};
+}
+
+# ---------- sinks: снаряжение (ORG-097, Т-44) ----------
+# Маски слотов rAthena (src/common/mmo.hpp EQP_*), поле equipped предмета OpenKore (Actor/Item.pm) — та же маска.
+our @EQUIP_MASKS = ([weapon => 0x2], [Armor => 0x10], [Left_Hand => 0x20], [Shoes => 0x40], [Garment => 0x4],   # sinks:
+                    [Head_Top => 0x100]);                                                                            # sinks:
+our $EQUIP_BAG_MAX = 20;                                                                                             # sinks:
+
+sub inventoryItems {                                                                                                 # sinks:
+	my $inv = (ref $char ne 'HASH' && $char->can('inventory')) ? $char->inventory : $char->{inv};
+	return @{$inv || []};
+}
+
+# equip {слот: nameID} — надето сейчас (двуручное — и weapon, и Left_Hand); equip_bag [nameID] — снаряжение в рюкзаке.
+sub equipFields {                                                                                                    # sinks:
+	return {} unless $char;
+	my (%slot, @bag);
+	for my $item (inventoryItems()) {
+		my $eq = $item->{equipped} || 0;
+		if ($eq) {
+			for my $m (@EQUIP_MASKS) {
+				$slot{$m->[0]} //= $item->{nameID} + 0 if $eq & $m->[1];
+			}
+		} elsif ($item->{type_equip} && @bag < $EQUIP_BAG_MAX) {
+			push @bag, $item->{nameID} + 0;
+		}
+	}
+	return {equip => \%slot, equip_bag => \@bag};
+}
+
+# Действие equip {item}: надеть вещь из рюкзака по nameID (команда OpenKore «eq <номер в рюкзаке>», Commands.pm cmdEquip).
+sub equipAction {                                                                                                    # sinks:
+	my ($a) = @_;
+	my $id = $a->{item} // '';
+	return (0, 'неверный предмет') unless $id =~ /^\d{3,6}$/;
+	my ($item) = grep { ($_->{nameID} // -1) == $id && !$_->{equipped} && $_->{type_equip} } inventoryItems();
+	return (0, "предмета $id нет в рюкзаке (или уже надет)") unless $item;
+	return (1, [standFirst(), "eq $item->{binID}"]);
 }
 
 sub bottleBlock {

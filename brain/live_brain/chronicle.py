@@ -40,6 +40,8 @@ from .legacy import CHRONICLE_LINES as LEGACY_LINES      # legacy: наслед�
 from .fest import CHRONICLE_LINES as FEST_LINES          # events2: ивенты rAthena (ORG-087)
 from .scars import CHRONICLE_LINES as SCAR_LINES       # traits: реванш (ORG-093)
 from .drift import CHRONICLE_LINES as DRIFT_LINES      # traits: дрейф характера (ORG-092)
+from .gear import CHRONICLE_LINES as GEAR_LINES          # sinks: снаряжение (ORG-097)
+from .treat import CHRONICLE_LINES as TREAT_LINES        # sinks: угощение (ORG-099)
 from . import world_calendar                            # calendar: заголовок дня (ORG-059)
 from . import places                                    # places: коды карт -> имена мест (ORG-084)
 
@@ -83,6 +85,8 @@ LINES = {
     **WED_LINES,                                          # wed: ORG-062
     **LEGACY_LINES,                                       # legacy: ORG-083
     **FEST_LINES,                                         # events2: ORG-087
+    **GEAR_LINES,                                         # sinks: ORG-097
+    **TREAT_LINES,                                        # sinks: ORG-099
     **places.CHRONICLE_LINES,                             # places: ORG-084
     **MARKET_LINES,                                       # market: ORG-071
     **REFINE_LINES,                                       # refine: ORG-072

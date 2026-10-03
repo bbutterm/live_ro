@@ -58,6 +58,7 @@ MAX_BANK_OP = 10_000_000         # dreams: сумма одной операци�
 PLAN_ACTIONS += ("refine",)      # refine: заточка своего оружия до безопасного уровня (refine.py, ORG-072)
 REFINE_ORES = (1010, 1011)       # refine: Phracon, Emveretarcon — продаёт Vurewell (тот же список в refine.pl)
 PLAN_ACTIONS += ("look_at",)     # look: повернуться к собеседнику (gaze.py, ORG-067)
+PLAN_ACTIONS += ("equip",)       # sinks: надеть снаряжение из рюкзака (gear.py, ORG-097)
 LOOK_GAP = 20                    # look: не чаще раза в 20 с
 BANK_PER_DAY = 12                # dreams: операций банка в сутки
 CHAT_ROOM_GAP = 600              # society: открывать не чаще раза в 10 мин
@@ -214,6 +215,13 @@ class SafetyPolicy:
             return self.check_refine(action, state)                                                  # refine:
         if kind in ("buyer_open", "buyer_sell"):                                                      # buying:
             return self.check_buyer(kind, action, state)                                             # buying:
+        if kind == "equip":                                                                           # sinks: ORG-097
+            item = action.get("item")                                                                # sinks:
+            if isinstance(item, bool) or not isinstance(item, int) or not 100 <= item < 1000000:    # sinks:
+                return None, "неверный предмет"                                                      # sinks:
+            if state.get("dead"):                                                                    # sinks:
+                return None, "мёртв"                                                                 # sinks:
+            return {"action": "equip", "item": item}, None                                          # sinks:
         if kind == "craft_setup":                                                                     # herbal:
             return self.check_craft_setup(action)                                                    # herbal:
         if kind == "arrowcraft":                                                                      # arrows:
