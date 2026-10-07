@@ -1,0 +1,11 @@
+# Verified protocol-created characters; no credentials.
+residents:
+  - resident_id: resident_a
+    char_id: 150001
+    name: ResidentA
+    group_id: 0
+    enabled: true
+tester:
+  char_id: 150000
+  name: Tester
+  role: tester

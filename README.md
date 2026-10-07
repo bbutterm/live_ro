@@ -6,10 +6,12 @@
 OpenKore исполняет ограниченные навыки, rAthena подтверждает фактические игровые события, один оркестратор ведёт журнал и планы. LLM позже выбирает допустимые варианты. ACK команды — не успех в игре.
 
 ## Текущее состояние
-**Первый сквозной срез проверен, автономии пока нет.** Tester создан и вошёл; NPC-свидетель подтвердил движение, logout/login; SELECT-only reader получил эти события. Это привилегированный операторский тестер, не обычный житель. Веха A ещё не завершена. Null-session crash воспроизведён и исправлен; обычный group0 житель проверен. См. [QA_02](docs/QA_02.md). [STATUS](docs/STATUS.md), [HANDOFF](docs/HANDOFF.md).
+**Веха A: техническая приёмка 8/8 gates PASS, автономии нет.** Обычный group0 ResidentA проверен; native Tester купил банку, убил Poring, прошёл die/loadmap/relog. SELECT-only eyes/wait-event, durable reader и ресурсный замер приняты. Графический смотр владельца отдельно не выполнен; B/C/LLM не начаты. Итог [QA_A](docs/QA_A.md), предыдущие [QA_02](docs/QA_02.md)/[QA_03](docs/QA_03.md), [STATUS](docs/STATUS.md), [HANDOFF](docs/HANDOFF.md).
+
+Лента: `python3 tools/events.py --char ResidentA --follow --duration 300` (на лабораторном VPS, приватный reader.cnf).
 
 ## Исходники
-- `tools/`: одноразовые скрипты для новой изолированной установки. **Не запускать повторно на существующей БД.**
+- `tools/`: eyes/events/wait/sql, literal-команды тестеру, а также provisioning. **Provision/prepare-* не запускать повторно на существующей БД.**
 - `checks/01.py`: базовая инфраструктурная проверка; не доказывает interserver auth.
 - `checks/01b.py`: проверка свидетельств конкретного tester-прогона на лабораторных путях, не universal health check.
 - `server/schema/`, `server/witness/`, `server/patches/`: witness v0, миграция отдельной schema, config patch и минимальный char-server null-session guard.

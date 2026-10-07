@@ -1,0 +1,4 @@
+// A: private lab server receipts; native chat bitmask 1+2+4.
+log_zeny: 1
+log_chat: 7
+log_commands: yes

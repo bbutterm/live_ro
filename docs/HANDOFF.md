@@ -1,16 +1,14 @@
-# Handoff: finish bounded milestone-A acceptance
+# Handoff — техническая веха A принята
 
-Read STATUS.md, QA_02.md and QA_03.md. One executor; no external coding models, no old bots, no paid LLM. Isolated rAthena/OpenKore runtime /root/ragnarok; source /root/ragnarok/repos/live_ro. Loopback ports; shared DB/other services untouched.
+Читайте STATUS.md, QA_A.md, QA_02.md, QA_03.md. Исходный checklist A в docs/ro_residents_report/CHECKS.md: 8/8 gates PASS. Графический смотр владельца остаётся отдельным, не выдавать за выполненный. В B/LLM автоматически не переходить.
 
-## Accepted new step
-Normal ResidentA group0 performed actual shop purchase, kill, map travel and death with server records. Initial money/knife and mobs were explicitly LAB fixtures. Temporary NPCs/monsters removed; fixture is not included in startup. Witness now writes a1/a2; never assume payload_json exists. Durable SQLite inbox and cursor are atomic; fresh SELECT-only reads/restart/retry recovery tested. stdout is not consumer ACK.
+Один исполнитель, без Claude/других coding models. Стенд /root/ragnarok, приватные profiles/credentials/evidence вне Git. Обычный ResidentA 150001/group0, Tester 150000/group99. Не создавать их SQL-вставками и не подменять игровые результаты.
 
-## Next bounded gates
-1. Re-read original report/CHECKS for exact milestone-A exit criteria, including PM and full combined test. Do not close milestone based only on four gameplay gates.
-2. Bound position observation (change detection/heartbeat/retention) before sustained idle population. Manual QA clients are stopped after this run; protected profiles are retained. Verify live process state before relaunch; don't rerun one-time account provisioning.
-3. Source generation/reset identity and timezone contract; current source-id is explicit, not automatic detection. Reader retries3 times and exits honestly on exhaustion; cursor remains durable.
-4. Full cold-start/recovery and resource acceptance for actual integrated artifact. Relevant maps need loadevent; flags from temporary QA fixture do not establish global transition coverage.
-5. Only then a simple non-LLM action cycle, not full social/memory architecture.
-
-## Preservation
-Server services remain available. Core guard/patches unchanged. Source tests separate from real DB/game evidence. Never publish raw defaults/profiles, DBs, inbox or logs. No cron/daemon installed for reader. Secrets remain local. Runtime accounts/schema already exist; provisioning intentionally refuses repeats.
+- Native Tester proof: prontera №5062, покупка picklog №4/S/501 в prt_in, field Poring kill №5069, die №5070 (@die только Tester), loadmap №5071, relog №5073/5074. Границы зафиксированы в QA_A; для fresh-game нужны новые.
+- tmux server -L ro-residents, target tester; tools/tester.sh посылает только literal-команду в уже запущенную сессию.
+- tools/events.py/wait_event.py/sql.sh читают приватный reader.cnf; ONLY SELECT. stdout — диагностический, не durable ACK.
+- Witness source server/witness: residents_witness.txt, maps.txt, log_conf.txt. Persistent runtime includes witness + residents_maps, log import; runtime успешно restarted. QA fixture не в автозагрузке. Position 5sec/>3 cells.
+- DB-time SYSTEM/Europe/Amsterdam; eyes сохраняют ts и добавляют ts_utc. Cursor ordering по ID. После source reset/restore/timezone change новая --source-id; MAX<cursor fails closed. High-water reset/DST/consumer semantics — границы v0, не выдавать за веху D.
+- SQLite доказательства /root/ragnarok/evidence/03, комбинированные /evidence/A, ресурсы /evidence/07. Ресурсы A: rAthena457.1MiB, OpenKore143.9MiB, available1225MiB, swap1315MiB; 20 тел не приняты.
+- QA-клиенты завершаются после приёмки; не предполагать online или оставлять автономные циклы. Проверять live processes вместо старых PID; run/PROCESSES.md — snapshot.
+- Принятый отдельный null-session char patch см. QA_02. Новых core/pin/protocol изменений нет. Не поднимать старый live_ro runtime.

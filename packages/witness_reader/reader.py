@@ -41,7 +41,12 @@ def read_events(defaults_file,after):
     sql="SELECT JSON_OBJECT('id',id,'ts',CAST(ts AS CHAR),'char_id',char_id,'kind',kind,'map',map,'x',x,'y',y,'a1',a1,'a2',a2) FROM residents.resident_events WHERE id > %d ORDER BY id LIMIT 200" % after
     p=subprocess.run(['mariadb','--defaults-extra-file='+defaults_file,'--batch','--raw','--skip-column-names'],input=sql,text=True,capture_output=True,timeout=8)
     if p.returncode: raise RuntimeError('Reader database connection/query failed (credential-bearing details withheld)')
-    return [json.loads(l) for l in p.stdout.splitlines() if l]
+    rows=[json.loads(l) for l in p.stdout.splitlines() if l]
+    if not rows and after:
+        guard=subprocess.run(['mariadb','--defaults-extra-file='+defaults_file,'-NBr'],input='SELECT COALESCE(MAX(id),0) FROM residents.resident_events',text=True,capture_output=True,timeout=8)
+        if guard.returncode: raise RuntimeError('Reader source validation failed; private details withheld')
+        if int(guard.stdout.strip())<after: raise ValueError('Source sequence behind cursor: select a new explicit source generation after reset')
+    return rows
 
 def fetch_with_retry(defaults_file,after):
     for attempt in range(3):

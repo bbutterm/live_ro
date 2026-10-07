@@ -1,0 +1,6 @@
+// Persistent witness coverage on test maps.
+prontera	mapflag	loadevent
+prt_fild08	mapflag	loadevent
+izlude	mapflag	loadevent
+iz_int01	mapflag	loadevent
+guild_vs1	mapflag	loadevent
