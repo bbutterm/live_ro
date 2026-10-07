@@ -1,0 +1,17 @@
+diff --git a/src/char/char_clif.cpp b/src/char/char_clif.cpp
+index 319603266..6c0066aea 100644
+--- a/src/char/char_clif.cpp
++++ b/src/char/char_clif.cpp
+@@ -1704,6 +1704,12 @@ int32 chclif_parse(int32 fd) {
+ 			// login as map-server
+ 			case 0x2af8: chclif_parse_maplogin(fd); return 0; // avoid processing of followup packets here
+ 			default:
++				// Reject packets before character-session initialization.
++				// A stale/reconnecting client may send char-select on a fresh socket.
++				if( sd == nullptr ){
++					set_eof( fd );
++					return 0;
++				}
+ 				if( !char_packet_db.handle( fd, *sd ) ){
+ 					return 0;
+ 				}

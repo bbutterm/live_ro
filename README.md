@@ -6,13 +6,13 @@
 OpenKore исполняет ограниченные навыки, rAthena подтверждает фактические игровые события, один оркестратор ведёт журнал и планы. LLM позже выбирает допустимые варианты. ACK команды — не успех в игре.
 
 ## Текущее состояние
-**Первый сквозной срез проверен, автономии пока нет.** Tester создан и вошёл; NPC-свидетель подтвердил движение, logout/login; SELECT-only reader получил эти события. Это привилегированный операторский тестер, не обычный житель. Веха A ещё не завершена, stale-session char-server crash не разобран. [STATUS](docs/STATUS.md), [HANDOFF](docs/HANDOFF.md).
+**Первый сквозной срез проверен, автономии пока нет.** Tester создан и вошёл; NPC-свидетель подтвердил движение, logout/login; SELECT-only reader получил эти события. Это привилегированный операторский тестер, не обычный житель. Веха A ещё не завершена. Null-session crash воспроизведён и исправлен; обычный group0 житель проверен. См. [QA_02](docs/QA_02.md). [STATUS](docs/STATUS.md), [HANDOFF](docs/HANDOFF.md).
 
 ## Исходники
 - `tools/`: одноразовые скрипты для новой изолированной установки. **Не запускать повторно на существующей БД.**
 - `checks/01.py`: базовая инфраструктурная проверка; не доказывает interserver auth.
 - `checks/01b.py`: проверка свидетельств конкретного tester-прогона на лабораторных путях, не universal health check.
-- `server/schema/`, `server/witness/`, `server/patches/`: witness v0, миграция отдельной schema и явный config patch; не изменения ядра.
+- `server/schema/`, `server/witness/`, `server/patches/`: witness v0, миграция отдельной schema, config patch и минимальный char-server null-session guard.
 - `packages/witness_reader/`: bounded reader v0; durable cursor/reconnect пока отсутствуют.
 - `ops/units/`: изолированные systemd-сервисы, не включённые на загрузку ОС.
 - `vendor/`: официальные pinned submodules.
@@ -28,7 +28,7 @@ git clone --recurse-submodules https://github.com/bbutterm/live_ro.git
 ## Ограничения воспроизводимости
 Лабораторные скрипты используют `/root/ragnarok/repos/rathena`, submodules — `vendor/rathena`. Универсального инсталлятора нет. Import templates, service ACL и systemd linking выполнялись отдельно. Не запускать на другом хосте без настройки путей.
 
-`prepare_tester.py` теперь сохраняет addTableFolders и charBlockSize155. PIN отключён runtime-only, не в исходном provision. Проверять service-account read access после атомарной замены config: root-readability не означает daemon-readability. Автозагрузка witness после нового server restart пока не принята, hot-load и relog приняты.
+`prepare_tester.py` теперь сохраняет addTableFolders и charBlockSize155. PIN отключён runtime-only, не в исходном provision. Проверять service-account read access после атомарной замены config: root-readability не означает daemon-readability. Автозагрузка witness после map-server restart проверена по новому startup log и свежим серверным pos.
 
 ## Проверки
 ```sh

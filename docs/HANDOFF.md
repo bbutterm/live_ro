@@ -1,16 +1,15 @@
-# Handoff: продолжать самостоятельно, без внешних coding agents
+# Handoff: один исполнитель, продолжать веху A
 
-## Принято в этом проходе
-Tester создан, вошёл и прошёл iz_int01 (20,26) → (22,26). Серверный witness пишет реальные pos/logout/login; SELECT-only reader их читает. См. STATUS.md. Это один сквозной срез, не вся веха A.
-
-## Текущий контекст на VPS
-Репозиторий /root/ragnarok/repos/live_ro. Runtime rAthena /root/ragnarok/repos/rathena, OpenKore /root/ragnarok/repos/openkore. Тестер последний tracked handle proc_58b8d09f383b, PID112761; не использовать PID без проверки identity/cwd. Разрешены bounded дальнейшие проверки вехи A без повторных подтверждений. Не запускать другие модели/Claude. Secrets в run/private и tester profile, не в Git.
+## Принято
+См. STATUS.md и QA_02.md: обычный ResidentA group0, registry negative/positive, server-observed movement и relog; null-session crash RED→GREEN; witness map-restart persistence.
 
 ## Следующие gates
-1. Разобрать stale char-session SIGSEGV по сохранённому evidence/01b/char-crash.log; не объявлять сервер надёжным по удачному свежему входу. После двух неудачных scoped попыток остановиться с причиной.
-2. Создать обычного персонажа-жителя (group0) нормальным клиентским протоколом. Отдельно подтвердить, что незарегистрированный char не пишет события, и что регистрируемый пишет.
-3. Включить нужные серверные picklog, проверить реальную покупку. SQL-правки инвентаря/позиции не доказательство покупки/перемещения.
-4. Дорастить witness kill/die/loadmap по отдельным тестам и mapflag semantics. Не менять ядро; autoload config patch уже сохранён, restart persistence ещё проверить.
-5. Затем reader cursor/restart и отрицательные проверки, уточнение a1/a2/source reset/timezone. Завершить веху A ресурсным замером и честным demonstration.
+1. Включить нужный picklog, провести настоящую покупку у NPC обычным жителем. Разделять стартовый grant средств/fixtures и факт покупки; SQL-update inventory/zeny не покупка.
+2. По отдельным game tests: kill/die/loadmap и нужные loadevent mapflags. Не менять ядро ради witness; единственный core guard уже сохранён и обоснован crash-repro.
+3. Reader: SQLite store + cursor атомарно, restart, source identity/reset, ограниченный reconnect и timezone. stdout ACK не durable delivery.
+4. Полная bounded веха-A приёмка и свежий ресурсный замер; затем простой исполнитель без LLM, не сейчас.
 
-Не закрывать issues #1–#3 по текущему частичному результату. Никаких paid LLM, будущих вех или открытых портов. Сервер и чат Hermes не выключать при scoped остановке tester.
+## Runtime
+/root/ragnarok/repos/rathena и /root/ragnarok/repos/openkore; canonical source /root/ragnarok/repos/live_ro. Последние ручные clients: tester proc_58b8d09f383b, resident proc_d2df661721c0. Проверять identity/live-state перед действиями. Регистрация процессов run/PROCESSES.md. Char был пересобран и запущен после guard; map был перезапущен только для autoload test. Login/Hermes/чужие службы не перезапускались. Credentials в protected runtime profiles, не в Git.
+
+Разрешены bounded дальнейшие шаги/проверки без повторного подтверждения. Не запускать другие модели/Claude или платные LLM, не открывать порты. Сырые доказательства не публиковать. Отсутствие дальнейших тестов не закрывать green source suite.
