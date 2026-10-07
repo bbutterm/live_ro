@@ -1,0 +1,11 @@
+diff --git a/npc/scripts_custom.conf b/npc/scripts_custom.conf
+index fb46627e4..958653baa 100644
+--- a/npc/scripts_custom.conf
++++ b/npc/scripts_custom.conf
+@@ -115,3 +115,6 @@
+ // -- Custom quests from official Umbalian Quests
+ //npc: npc/custom/quests/sphinx_mask.txt
+ //npc: npc/custom/quests/umbalian_language.txt
++
++// Isolated resident witness; deployed source in live_ro/server/witness.
++npc: npc/custom/residents_witness.txt

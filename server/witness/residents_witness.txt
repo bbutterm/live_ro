@@ -1,0 +1,33 @@
+// v0: registry-filtered login/logout/loadmap and position probes.
+// Timer uses name-based lookups, never attachrid: does not interrupt player scripts.
+-	script	ResidentsWitness	-1,{
+OnInit:
+	initnpctimer;
+	end;
+OnPCLoginEvent:
+	callsub S_Record, "login", strcharinfo(0);
+	end;
+OnPCLogoutEvent:
+	callsub S_Record, "logout", strcharinfo(0);
+	end;
+OnPCLoadMapEvent:
+	callsub S_Record, "loadmap", strcharinfo(0);
+	end;
+OnTimer1000:
+	.@n = getunits(BL_PC, .@names$);
+	for (.@i=0; .@i<.@n; .@i++)
+		callsub S_Record, "pos", .@names$[.@i];
+	setnpctimer 0;
+	end;
+S_Record:
+	.@kind$ = getarg(0);
+	.@name$ = getarg(1);
+	.@cid = getcharid(0, .@name$);
+	if (!.@cid) return;
+	.@allowed = 0;
+	query_sql("SELECT COUNT(*) FROM residents.registry WHERE enabled=1 AND char_id="+.@cid, .@allowed);
+	if (!.@allowed) return;
+	if (getmapxy(.@map$, .@x, .@y, BL_PC, .@name$)) return;
+	query_sql("INSERT INTO residents.resident_events(char_id,kind,map,x,y) VALUES ("+.@cid+",'"+.@kind$+"','"+escape_sql(.@map$)+"',"+.@x+","+.@y+")");
+	return;
+}

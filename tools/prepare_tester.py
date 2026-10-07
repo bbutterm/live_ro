@@ -11,7 +11,7 @@ subprocess.run(['mariadb','ro_residents_main'],input=sql,text=True,check=True,ca
 f=p/'credentials.json';f.write_text(json.dumps(cred));f.chmod(0o600)
 shutil.copytree(ok/'control',p/'control',dirs_exist_ok=True)
 (p/'tables').mkdir(exist_ok=True);(p/'plugins').mkdir(exist_ok=True);(r/'logs/tester').mkdir(exist_ok=True)
-f=p/'tables/servers.txt';f.write_text('[ROResidentsLab]\nip 127.0.0.1\nport 6900\nmaster_version 1\nversion 20180620\nserverType kRO_RagexeRE_2018_06_20e\nserverEncoding Western\ncharBlockSize 175\npinCode 0\n');f.chmod(0o600)
+f=p/'tables/servers.txt';f.write_text('[ROResidentsLab]\nip 127.0.0.1\nport 6900\nmaster_version 1\nversion 20180620\nserverType kRO_RagexeRE_2018_06_20e\naddTableFolders kRO/RagexeRE_2018_06_21a;kRO\nserverEncoding Western\ncharBlockSize 155\npinCode 0\n');f.chmod(0o600)
 f=p/'control/config.txt';text=f.read_text();vals={'master':'ROResidentsLab','server':'0','username':cred['username'],'password':cred['password'],'char':'0','attackAuto':'0','route_randomWalk':'0','itemsTakeAuto':'0','itemsGatherAuto':'0','storageAuto':'0','sellAuto':'0','buyAuto':'0','teleportAuto_hp':'0','teleportAuto_portal':'0','secureAdminPassword':'0','adminPassword':secrets.token_hex(12),'autoMake':'0','autoTalkCont':'0','logConsole':'1'}
 for key,value in vals.items():
  pattern=r'^'+re.escape(key)+r'(?:\s+.*)?$'
