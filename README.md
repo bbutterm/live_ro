@@ -6,7 +6,7 @@
 OpenKore исполняет ограниченные навыки, rAthena подтверждает фактические игровые события, один оркестратор ведёт журнал и планы. LLM позже выбирает допустимые варианты. ACK команды — не успех в игре.
 
 ## Текущее состояние
-**Веха A: техническая приёмка 8/8 gates PASS, автономии нет.** Обычный group0 ResidentA проверен; native Tester купил банку, убил Poring, прошёл die/loadmap/relog. SELECT-only eyes/wait-event, durable reader и ресурсный замер приняты. Графический смотр владельца отдельно не выполнен; B/C/LLM не начаты. Итог [QA_A](docs/QA_A.md), предыдущие [QA_02](docs/QA_02.md)/[QA_03](docs/QA_03.md), [STATUS](docs/STATUS.md), [HANDOFF](docs/HANDOFF.md).
+**Веха A: техническая приёмка 8/8 gates PASS, автономии нет.** Обычный group0 ResidentA проверен; native Tester купил банку, убил Poring, прошёл die/loadmap/relog. SELECT-only eyes/wait-event, durable reader и ресурсный замер приняты. Графический смотр владельца отдельно не выполнен. [B-01](docs/QA_B_01.md): новый body/Unix telemetry/реальная сверка позиции, но полная B не принята. C/LLM не начаты. Итог [QA_A](docs/QA_A.md), предыдущие [QA_02](docs/QA_02.md)/[QA_03](docs/QA_03.md), [STATUS](docs/STATUS.md), [HANDOFF](docs/HANDOFF.md).
 
 Лента: `python3 tools/events.py --char ResidentA --follow --duration 300` (на лабораторном VPS, приватный reader.cnf).
 

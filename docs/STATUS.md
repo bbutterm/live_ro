@@ -1,11 +1,15 @@
-# Проверенный срез
+# Статус — 2026-10-07
 
-**Веха A: техническая приёмка PASS, 8/8 gates (включая 1б).** См. QA_A.md и ресурсные замеры RISKS.md §2.1а. Графический смотр владельца отдельно не принят.
+## A: технически принята
+8/8 gates, 16/16 tests на её срезе; native gameplay, SELECT-only eyes, SQLite5080/5080/restart0. См. QA_A.md. Личный графический смотр владельца отдельно не выполнен.
 
-- Реальные серверные действия ordinary ResidentA и native Tester: покупка, движение, relog, kill/die/loadmap.
-- SELECT-only eyes, события в порядке ID, wait-event 0/1/2, UTC-представление для фиксированного timezone стенда.
-- Durable SQLite inbox/cursor, restart/dedup/rollback/retry; явная generation и защита от MAX<cursor. Automatic high-water reset detection и consumer exactly-once не обещаны.
-- Позиционная проба 5 с с порогом >3 клетки; stationary test без новых строк.
-- Persistent witness/maps/logging реально загружены после restart.
+## B: первый рабочий срез, НЕ полная приёмка
+Явное разрешение владельца: следующие вехи самостоятельно, без вопросов, только отчёты; один исполнитель Hermes, без Claude/других coding models.
+- Новый residentBody → Unix socket0600 → durable SQLite WAL telemetry. Group0 ResidentA реально вошёл в iz_int01, HP40/40.
+- 169 telemetry за169.83s; интервал p95 1.022s, delivery lag p95 .931ms. `calcPosition` и `dest` различаются на реальном движении.
+- move18,26→24,25 выполнен обычным OpenKore CLI; witness5084 и body24,25, delta0. Это НЕ T1/travel_to через новый оркестратор.
+- Новый epoch после обычного restart; configSHA до/после совпал. 20/20 unit/source tests PASS. Подробности/ограничения: QA_B_01.md.
 
-Работа в B/C/LLM не начата. Графический вход и личный смотр нельзя заменить автоматическими проверками. Отдельные 30-минутный CPU benchmark, skill PM, телеметрия/действия/ESTOP относятся к следующим вехам.
+Остаток B: полный telemetry contract, StateStore/divergence, action journal/SkillExecutor/CLI, travel_to/whisper, idempotency, cancel/ESTOP/watchdog, recovery и T1–T13, 30мин metrics, Пронтера/межкарточные маршруты, графический смотр/видео. C и LLM не начаты. Автономного цикла/cron/dispatcher нет.
+
+Секреты/профили/БД/сырые логи вне Git. Стенд /root/ragnarok, pins/PACKETVER неизменны. При рестарте сначала проверить live процессы; register — snapshot, не доказательство текущей игры.

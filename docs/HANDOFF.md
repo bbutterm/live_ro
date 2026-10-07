@@ -1,6 +1,6 @@
 # Handoff — техническая веха A принята
 
-Читайте STATUS.md, QA_A.md, QA_02.md, QA_03.md. Исходный checklist A в docs/ro_residents_report/CHECKS.md: 8/8 gates PASS. Графический смотр владельца остаётся отдельным, не выдавать за выполненный. В B/LLM автоматически не переходить.
+Читайте STATUS.md, QA_B_01.md, QA_A.md, QA_02.md, QA_03.md. Исходный checklist A в docs/ro_residents_report/CHECKS.md: 8/8 gates PASS. Графический смотр владельца остаётся отдельным, не выдавать за выполненный. Владелец после этого явно разрешил следующие вехи самостоятельно, без вопросов, только отчёты. B-01 реализована: см. QA_B_01.md, plugins/residentBody, packages/body_gateway. Полная B/T1–T13 НЕ принята; C/LLM не запускались.
 
 Один исполнитель, без Claude/других coding models. Стенд /root/ragnarok, приватные profiles/credentials/evidence вне Git. Обычный ResidentA 150001/group0, Tester 150000/group99. Не создавать их SQL-вставками и не подменять игровые результаты.
 
