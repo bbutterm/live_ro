@@ -13,7 +13,8 @@ OpenKore исполняет ограниченные навыки, rAthena по�
 - `checks/01.py`: базовая инфраструктурная проверка; не доказывает interserver auth.
 - `checks/01b.py`: проверка свидетельств конкретного tester-прогона на лабораторных путях, не universal health check.
 - `server/schema/`, `server/witness/`, `server/patches/`: witness v0, миграция отдельной schema, config patch и минимальный char-server null-session guard.
-- `packages/witness_reader/`: bounded reader v0; durable cursor/reconnect пока отсутствуют.
+- `packages/witness_reader/`: bounded SELECT-only reader с SQLite inbox/атомарным курсором и ограниченными retries. Restart/recovery проверены; automatic source reset и timezone ещё требуют приёмки. См. [QA_03](docs/QA_03.md).
+- `server/qa/`, `checks/03_game_event.py`: вручную загружаемый LAB-сценарий и серверные gates покупки/kill/die/loadmap обычного жителя; не startup и не автономная жизнь.
 - `ops/units/`: изолированные systemd-сервисы, не включённые на загрузку ОС.
 - `vendor/`: официальные pinned submodules.
 - `docs/ro_residents_report/`: проектные критерии, не утверждение об их выполнении.

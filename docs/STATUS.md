@@ -1,20 +1,16 @@
-# Текущий проверенный срез
+# Проверенный срез
 
-Срез tester→witness→reader опубликован в f1e2bac; новые проверки описаны в QA_02.md. Это не принятие всей вехи A и не live-monitor.
+Один исполнитель. Предыдущие этапы опубликованы в 55f55eb; текущий следующий срез — QA_03.md. Это не приёмка всей вехи A.
 
 ## Принято
-- Tester150000 group99: создание протоколом, вход и движение20,26→22,26; серверные logout/login; SELECT-only reader. 7 source/unit tests PASS.
-- ResidentA150001 group0: создан протоколом, вошёл; до registry COUNT events=0; после registry серверные pos20,26→21,25→24,25; logout/login24,25. Отдельный ручной профиль, без LLM/автоохоты.
-- Crash воспроизведён под gdb, локализован до char_packet_db.handle(fd,*sd) при nullptr. Отдельный wire-repro RED до patch, GREEN после. Пересобран только char. Исходный upstream pin тот же, **минимальный core patch сохранён отдельно**.
-- Witness автозагрузился после настоящего map-server restart: новый лог содержит имя скрипта и Map Server online; появились свежие pos ResidentA с id выше дорестартового baseline. Клиент переподключился.
-- Reader получил реальные события обычного жителя в evidence/01b/resident-reader.jsonl. Пользователь имеет только SELECT; DELETE probe отклонён.
+- Tester и обычный ResidentA(group0): протокольное создание/вход/движение/relog, registry negative/positive. SELECT-only reader и denied-write probe — предыдущий этап QA_02.
+- Null-session crash RED→GREEN; отдельный core guard, char пересобран. Witness autoload после настоящего map restart принят ранее.
+- QA_03: покупка одной банки501 за50 зени, persisted450 зени/1 банка; серверные kill3328(Poring1002), loadmap3402(guild_vs1), die3431. Стартовый grant500 — fixture, не игровой заработок. SQL не подменял игровые действия.
+- Исправлен witness INSERT: a1/a2 по установленной схеме; записи после исправления восстановлены и бой повторён.
+- Reader durable SQLite inbox + атомарный cursor, отдельные CLI restarts без replay, реальные боевые события в inbox. Ограниченные retries, реальное восстановление недоступного defaults file; cursor сохраняется при исчерпании retries.
 
 ## Не принято
-Покупка/picklog, kill/die/loadmap. Наличие loadmap handler само по себе не тест, нужны loadevent mapflags. Durable cursor, reconnect/backoff, source reset и нормализация timezone reader ещё отсутствуют. Графический клиент, видео и автономия не проверены. Нет оркестратора или LLM.
+Полная объединённая веха-A приёмка, PM/прочие gates исходного контракта, automatic epoch/reset detection, timezone normalization, downstream ACK/consumer, sustained resource/retention limits. loadevent проверен только на двух QA-картах. 1Hz position probe остаётся диагностическим: перед постоянным населением нужен change detection/heartbeat. Графический клиент, автономия, оркестратор и LLM не запущены.
 
-## Evidence и воспроизводимость
-Сырые логи/DB/credentials только на VPS. evidence/01b: char-crash.log, unauth-red.txt, unauth-green.txt, resident-unregistered.txt, resident-reader.jsonl, autoload.json; debugger stack в logs/char-gdb.log.
-
-Source содержит server/patches/char-null-session.patch и witness-autoload.patch. Submodule SHA без этих patches не эквивалент deployed runtime. См. server/patches/README.md. Универсального installer нет. Скрипты provisioning одноразовые и намеренно отказывают при существующих аккаунтах/схемах.
-
-Веха A частично выполнена. Один исполнитель, внешние модели не запускались; issues не закрыты.
+## Evidence
+QA_02.md и QA_03.md — описание source/runtime gates. Raw logs/defaults/SQLite/JSONL только локально. Скрипты provisioning — одноразовые; fixture03 загружается вручную, не startup. Core patch и autoload patch сохраняются отдельно от upstream pin. GitHub CI workflow не включён из-за ранее выявленных прав; local tests не выдаются за CI.

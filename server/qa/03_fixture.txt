@@ -1,0 +1,29 @@
+// LAB ONLY: loaded manually, never included in normal startup.
+// Initial money/item are fixtures, NOT earned rewards or evidence of purchase.
+iz_int01	mapflag	loadevent
+guild_vs1	mapflag	loadevent
+iz_int01,24,29,4	shop	ResidentQA_Shop	4_F_KAFRA1,501:50
+iz_int01,23,29,4	script	ResidentQA_Guide	4_M_01,{
+	if (strcharinfo(0)!="ResidentA") close;
+	mes "LAB QA fixture: initial grant is not an earned reward.";
+	switch(select("Fixture:Travel:Spawn Poring:Spawn threat:Return")) {
+	case 1:
+		if (!qa03_fixture) { Zeny += 500; getitem 1201,1; qa03_fixture=1; }
+		close;
+	case 2:
+		close2;
+		warp "guild_vs1",50,50;
+		end;
+	case 3:
+		monster "guild_vs1",53,50,"QA Poring",1002,1;
+		close;
+	case 4:
+		monster "guild_vs1",51,50,"QA Threat",1046,1;
+		close;
+	case 5:
+		close2;
+		warp "iz_int01",24,25;
+		end;
+	}
+}
+guild_vs1,50,48,4	duplicate(ResidentQA_Guide)	ResidentQA_Arena	4_M_01
