@@ -1,6 +1,6 @@
 run/
 logs/
-evidence/
+/evidence/
 artifacts/
 research/
 .env

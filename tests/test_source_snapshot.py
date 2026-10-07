@@ -18,6 +18,13 @@ class SourceSnapshot(unittest.TestCase):
             line = subprocess.check_output(['git', 'ls-files', '--stage', path], cwd=ROOT, text=True)
             self.assertIn('160000 ' + sha, line)
 
+    def test_evidence_module_not_ignored_but_runtime_is(self):
+        for path in ('packages/evidence/example.py', 'tests/evidence/test_example.py'):
+            result = subprocess.run(['git', 'check-ignore', '--no-index', path], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1, result.stdout)
+        result = subprocess.run(['git', 'check-ignore', '--no-index', 'evidence/runtime.txt'], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0)
+
     def test_no_runtime_in_index(self):
         names = subprocess.check_output(['git', 'ls-files'], cwd=ROOT, text=True).splitlines()
         for name in names:
