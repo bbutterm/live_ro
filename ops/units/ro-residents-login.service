@@ -1,0 +1,23 @@
+[Unit]
+Description=Ragnarok residents isolated login server
+After=mariadb.service
+
+[Service]
+Type=simple
+User=ro-residents
+Group=ro-residents
+WorkingDirectory=/root/ragnarok/repos/rathena
+ExecStart=/root/ragnarok/repos/rathena/login-server
+Restart=no
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/ragnarok/repos/rathena/log
+InaccessiblePaths=/root/.hermes
+CapabilityBoundingSet=
+MemoryMax=900M
+TasksMax=64
+StandardOutput=append:/root/ragnarok/logs/login-server.log
+StandardError=append:/root/ragnarok/logs/login-server.log
+TimeoutStopSec=30
