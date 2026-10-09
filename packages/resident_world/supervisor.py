@@ -51,7 +51,7 @@ def clear_chat_goal(d,task_id):
 def brain(r):
     d=STATE/r['resident_id'];sock=str(d/'actions.sock.control');pending=None;retry=0;last=None
     from packages.resident_world.chat import start_listener
-    listener=start_listener(r) if 'name' in r and 'char_id' in r else None
+    listener=start_listener(r) if config().get('chat_service')!='standalone' and 'name' in r and 'char_id' in r else None
     mind=None
     if config().get('llm',{}).get('enabled') and 'name' in r and 'char_id' in r:
         try:

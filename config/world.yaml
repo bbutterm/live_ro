@@ -5,6 +5,7 @@
   "brain_python": "/opt/ro-residents/world-venv/bin/python",
   "llm_timeout_seconds": 20,
   "chat_radius": 14,
+  "chat_service": "standalone",
   "residents": [
     {"resident_id":"resident_a","name":"ResidentA","char_id":150001,"profile":"/root/ragnarok/run/Demo/resident_a","enabled":true},
     {"resident_id":"resident_b","name":"Mira","char_id":150002,"profile":"/root/ragnarok/run/Demo/resident_b","enabled":true},

@@ -1,6 +1,24 @@
 import unittest, tempfile, pathlib, time
 
 class ChatTests(unittest.TestCase):
+    def test_standalone_chat_survives_brain_lifecycle_without_duplicate_listener(self):
+        from packages.resident_world import supervisor
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            d=pathlib.Path(tmp);(d/'STOP').touch()
+            c={'chat_service':'standalone','llm':{'enabled':False}}
+            with patch.object(supervisor,'STATE',d),patch.object(supervisor,'config',return_value=c),patch('packages.resident_world.chat.start_listener') as start:
+                supervisor.brain({'resident_id':'r','name':'Mira','char_id':2})
+                start.assert_not_called()
+
+    def test_standalone_service_restarts_if_a_listener_dies(self):
+        from packages.resident_world import chat,supervisor
+        from unittest.mock import patch,Mock
+        with tempfile.TemporaryDirectory() as tmp:
+            thread=Mock();thread.is_alive.return_value=False
+            with patch.object(supervisor,'STATE',pathlib.Path(tmp)),patch.object(supervisor,'config',return_value={'residents':[{'name':'Mira','enabled':True}]}),patch.object(chat,'start_listener',return_value=thread):
+                with self.assertRaisesRegex(RuntimeError,'CHAT_LISTENER_DIED'):chat.serve()
+
     def test_named_or_nearest_one_resident_and_whispers(self):
         from packages.resident_world.chat import select_responder
         residents=[{'name':'Mira','char_id':2,'resident_id':'b'}, {'name':'Borin','char_id':3,'resident_id':'c'}]

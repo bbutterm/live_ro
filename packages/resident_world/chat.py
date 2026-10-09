@@ -155,8 +155,8 @@ def handle(event,r,c,store,model=None):
 
 
 def start_listener(r):
-    import threading,time,logging
-    from .supervisor import STATE,config
+    import threading,time,logging,os
+    from .supervisor import STATE,config,atomic
     def listen():
         store=ChatStore(STATE/'chat.sqlite');c=config();model=None
         if c.get('llm',{}).get('enabled'):
@@ -165,6 +165,7 @@ def start_listener(r):
                 model=Mind(r,STATE/r['resident_id'],c).respond
             except Exception:pass
         (STATE/r['resident_id']/'CHAT_PENDING').unlink(missing_ok=True)
+        atomic(STATE/r['resident_id']/'chat-ready.json',{'pid':os.getpid(),'at':time.time()})
         while not (STATE/'STOP').exists():
             try:
                 ingest(store,c)
@@ -174,3 +175,18 @@ def start_listener(r):
                 logging.getLogger('world').warning('chat listener %s: %s',r['name'],type(error).__name__)
             time.sleep(.2)
     thread=threading.Thread(target=listen,name='chat-'+r['name'],daemon=True);thread.start();return thread
+
+
+def serve():
+    import time,os,fcntl
+    from .supervisor import STATE,config
+    os.umask(0o077)
+    with (STATE/'chat-service.lock').open('a') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        threads=[start_listener(r) for r in config()['residents'] if r.get('enabled',True)]
+        while not (STATE/'STOP').exists():
+            if not all(t.is_alive() for t in threads):raise RuntimeError('CHAT_LISTENER_DIED')
+            time.sleep(.2)
+
+
+if __name__=='__main__':serve()
