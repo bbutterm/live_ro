@@ -1,8 +1,18 @@
 """Durable city visits only when the model has declined a goal; no paid calls."""
 from .skills import witness_at
+from packages.resident_demo.life_cycle import LOOT
 
 def city_goal(status,state,now,c):
     t=status.get('telemetry') or {}
+    # The shop cannot reduce weight outside its fixed sale whitelist. Do not
+    # alternate shop/field forever or request rest with regeneration disabled.
+    if (not t.get('dead') and t.get('weight',0)>t.get('weight_max',100000)*.8
+        and not any(t.get('inventory',{}).get(k,0)>0 for k in LOOT)):
+        point=c.get('places',{}).get('fountain')
+        if not point:return None
+        if not witness_at(status,point,now):
+            return {'action':'walk_to','args':{'place':'fountain'},'reason':'Иду в безопасный город: магазин не снимает этот перевес'}
+        return {'action':'idle','args':{'minutes':5},'reason':'Безопасная пауза: перевес без разрешённой добычи для продажи'}
     if (t.get('dead') or t.get('hp',0)*100<max(1,t.get('hp_max',0))*60
         or t.get('map')=='prt_in' or t.get('inventory',{}).get('501',0)<3
         or t.get('weight',0)>t.get('weight_max',100000)*.8):return None

@@ -2,6 +2,27 @@ import unittest
 from packages.resident_world.supervisor import fallback
 
 class FallbackLifeTests(unittest.TestCase):
+    def test_unserviceable_weight_waits_safely_in_city_instead_of_shop_field_loop(self):
+        from packages.resident_world.fallback_life import city_goal,completed
+        c={'places':{'fountain':{'map':'prontera','x':156,'y':191}}}
+        t={'hp':100,'hp_max':100,'map':'prt_in','weight':2879,'weight_max':3550,'inventory':{'501':20,'1202':26}}
+        s={'telemetry':t,'age':1,'projection':{}}
+        state={'next_city_at':1000}
+        self.assertEqual(city_goal(s,state,100,c)['action'],'walk_to')
+        t['map']='prontera'
+        s['projection']={'server_map':{'value':'prontera'},'server_pos':{'ts':101,'value':{'x':156,'y':191}}}
+        goal=city_goal(s,state,101,c)
+        self.assertEqual(goal['action'],'idle')
+        completed(state,goal,'done',401)
+        s['projection']['server_pos']['ts']=402
+        self.assertEqual(city_goal(s,state,402,c)['action'],'idle')
+        t['hp']=10
+        self.assertEqual(city_goal(s,state,402,c)['action'],'idle')
+        t['inventory']['909']=1
+        self.assertIsNone(city_goal(s,state,402,c))
+        del t['inventory']['909'];t['dead']=True
+        self.assertIsNone(city_goal(s,state,402,c))
+
     def test_chat_interrupt_resumes_rest_without_repeating_greeting(self):
         from packages.resident_world.fallback_life import city_goal,completed
         c={'places':{'fountain':{'map':'prontera','x':156,'y':191}}}
