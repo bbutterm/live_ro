@@ -130,8 +130,10 @@ def handle(event,r,c,store,model=None):
     started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+10}
     try:
         s=request(str(d/'actions.sock.control'),{'op':'status'})
-        decision=validate_reply(fallback_reply(r['name'],event,s),event,c,s)
-        if model is not None:
+        from .memory import day_decision
+        daily=day_decision(r,event,d)
+        decision=validate_reply(daily or fallback_reply(r['name'],event,s),event,c,s)
+        if model is not None and daily is None:
             decision=model(event,s,decision)
         # The same resident writer owns speech and its persisted movement commitment.
         while time.time()<event['ts']+8:
