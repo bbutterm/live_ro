@@ -50,7 +50,11 @@ def follow_verified(samples):return bool(samples) and sum(bool(p.get('near')) fo
 
 def execution_deadline(action,started):return started+(60 if action=='walk_to' else 1200)
 
-def retry_allowed(action,attempt,result):return action in REVERSIBLE and attempt<3 and result!='done'
+def retry_allowed(action,attempt,result):return action in REVERSIBLE and attempt<3 and result not in ('done','failed(CHAT_INTERRUPT)')
+
+def interrupted(task,skill,d):
+    return task.get('origin')!='chat' and skill not in ('buy_potions','sell_loot') and (d/'CHAT_PENDING').exists()
+
 
 def native_plan(action,args,c):
     if action=='walk_to':return dict(skill='travel_to',params=dict(c['places'][args['place']],r=3),timeout=55)
@@ -64,7 +68,7 @@ def native_plan(action,args,c):
     raise ValueError('COMPOSITE_ACTION')
 
 @contextlib.contextmanager
-def manual(r):
+def manual(r,wait_limit=None):
     d=STATE/r['resident_id'];lock=(d/'manual.lock').open('a')
     fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     flag=d/'MANUAL';atomic(flag,{'pid':os.getpid(),'expires':time.time()+7200})
@@ -73,12 +77,16 @@ def manual(r):
         time.sleep(.6)
         sock=str(d/'actions.sock.control');s=request(sock,{'op':'status'})
         for a in s['actions']:
+            if wait_limit is not None and a['skill'] in ('buy_potions','sell_loot'):raise BlockingIOError('ECONOMIC_ACTION_IN_FLIGHT')
             if a['skill'] not in ('buy_potions','sell_loot'):request(sock,{'op':'cancel','action_id':a['action_id']})
             end=time.monotonic()+max(5,a['deadline']-time.time()+65)
+            if wait_limit is not None:end=min(end,time.monotonic()+wait_limit)
             while time.monotonic()<end:
                 if request(sock,{'op':'action','action_id':a['action_id']})['state'] in TERMINAL:break
                 time.sleep(.25)
-            else:raise RuntimeError('EXISTING_ACTION_UNRESOLVED')
+            else:
+                if wait_limit is not None:raise BlockingIOError('EXISTING_ACTION_UNRESOLVED')
+                raise RuntimeError('EXISTING_ACTION_UNRESOLVED')
         yield d,sock
     finally:
         flag.unlink(missing_ok=True);lock.close()
@@ -92,6 +100,9 @@ def run_native(sock,plan,key,task,d):
     task['native_action']=a['action_id'];atomic(d/'manual_task.json',task)
     end=min(time.monotonic()+timeout+65,time.monotonic()+remaining)
     while time.monotonic()<end:
+        if interrupted(task,plan['skill'],d):
+            request(sock,{'op':'cancel','action_id':a['action_id']})
+            return 'failed(CHAT_INTERRUPT)'
         a=request(sock,{'op':'action','action_id':a['action_id']})
         result=outcome(a)
         if result is not None:
@@ -130,6 +141,7 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         request(sock,{'op':'safe_stop'});time.sleep(.5)
         start=time.time();end=time.monotonic()+args['minutes']*60
         while time.monotonic()<end:
+            if interrupted(task,action,d):return 'failed(CHAT_INTERRUPT)'
             s=request(sock,{'op':'status'});p=s.get('projection',{}).get('server_pos',{})
             if s.get('age') is None or s['age']>4 or time.time()-p.get('ts',0)>15:return 'failed(STALE_WITNESS)'
             if s.get('telemetry',{}).get('mode')!='IDLE_SAFE':return 'failed(IDLE_NOT_SAFE)'
@@ -141,6 +153,7 @@ def execute_native_menu(action,args,c,sock,key,task,d):
     if action=='follow':
         end=time.monotonic()+args['minutes']*60;proof=[]
         while time.monotonic()<end:
+            if interrupted(task,action,d):return 'failed(CHAT_INTERRUPT)'
             s=request(sock,{'op':'status'});t=s.get('telemetry') or {}
             now=time.time()
             if s.get('age') is None or s['age']>4:return 'failed(STALE_BODY)'

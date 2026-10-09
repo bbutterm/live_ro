@@ -32,11 +32,11 @@ class DailyBudget:
                 return len(old['reservations'])
             except (OSError,ValueError,KeyError,TypeError,ArithmeticError) as error:raise BudgetStop('DAILY_RESERVATION_DENIED') from error
 
-def world_snapshot(cfg,key):
+def world_snapshot(cfg,key,timeout=8):
     if cfg['base_url'].rstrip('/')!='https://openrouter.ai/api/v1':raise BudgetStop('UNAPPROVED_ENDPOINT')
     def get(route):
         req=urllib.request.Request(cfg['base_url'].rstrip('/')+route,headers={'Authorization':'Bearer '+key})
-        with urllib.request.urlopen(req,timeout=8) as response:return json.load(response)['data']
+        with urllib.request.urlopen(req,timeout=timeout) as response:return json.load(response)['data']
     try:
         account=get('/key');model=next(m for m in get('/models') if m['id']==cfg['model'])
         return account['usage'],model['pricing'],account['usage_daily']

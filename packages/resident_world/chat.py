@@ -1,0 +1,174 @@
+"""Server-observed incoming speech; one spatially selected responder, no name allowlist."""
+import re,json,sqlite3
+from .supervisor import online
+ALIASES={'Mira':('мира','миру','mira'), 'Borin':('борин','борина','borin'), 'ResidentA':('residenta','резидент','резидента')}
+
+def select_responder(event,residents,states,now,radius=14):
+    eligible=[]
+    for r in residents:
+        s=states.get(r['resident_id'],{})
+        if not r.get('enabled',True) or r['char_id']==event['char_id'] or not online(s,now):continue
+        if event.get('type')=='W':
+            if event.get('to')==r['name']:return r
+            continue
+        proj=s['projection'];pos=proj['server_pos']['value']
+        if proj['server_map']['value']!=event['map']:continue
+        distance=max(abs(pos['x']-event['x']),abs(pos['y']-event['y']))
+        if distance<=radius:eligible.append((distance,r))
+    if not eligible:return None
+    mentioned=[]
+    for r in residents:
+        for alias in ALIASES.get(r['name'],(r['name'],)):
+            match=re.search(r'(?<!\w)'+re.escape(alias)+r'(?!\w)',event['text'],re.I)
+            if match:mentioned.append((match.start(),r['name']))
+    if mentioned:
+        addressed=min(mentioned)[1]
+        return next((r for _,r in eligible if r['name']==addressed),None)
+    return min(eligible,key=lambda pair:(pair[0],pair[1]['name']))[1]
+
+class ChatStore:
+    def __init__(self,path):
+        self.db=sqlite3.connect(path,timeout=2)
+        self.db.execute('PRAGMA journal_mode=WAL');self.db.execute('PRAGMA synchronous=FULL')
+        self.db.executescript('CREATE TABLE IF NOT EXISTS inbox(id INTEGER PRIMARY KEY,payload TEXT,resident TEXT,status TEXT,claimed REAL,result TEXT); CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value REAL);')
+    def get(self,key,default=0):
+        row=self.db.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone()
+        return row[0] if row else default
+    def put(self,key,value):self.db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',(key,value))
+    def enqueue(self,event,resident,is_resident,now):
+        with self.db:
+            self.db.execute('BEGIN IMMEDIATE')
+            if self.db.execute('SELECT 1 FROM inbox WHERE id=?',(event['id'],)).fetchone():return False
+            chain=self.get('chain')+1 if is_resident else 0
+            self.put('chain',chain)
+            status='queued' if resident and now-event['ts']<=10 and (not is_resident or chain<=4) else 'ignored'
+            self.db.execute('INSERT INTO inbox VALUES(?,?,?,?,NULL,NULL)',(event['id'],json.dumps(event,ensure_ascii=False),resident,status))
+            self.put('cursor',event['id']);return status=='queued'
+    def claim(self,name,now):
+        with self.db:
+            self.db.execute('BEGIN IMMEDIATE')
+            self.db.execute("UPDATE inbox SET status='expired' WHERE status='queued' AND json_extract(payload,'$.ts')<?",(now-10,))
+            if self.db.execute('SELECT COUNT(*) FROM inbox WHERE resident=? AND claimed>?',(name,now-60)).fetchone()[0]>=6:return None
+            row=self.db.execute("SELECT id,payload FROM inbox WHERE resident=? AND status='queued' ORDER BY id LIMIT 1",(name,)).fetchone()
+            if not row:return None
+            self.db.execute("UPDATE inbox SET status='claimed',claimed=? WHERE id=?",(now,row[0]));return json.loads(row[1])
+    def finish(self,event_id,result):
+        with self.db:self.db.execute("UPDATE inbox SET status='finished',result=? WHERE id=?",(json.dumps(result,ensure_ascii=False),event_id))
+
+
+def fallback_reply(name,event,state):
+    text=event['text'].lower();base={'reason':'Ответ на услышанную реплику'}
+    visible={p['name'] for p in (state.get('telemetry') or {}).get('nearby_players',[])}
+    if re.search(r'пойд[её]м со мной|иди за мной|следуй за мной',text) and event['name'] in visible:
+        return dict(base,action='follow',args={'player':event['name'],'minutes':3},say='Пойдём, буду рядом.')
+    if re.search(r'фонтан',text) and re.search(r'встрет|пойд|иди|приход',text):
+        for peer,aliases in ALIASES.items():
+            if peer!=name and any(re.search(r'(?<!\w)'+re.escape(a)+r'(?!\w)',text) for a in aliases):
+                return dict(base,action='meet',args={'resident':peer,'place':'fountain'},say='Встретимся у фонтана.')
+        return dict(base,action='walk_to',args={'place':'fountain'},say='Иду к фонтану.')
+    phrase='Привет! Как твои дела?' if 'привет' in text else 'Я '+name+'. Живу здесь: охочусь, гуляю и отдыхаю.' if 'кто ты' in text else 'Слышу тебя. Сейчас я рядом.'
+    if event.get('type')=='W':return dict(base,action='whisper',args={'to':event['name'],'text':phrase})
+    return dict(base,action='say',args={'text':phrase})
+
+
+def validate_reply(d,event,c,s):
+    from .mind import validate_decision
+    validate_decision(d,c,s)
+    if d['action'] not in ('say','whisper','follow','walk_to','meet'):raise ValueError('NOT_A_CHAT_REPLY')
+    if d['action'] in ('say','whisper') and d.get('say'):raise ValueError('DOUBLE_REPLY')
+    if d['action'] in ('follow','whisper') and d['args'].get('player',d['args'].get('to'))!=event['name']:raise ValueError('WRONG_CHAT_TARGET')
+    if d['action'] not in ('say','whisper') and not d.get('say'):raise ValueError('MISSING_CHAT_REPLY')
+    return d
+
+
+def meeting_protocol(event,task):
+    if task.get('action')!='meet':return False
+    label='у фонтана' if task.get('args',{}).get('place')=='fountain' else 'в таверне'
+    return event['text'] in ('Предлагаю встречу '+label+'.','Договорились: встреча '+label+'.')
+
+def ingest(store,c):
+    import time,fcntl
+    from .supervisor import STATE
+    from packages.body_gateway.cli import request
+    from tools.events import query,DEFAULTS
+    with (STATE/'chat-poll.lock').open('a') as lock:
+        try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:return
+        if time.time()-store.get('last_poll')<.4:return
+        cursor=int(store.get('cursor',-1))
+        if cursor<0:
+            cursor=int(query(DEFAULTS,'SELECT COALESCE(MAX(id),0) FROM ro_residents_logs.chatlog').strip())
+            with store.db:store.put('cursor',cursor)
+        raw=query(DEFAULTS,f"SELECT JSON_OBJECT('id',l.id,'ts',UNIX_TIMESTAMP(l.time),'name',c.name,'char_id',l.src_charid,'type',l.type,'to',l.dst_charname,'map',l.src_map,'x',l.src_map_x,'y',l.src_map_y,'text',l.message) FROM ro_residents_logs.chatlog l JOIN ro_residents_main.`char` c ON c.char_id=l.src_charid WHERE l.id>{cursor} AND l.type IN ('O','W') ORDER BY l.id LIMIT 100")
+        rows=[json.loads(line) for line in raw.splitlines() if line]
+        states={}
+        if rows:
+            for r in c['residents']:
+                try:states[r['resident_id']]=request(str(STATE/r['resident_id']/'actions.sock.control'),{'op':'status'})
+                except (OSError,RuntimeError,ValueError):pass
+        ids={r['char_id'] for r in c['residents']}
+        for event in rows:
+            internal=False
+            source=next((r for r in c['residents'] if r['char_id']==event['char_id']),None)
+            if source:
+                try:
+                    task=json.loads((STATE/source['resident_id']/'manual_task.json').read_text())
+                    internal=task.get('started',0)<=event['ts']+1<=task.get('ended',time.time())+2 and meeting_protocol(event,task)
+                except (OSError,ValueError):pass
+            responder=None if internal else select_responder(event,c['residents'],states,time.time(),c.get('chat_radius',14))
+            store.enqueue(event,responder['name'] if responder else None,event['char_id'] in ids,time.time())
+        with store.db:store.put('last_poll',time.time())
+
+
+def handle(event,r,c,store,model=None):
+    import time
+    from .supervisor import STATE,atomic
+    from .skills import manual,run_native
+    from .mind import record
+    from packages.body_gateway.cli import request
+    d=STATE/r['resident_id'];marker=d/'CHAT_PENDING';atomic(marker,{'id':event['id']})
+    started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+10}
+    try:
+        s=request(str(d/'actions.sock.control'),{'op':'status'})
+        decision=validate_reply(fallback_reply(r['name'],event,s),event,c,s)
+        if model is not None:
+            decision=model(event,s,decision)
+        # The same resident writer owns speech and its persisted movement commitment.
+        while time.time()<event['ts']+8:
+            try:
+                with manual(r,wait_limit=2) as (d,sock):
+                    phrase=decision['args'].get('text',decision.get('say',''))
+                    skill='whisper' if decision['action']=='whisper' else 'say'
+                    params={'to_name':event['name'],'text':phrase} if skill=='whisper' else {'text':phrase}
+                    task['decision']=decision
+                    if decision['action'] not in ('say','whisper'):
+                        atomic(d/'chat-goal.json',{'id':task['id'],'event_id':event['id'],'decision':decision,'at':time.time()})
+                    result=run_native(sock,{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,d)
+                    task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
+                    record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,seconds=time.time()-event['ts'])
+                    return
+            except BlockingIOError:time.sleep(.1)
+        store.finish(event['id'],{'outcome':'failed(WRITER_BUSY)'})
+    finally:marker.unlink(missing_ok=True)
+
+
+def start_listener(r):
+    import threading,time,logging
+    from .supervisor import STATE,config
+    def listen():
+        store=ChatStore(STATE/'chat.sqlite');c=config();model=None
+        if c.get('llm',{}).get('enabled'):
+            try:
+                from .mind import Mind
+                model=Mind(r,STATE/r['resident_id'],c).respond
+            except Exception:pass
+        (STATE/r['resident_id']/'CHAT_PENDING').unlink(missing_ok=True)
+        while not (STATE/'STOP').exists():
+            try:
+                ingest(store,c)
+                event=store.claim(r['name'],time.time())
+                if event:handle(event,r,c,store,model)
+            except Exception as error:
+                logging.getLogger('world').warning('chat listener %s: %s',r['name'],type(error).__name__)
+            time.sleep(.2)
+    thread=threading.Thread(target=listen,name='chat-'+r['name'],daemon=True);thread.start();return thread

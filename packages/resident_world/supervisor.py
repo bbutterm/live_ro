@@ -42,8 +42,16 @@ def atomic(path,value):
 
 def config():return json.loads((ROOT/'config/world.yaml').read_text())
 
+def clear_chat_goal(d,task_id):
+    with (d/'manual.lock').open('a') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX)
+        p=d/'chat-goal.json'
+        if p.exists() and json.loads(p.read_text()).get('id')==task_id:p.unlink()
+
 def brain(r):
     d=STATE/r['resident_id'];sock=str(d/'actions.sock.control');pending=None;retry=0;last=None
+    from packages.resident_world.chat import start_listener
+    listener=start_listener(r) if 'name' in r and 'char_id' in r else None
     mind=None
     if config().get('llm',{}).get('enabled') and 'name' in r and 'char_id' in r:
         try:
@@ -55,6 +63,17 @@ def brain(r):
         old=json.loads((d/'brain.json').read_text());pending=old.get('pending')
     while not (STATE/'STOP').exists():
         try:
+            if (d/'CHAT_PENDING').exists():time.sleep(.1);continue
+            chat_goal=d/'chat-goal.json'
+            if chat_goal.exists():
+                from packages.resident_world.skills import execute
+                from packages.resident_world.mind import record
+                proposal=json.loads(chat_goal.read_text());goal=proposal['decision']
+                result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'])
+                record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal['event_id'],task=result)
+                clear_chat_goal(d,proposal['id']);pending=None;retry=time.time()+5;continue
+            hold=d/'BRAIN_HOLD'
+            if hold.exists() and json.loads(hold.read_text()).get('expires',0)>time.time():time.sleep(.2);continue
             lease=d/'MANUAL'
             if lease.exists():
                 try:
@@ -74,6 +93,7 @@ def brain(r):
                 pending=s['actions'][0]['action_id'];continue
             if mind is not None and not t.get('dead') and online(s,time.time()):
                 proposal=mind.choose(s)
+                if (d/'CHAT_PENDING').exists() or (d/'chat-goal.json').exists():time.sleep(.1);continue
                 if proposal:
                     from packages.resident_world.skills import execute
                     goal=proposal['decision']
