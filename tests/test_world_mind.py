@@ -1,6 +1,20 @@
 import unittest,tempfile,pathlib,json
 
 class WorldMindTests(unittest.TestCase):
+    def test_budget_pause_refreshes_witness_memory_without_model_call(self):
+        from packages.resident_world import mind
+        from unittest.mock import Mock,patch
+        with tempfile.TemporaryDirectory() as tmp:
+            m=mind.Mind.__new__(mind.Mind);m.d=pathlib.Path(tmp);m.path=m.d/'model-intent.json'
+            m.r={'name':'Mira','char_id':2};m.next_call=200;m._complete=Mock()
+            with patch.object(mind.time,'time',return_value=100),patch('packages.resident_world.memory.refresh') as refresh:
+                self.assertIsNone(m.choose({}))
+                refresh.assert_called_once_with(m.r,m.d)
+            m._complete.assert_not_called()
+            with patch.object(mind.time,'time',return_value=100),patch('packages.resident_world.memory.refresh',side_effect=RuntimeError('witness unavailable')):
+                self.assertIsNone(m.choose({}))
+            m._complete.assert_not_called()
+
     def test_meeting_schema_is_bounded_and_counter_requires_another_place(self):
         from packages.resident_world.meeting import validate_vote
         c={'places':{'fountain':{},'field':{}}}
