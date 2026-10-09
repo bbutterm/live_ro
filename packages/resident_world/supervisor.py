@@ -48,6 +48,13 @@ def brain(r):
         old=json.loads((d/'brain.json').read_text());pending=old.get('pending')
     while not (STATE/'STOP').exists():
         try:
+            lease=d/'MANUAL'
+            if lease.exists():
+                try:
+                    owner=json.loads(lease.read_text())
+                    os.kill(int(owner['pid']),0)
+                    if owner['expires']>time.time():time.sleep(.2);continue
+                except (OSError,ValueError,KeyError,TypeError):pass
             s=request(sock,{'op':'status'})
             if pending:
                 a=request(sock,{'op':'action','action_id':pending})
@@ -59,9 +66,11 @@ def brain(r):
             if s['actions']:
                 pending=s['actions'][0]['action_id'];continue
             intent=fallback(t)
-            # Journal plans before dispatch; never blindly resend economic intents.
-            a=request(sock,dict(op='run',skill=intent['skill'],params=intent['params'],deadline=intent['timeout']))
-            pending=a['action_id'];atomic(d/'brain.json',dict(pending=pending,activity=intent['skill'],reason=intent['reason'],last=last,at=time.time()))
+            # Serialize dispatch with the manual writer, including the RPC reply.
+            with (d/'manual.lock').open('a') as writer:
+                fcntl.flock(writer,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                a=request(sock,dict(op='run',skill=intent['skill'],params=intent['params'],deadline=intent['timeout']))
+                pending=a['action_id'];atomic(d/'brain.json',dict(pending=pending,activity=intent['skill'],reason=intent['reason'],last=last,at=time.time()))
         except (OSError,RuntimeError,ValueError,KeyError,TypeError):
             retry=time.time()+5
             time.sleep(.5)

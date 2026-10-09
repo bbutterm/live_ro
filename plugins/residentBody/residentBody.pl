@@ -55,9 +55,14 @@ sub pollRest{
  }
  $char->sendSit()unless$char->{sitting};
 }
+sub nearbyFrame{
+ my$list=eval{$Globals::playersList->getItems()}//[];my@seen;
+ for my$actor(@$list){next unless$actor&&defined$actor->{name}&&($actor->{pos_to}||$actor->{pos});my$p=calcPosition($actor);push@seen,{name=>$actor->{name},pos=>{x=>0+$p->{x},y=>0+$p->{y}}};last if@seen>=40}
+ return\@seen;
+}
 sub telemetryFrame{
  my$p=calcPosition($char);
- return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
+ return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),nearby_players=>nearbyFrame(),base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
 }
 sub sendFrame{
  return 0 unless$connection;my$bytes=encode_json($_[0])."\n";my$n=send($connection,$bytes,MSG_NOSIGNAL|MSG_DONTWAIT);
