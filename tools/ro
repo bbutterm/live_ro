@@ -1,0 +1,3 @@
+#!/bin/sh
+cd /root/ragnarok/repos/live_ro || exit 1
+exec /usr/bin/python3 -m packages.resident_world.cli "$@"

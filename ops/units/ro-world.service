@@ -1,0 +1,19 @@
+[Unit]
+Description=Persistent RO resident world
+After=ro-residents-map.service mariadb.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/ragnarok/repos/live_ro
+ExecStart=/usr/bin/python3 -m packages.resident_world.supervisor
+Restart=always
+RestartSec=10
+KillMode=control-group
+TimeoutStopSec=2
+StateDirectory=ro-world
+StateDirectoryMode=0700
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+{
+  "state_dir": "/var/lib/ro-world",
+  "daily_llm_usd": 2,
+  "llm_timeout_seconds": 20,
+  "chat_radius": 14,
+  "residents": [
+    {"resident_id":"resident_a","name":"ResidentA","char_id":150001,"profile":"/root/ragnarok/run/Demo/resident_a","enabled":true},
+    {"resident_id":"resident_b","name":"Mira","char_id":150002,"profile":"/root/ragnarok/run/Demo/resident_b","enabled":true},
+    {"resident_id":"resident_c","name":"Borin","char_id":150003,"profile":"/root/ragnarok/run/Demo/resident_c","enabled":true}
+  ],
+  "places": {"fountain":{"map":"prontera","x":156,"y":191},"field":{"map":"prt_fild08","x":170,"y":240}}
+}

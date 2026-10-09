@@ -7,7 +7,7 @@ from tools.events import DEFAULTS,get_events,query
 
 def serve(path,store,resident,char_id,char_name,duration,witness=True):
  path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True,mode=0o700);store=pathlib.Path(store);store.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
- os.umask(0o077);j=Journal(str(store));sel=selectors.DefaultSelector();listeners={};peers={};body=None;outbox=bytearray();deadline=time.monotonic()+duration;last_poll=0;last_ping=0;stopping=False
+ os.umask(0o077);j=Journal(str(store));sel=selectors.DefaultSelector();listeners={};peers={};body=None;outbox=bytearray();deadline=float('inf') if duration is None else time.monotonic()+duration;last_poll=0;last_ping=0;stopping=False
  def shutdown(*_):
   nonlocal stopping
   stopping=True
@@ -104,7 +104,7 @@ def serve(path,store,resident,char_id,char_name,duration,witness=True):
   sel.close();j.close()
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--socket',required=True);p.add_argument('--store',required=True);p.add_argument('--resident',default='resident_a');p.add_argument('--char-id',type=int,default=150001);p.add_argument('--char-name',default='ResidentA');p.add_argument('--duration',type=float,default=1800);p.add_argument('--no-witness',action='store_true');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--socket',required=True);p.add_argument('--store',required=True);p.add_argument('--resident',default='resident_a');p.add_argument('--char-id',type=int,default=150001);p.add_argument('--char-name',default='ResidentA');p.add_argument('--duration',type=float,default=1800);p.add_argument('--no-witness',action='store_true');p.add_argument('--persistent',action='store_true');a=p.parse_args()
  if not 0<a.duration<=28800 or a.char_id<=0:p.error('bounded runtime and positive char id required')
- serve(a.socket,a.store,a.resident,a.char_id,a.char_name,a.duration,not a.no_witness)
+ serve(a.socket,a.store,a.resident,a.char_id,a.char_name,None if a.persistent else a.duration,not a.no_witness)
 if __name__=='__main__':main()
