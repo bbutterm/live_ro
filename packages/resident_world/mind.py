@@ -6,6 +6,9 @@ from packages.resident_world.budget import DailyBudget,BudgetStop,world_snapshot
 from packages.resident_world.supervisor import ROOT,STATE,atomic
 
 PROMISE=re.compile(r'иду|пойду|пойдём|пойдем|встретимся|следую',re.I)
+class SimulatedRateLimitError(RuntimeError):
+    status_code=429
+
 def validate_decision(d,c,s):
     if not isinstance(d,dict) or set(d)-{'action','args','say','reason'} or not {'action','args','reason'}<=set(d):raise ValueError('INVALID_MODEL_SCHEMA')
     if not isinstance(d['reason'],str) or not 1<=len(d['reason'])<=200 or re.search(r'[\x00-\x1f]',d['reason']):raise ValueError('INVALID_REASON')
@@ -69,7 +72,9 @@ class Mind:
         key=self.key;fault=STATE/'llm-fault.json'
         if fault.exists():
             test=json.loads(fault.read_text())
-            if test.get('resident')==self.r['name'] and test.get('expires',0)>time.time() and test.get('kind')=='wrong_key':key='invalid-for-local-check'
+            if test.get('resident')==self.r['name'] and test.get('expires',0)>time.time():
+                if test.get('kind')=='429':raise SimulatedRateLimitError('Scoped acceptance injection')
+                if test.get('kind')=='wrong_key':key='invalid-for-local-check'
         usage,pricing,daily=world_snapshot(self.cfg,key,timeout=1.2 if timeout<20 else 8);cost=upper_cost(pricing,messages,350);self.budget.reserve(usage,cost,time.time(),already_spent=daily)
         start=time.monotonic()
         reply=self.client.chat.completions.create(model=self.cfg['model'],messages=messages,max_tokens=350,timeout=timeout,response_format={'type':'json_object'},extra_body={'reasoning':{'enabled':False}})

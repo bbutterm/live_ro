@@ -1,6 +1,25 @@
 import unittest,tempfile,pathlib,json
 
 class WorldMindTests(unittest.TestCase):
+    def test_scoped_expiring_429_enters_persisted_pause_without_provider_call(self):
+        from packages.resident_world import mind
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            d=pathlib.Path(tmp);fault=d/'llm-fault.json'
+            fault.write_text(json.dumps({'resident':'Mira','kind':'429','expires':1200}))
+            m=mind.Mind.__new__(mind.Mind);m.r={'name':'Mira','char_id':2};m.d=d;m.c={'places':{},'residents':[],'llm':{}}
+            m.path=d/'model-intent.json';m.history=[];m.history_path=d/'goal-history.json';m.errors=0;m.next_call=0;m.persona='Житель.';m.key='fake-test-key';m.cfg={}
+            with patch.object(mind,'STATE',d),patch.object(mind.time,'time',return_value=1000) as clock,patch('packages.resident_world.memory.refresh'),patch.object(mind,'world_snapshot',side_effect=RuntimeError('NETWORK_BOUNDARY')) as provider:
+                self.assertIsNone(m.choose({'telemetry':{}}))
+                pause=json.loads((d/'llm-pause.json').read_text());self.assertEqual(pause['status'],429);self.assertEqual(pause['until'],1030)
+                self.assertFalse(m.path.exists());provider.assert_not_called()
+                clock.return_value=1029;self.assertIsNone(m.choose({'telemetry':{}}));provider.assert_not_called()
+                m.r['name']='Borin'
+                with self.assertRaisesRegex(RuntimeError,'NETWORK_BOUNDARY'):m._complete([])
+                m.r['name']='Mira';clock.return_value=1201
+                with self.assertRaisesRegex(RuntimeError,'NETWORK_BOUNDARY'):m._complete([])
+                self.assertEqual(provider.call_count,2)
+
     def test_model_json_must_be_one_safe_menu_goal_with_linked_promise(self):
         from packages.resident_world.mind import validate_decision
         c={'places':{'field':{'map':'prt_fild08','x':170,'y':240}},'residents':[]}
