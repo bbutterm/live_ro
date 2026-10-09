@@ -10,7 +10,8 @@ def describe(activity,reason):
     return activities.get(activity,'ожидание'),russian_reason
 
 def status_intent(memory,manual_task,manual_live):
-    if manual_live and manual_task and not manual_task.get('ended'):return manual_task['action'],'Ручная проверка навыка'
+    if manual_live and manual_task and not manual_task.get('ended'):
+        return manual_task['action'],memory.get('reason','Выбираю занятие') if manual_task.get('origin')=='brain' else 'Ручная проверка навыка'
     return memory.get('activity',''),memory.get('reason','')
 
 def main():

@@ -42,12 +42,42 @@ class WorldSkillsTests(unittest.TestCase):
         from packages.resident_world.skills import execution_deadline
         self.assertEqual(execution_deadline('walk_to',100),160)
         self.assertEqual(execution_deadline('follow',100),1300)
+    def test_llm_walk_allows_reachable_cross_map_route_longer_than_one_minute(self):
+        import pathlib
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        c={'places':{'fountain':{'map':'prontera','x':156,'y':191}}}
+        with patch.object(skills,'run_native',return_value='done') as run:
+            self.assertEqual(skills.execute_native_menu('walk_to',{'place':'fountain'},c,'sock','key',{'origin':'brain'},pathlib.Path('/unused')),'done')
+        self.assertEqual(run.call_args.args[1]['timeout'],240)
+    def test_llm_walk_task_does_not_clip_native_route_to_manual_minute(self):
+        import tempfile,pathlib,json,time
+        from contextlib import nullcontext
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        c={'residents':[{'name':'Mira','resident_id':'resident_b'}],'places':{'fountain':{'map':'prontera','x':156,'y':191}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            d=pathlib.Path(tmp);(d/'MANUAL').write_text(json.dumps({'expires':time.time()+7200}))
+            with patch.object(skills,'config',return_value=c),patch.object(skills,'STATE',d),patch.object(skills,'manual',return_value=nullcontext((d,'sock'))),patch.object(skills,'execute_native_menu',return_value='done'):
+                task=skills.execute('Mira','walk_to',{'place':'fountain'},origin='brain')
+        self.assertEqual(task['expires']-task['started'],300)
+    def test_llm_hunt_uses_cross_map_route_budget_before_starting_hunt(self):
+        import pathlib
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        with patch.object(skills,'request',return_value={'telemetry':{'map':'prt_in'}}),patch.object(skills,'run_native',return_value='done') as run:
+            self.assertEqual(skills.execute_native_menu('hunt',{'map':'prt_fild08','minutes':5},{},'sock','key',{'origin':'brain'},pathlib.Path('/unused')),'done')
+        self.assertEqual(run.call_args_list[0].args[1]['timeout'],240)
+        self.assertEqual(run.call_args_list[1].args[1]['params']['duration'],300)
     def test_town_service_allows_cross_map_route_without_short_walk_budget(self):
         c={'places':{},'residents':[]}
         p=native_plan('town_service',{},c)
         self.assertEqual(p['skill'],'travel_to')
         self.assertEqual(p['params']['map'],'prt_in')
         self.assertEqual(p['timeout'],240)
+    def test_status_uses_llm_reason_during_brain_owned_menu_goal(self):
+        from packages.resident_world.cli import status_intent
+        self.assertEqual(status_intent({'activity':'walk_to','reason':'Хочу прогуляться'},{'action':'walk_to','origin':'brain'},True),('walk_to','Хочу прогуляться'))
     def test_status_displays_live_manual_goal_instead_of_old_brain_goal(self):
         from packages.resident_world.cli import status_intent
         self.assertEqual(status_intent({'activity':'hunt','reason':'старое'},{'action':'idle'},True),('idle','Ручная проверка навыка'))

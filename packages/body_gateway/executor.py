@@ -88,7 +88,7 @@ class Executor:
    if state in ('verifying','unknown') and t and now-t['ts']<=3 and now-self.received<=3 and not t.get('dead') and not t.get('running') and server_alive and server_map_ok:
     if a['skill']=='travel_to':
      def near(x,y,r):return 'x' not in p or max(abs(x-p['x']),abs(y-p['y']))<=r
-     hit=next((r for r in reversed(rows) if r['kind'] in ('pos','loadmap') and r['map']==p['map'] and near(r['x'],r['y'],p['r']+3)),None)
+     hit=next((r for r in reversed(rows) if r['kind'] in ('pos','loadmap') and r['map']==p['map'] and near(r['x'],r['y'],p['r'])),None)
      arrived=t['map']==p['map'] and near(t['pos']['x'],t['pos']['y'],p['r'])
      if hit and arrived:
       self.j.transition(aid,'confirmed','ARRIVED',{'server':hit,'body':t});continue

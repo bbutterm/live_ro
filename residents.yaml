@@ -5,6 +5,19 @@ residents:
     name: ResidentA
     group_id: 0
     enabled: true
+    persona: "Мечник. Прямой, смелый, любит охоту, предлагает друзьям помощь."
+  - resident_id: resident_b
+    char_id: 150002
+    name: Mira
+    group_id: 0
+    enabled: true
+    persona: "Послушница. Доброжелательная, общительная, заботится о самочувствии друзей. Не приписывает себе неосвоенные умения."
+  - resident_id: resident_c
+    char_id: 150003
+    name: Borin
+    group_id: 0
+    enabled: true
+    persona: "Послушник. Осторожный, добрый, предпочитает спокойное общение и обдуманные прогулки."
 tester:
   char_id: 150000
   name: Tester

@@ -1,5 +1,13 @@
 import pathlib,tempfile,time,unittest
 class ExecutorTest(unittest.TestCase):
+ def test_arrival_requires_server_position_inside_requested_radius(self):
+  from packages.body_gateway.journal import Journal
+  from packages.body_gateway.executor import Executor
+  with tempfile.TemporaryDirectory() as d:
+   j=Journal(d+'/world.sqlite');e=Executor(j,'resident_a',150001,lambda m:None);now=time.time();e.body({'type':'hello','body_epoch':'ep','ts':now});e.body({'type':'telemetry','body_epoch':'ep','ts':now,'map':'prontera','pos':{'x':156,'y':185},'dead':False})
+   a=e.run('travel_to',{'map':'prontera','x':156,'y':191,'r':3},240,'strict');aid=a['action_id'];e.body({'type':'skill_result','action_id':aid,'outcome':'done','code':'ARRIVED'});e.body({'type':'telemetry','body_epoch':'ep','ts':time.time(),'map':'prontera','pos':{'x':156,'y':188},'dead':False})
+   e.witness({'id':1,'kind':'pos','char_id':150001,'map':'prontera','x':156,'y':185,'event_ts':time.time()});e.evaluate();self.assertNotEqual(j.action(aid)['state'],'confirmed')
+   e.witness({'id':2,'kind':'pos','char_id':150001,'map':'prontera','x':156,'y':188,'event_ts':time.time()});e.evaluate();self.assertEqual(j.action(aid)['state'],'confirmed')
  def test_unknown_arrival_does_not_confirm_while_body_task_is_active(self):
   from packages.body_gateway.journal import Journal
   from packages.body_gateway.executor import Executor

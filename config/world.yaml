@@ -1,6 +1,8 @@
 {
   "state_dir": "/var/lib/ro-world",
   "daily_llm_usd": 2,
+  "llm": {"enabled": true, "max_hunt_minutes": 5},
+  "brain_python": "/opt/ro-residents/world-venv/bin/python",
   "llm_timeout_seconds": 20,
   "chat_radius": 14,
   "residents": [

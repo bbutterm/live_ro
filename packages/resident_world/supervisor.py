@@ -1,5 +1,5 @@
 """Permanent native world. No LLM calls in P1; no global child-failure shutdown."""
-import argparse,fcntl,json,logging,os,pathlib,signal,subprocess,time
+import argparse,fcntl,json,logging,os,pathlib,signal,subprocess,time,sys
 from logging.handlers import RotatingFileHandler
 from dataclasses import dataclass
 from packages.body_gateway.cli import request
@@ -44,6 +44,13 @@ def config():return json.loads((ROOT/'config/world.yaml').read_text())
 
 def brain(r):
     d=STATE/r['resident_id'];sock=str(d/'actions.sock.control');pending=None;retry=0;last=None
+    mind=None
+    if config().get('llm',{}).get('enabled') and 'name' in r and 'char_id' in r:
+        try:
+            from packages.resident_world.mind import Mind
+            mind=Mind(r,d,config())
+        except Exception:
+            logging.getLogger('world').warning('LLM init unavailable; fallback for %s',r['name'])
     if (d/'brain.json').exists():
         old=json.loads((d/'brain.json').read_text());pending=old.get('pending')
     while not (STATE/'STOP').exists():
@@ -65,6 +72,14 @@ def brain(r):
             if not t or s.get('age') is None or s['age']>3 or time.time()<retry:time.sleep(.5);continue
             if s['actions']:
                 pending=s['actions'][0]['action_id'];continue
+            if mind is not None and not t.get('dead') and online(s,time.time()):
+                proposal=mind.choose(s)
+                if proposal:
+                    from packages.resident_world.skills import execute
+                    goal=proposal['decision']
+                    atomic(d/'brain.json',dict(pending=None,activity=goal['action'],reason=goal['reason'],source='llm',decision_id=proposal['id'],at=time.time(),last=last))
+                    result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'],say=goal.get('say',''))
+                    mind.finished(result);last={'state':result['outcome'],'at':time.time()};retry=time.time()+5;continue
             intent=fallback(t)
             # Serialize dispatch with the manual writer, including the RPC reply.
             with (d/'manual.lock').open('a') as writer:
@@ -132,6 +147,9 @@ def supervise():
 def main():
     p=argparse.ArgumentParser();p.add_argument('--brain');a=p.parse_args()
     if a.brain:
+        interpreter=config().get('brain_python',sys.executable)
+        if pathlib.Path(interpreter).resolve()!=pathlib.Path(sys.executable).resolve():
+            return os.execv(interpreter,[interpreter,'-m','packages.resident_world.supervisor','--brain',a.brain])
         r=next(r for r in config()['residents'] if r['resident_id']==a.brain);brain(r)
     else:supervise()
 if __name__=='__main__':main()

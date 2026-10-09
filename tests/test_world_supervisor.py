@@ -2,6 +2,15 @@ import unittest
 from packages.resident_world.supervisor import RestartPolicy, fallback, online
 
 class WorldSupervisorTests(unittest.TestCase):
+    def test_brain_execs_isolated_interpreter_without_restarting_bodies(self):
+        from unittest.mock import patch
+        from packages.resident_world import supervisor
+        c={'brain_python':'/opt/test/python','residents':[{'resident_id':'resident_a'}]}
+        with patch.object(supervisor,'config',return_value=c),patch('sys.argv',['world','--brain','resident_a']),patch('sys.executable','/usr/bin/python3'),patch.object(supervisor.os,'execv') as execute,patch.object(supervisor,'brain') as brain:
+            supervisor.main()
+        execute.assert_called_once_with('/opt/test/python',['/opt/test/python','-m','packages.resident_world.supervisor','--brain','resident_a'])
+        brain.assert_not_called()
+
     def test_one_body_failure_does_not_change_other_restart_clocks(self):
         a,b=RestartPolicy(),RestartPolicy()
         self.assertEqual(a.failed(100),110)

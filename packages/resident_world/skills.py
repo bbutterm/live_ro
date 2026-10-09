@@ -104,11 +104,13 @@ def run_native(sock,plan,key,task,d):
 
 def execute_native_menu(action,args,c,sock,key,task,d):
     if action in ('say','whisper','walk_to','rest'):
-        return run_native(sock,native_plan(action,args,c),key,task,d)
+        plan=native_plan(action,args,c)
+        if action=='walk_to' and task.get('origin')=='brain':plan={**plan,'timeout':240}
+        return run_native(sock,plan,key,task,d)
     if action=='hunt':
         t=request(sock,{'op':'status'}).get('telemetry') or {}
         if t.get('map')!=args['map']:
-            go=dict(skill='travel_to',params={'map':args['map'],'x':170,'y':240,'r':3},timeout=55)
+            go=dict(skill='travel_to',params={'map':args['map'],'x':170,'y':240,'r':3},timeout=240 if task.get('origin')=='brain' else 55)
             result=run_native(sock,go,key+'-route',task,d)
             if result!='done':return result
         return run_native(sock,native_plan(action,args,c),key,task,d)
@@ -187,16 +189,20 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         except BlockingIOError:return 'failed(TARGET_BUSY)'
     raise ValueError('UNSUPPORTED')
 
-def execute(name,action,args):
+def execute(name,action,args,*,origin='manual',task_id=None,say=''):
     c=config();args=validate(action,args,c)
     r=next((r for r in c['residents'] if name in (r['name'],r['resident_id'])),None)
     if r is None:raise ValueError('UNKNOWN_RESIDENT')
-    task={'id':str(uuid.uuid4()),'resident':r['name'],'action':action,'args':args,'started':time.time(),'outcome':None,'attempts':0}
-    task['expires']=execution_deadline(action,task['started'])
+    started=time.time();task={'id':task_id or str(uuid.uuid4()),'resident':r['name'],'origin':origin,'action':action,'args':args,'started':started,'outcome':None,'attempts':0,'expires':execution_deadline(action,started)}
+    if origin=='brain' and action=='walk_to':task['expires']=started+300
+    if origin=='brain' and action=='hunt':task['expires']=started+args['minutes']*60+300
     with manual(r) as (d,sock):
+        if origin=='brain':
+            lease=json.loads((d/'MANUAL').read_text());lease['expires']=max(lease['expires'],task['expires']);atomic(d/'MANUAL',lease)
         for attempt in range(1,4):
             task['attempts']=attempt;atomic(d/'manual_task.json',task)
-            result=execute_native_menu(action,args,c,sock,task['id']+'-'+str(attempt),task,d)
+            spoken=run_native(sock,{'skill':'say','params':{'text':say},'timeout':10},task['id']+'-speech-'+str(attempt),task,d) if say else 'done'
+            result=execute_native_menu(action,args,c,sock,task['id']+'-'+str(attempt),task,d) if spoken=='done' else spoken
             task['outcome']=result;atomic(d/'manual_task.json',task)
             if not retry_allowed(action,attempt,result) or task.get('unresolved') or time.time()+5>=task['expires']:break
             time.sleep(5)
