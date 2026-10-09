@@ -100,6 +100,16 @@ def brain(r):
                     atomic(d/'brain.json',dict(pending=None,activity=goal['action'],reason=goal['reason'],source='llm',decision_id=proposal['id'],at=time.time(),last=last))
                     result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'],say=goal.get('say',''))
                     mind.finished(result);last={'state':result['outcome'],'at':time.time()};retry=time.time()+5;continue
+            from packages.resident_world.fallback_life import city_goal,completed
+            cycle_file=d/'fallback-life.json'
+            cycle=json.loads(cycle_file.read_text()) if cycle_file.exists() else {}
+            city=city_goal(s,cycle,time.time(),config()) if 'name' in r and 'char_id' in r else None
+            if city:
+                from packages.resident_world.skills import execute
+                atomic(d/'brain.json',dict(pending=None,activity=city['action'],reason=city['reason'],source='fallback_city',at=time.time(),last=last))
+                result=execute(r['name'],city['action'],city['args'],origin='brain')
+                completed(cycle,city,result['outcome'],time.time());atomic(cycle_file,cycle)
+                last={'state':result['outcome'],'at':time.time()};retry=time.time()+5;continue
             intent=fallback(t)
             # Serialize dispatch with the manual writer, including the RPC reply.
             with (d/'manual.lock').open('a') as writer:
