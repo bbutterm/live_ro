@@ -19,7 +19,7 @@ class WorldSkillsTests(unittest.TestCase):
         self.assertFalse(witness_at(s,p,130))
         s['projection']['server_pos']['value']['x']=200
         self.assertFalse(witness_at(s,p,100))
-    def test_meet_obtains_peer_agreement_and_moves_both_residents(self):
+    def test_meet_moves_both_only_after_model_agreement(self):
         import tempfile,pathlib,time
         from unittest.mock import patch
         from packages.resident_world import skills
@@ -29,15 +29,70 @@ class WorldSkillsTests(unittest.TestCase):
         def native(sock,plan,key,task,d):plans.append((sock,plan));return 'done'
         with tempfile.TemporaryDirectory() as tmp:
             d=pathlib.Path(tmp);(d/'resident_b').mkdir()
-            with patch.object(skills,'STATE',d),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',side_effect=native),patch.object(skills.time,'sleep'):
-                self.assertEqual(skills.execute_native_menu('meet',{'resident':'Mira','place':'fountain'},c,'self-sock','key',{'native_results':[]},d),'done')
-        self.assertEqual(sum(p['skill']=='travel_to' for _,p in plans),2)
-        self.assertTrue(any('Договорились' in p.get('params',{}).get('text','') for _,p in plans))
+            with patch.object(skills,'STATE',d),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',side_effect=native),patch.object(skills.time,'sleep'),patch('packages.resident_world.meeting.decide',return_value={'choice':'accept','place':'fountain','reason':'Хочу поговорить'}):
+                self.assertEqual(skills.execute_native_menu('meet',{'resident':'Mira','place':'fountain'},c,'self-sock','key',{'id':'key','resident':'ResidentA','native_results':[]},d),'done')
+                self.assertEqual(sum(p['skill']=='travel_to' for _,p in plans),2)
+            plans.clear()
+            with patch.object(skills,'STATE',d),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',side_effect=native),patch.object(skills.time,'sleep'),patch('packages.resident_world.meeting.decide',return_value={'choice':'decline','place':'fountain','reason':'Хочу отдыхать'}):
+                self.assertEqual(skills.execute_native_menu('meet',{'resident':'Mira','place':'fountain'},c,'self-sock','key',{'id':'key','resident':'ResidentA','native_results':[]},d),'failed(MEETING_DECLINED)')
+                self.assertFalse(any(p['skill']=='travel_to' for _,p in plans))
     def test_follow_requires_measured_proximity_not_just_seen_target(self):
         from packages.resident_world.skills import follow_verified
         self.assertTrue(follow_verified([{'near':True}]*7+[{'near':False}]*3))
         self.assertFalse(follow_verified([{'near':True}]*6+[{'near':False}]*4))
         self.assertFalse(follow_verified([]))
+    def test_meeting_counter_and_unavailable_vote_never_imply_acceptance(self):
+        import tempfile,pathlib,time
+        from unittest.mock import patch
+        from packages.resident_world import skills,meeting
+        c={'residents':[{'name':'Mira','resident_id':'b'},{'name':'ResidentA','resident_id':'a'}],'places':{'fountain':{'map':'prontera','x':156,'y':191},'field':{'map':'prt_fild08','x':170,'y':240}}}
+        s={'actions':[],'age':1,'projection':{'server_map':{'value':'prt_fild08'},'server_pos':{'value':{'x':170,'y':240},'ts':time.time()}}}
+        for answer,expected in [(dict(choice='accept',place='field',reason='Хочу поговорить'),'done'),(dict(choice='decline',place='field',reason='Хочу отдыхать'),'failed(MEETING_DECLINED)'),(None,'failed(MEETING_MODEL_UNAVAILABLE)')]:
+            with self.subTest(answer=answer),tempfile.TemporaryDirectory() as tmp:
+                root=pathlib.Path(tmp);d=root/'a';d.mkdir();(root/'b').mkdir();plans=[]
+                def native(sock,plan,key,task,path):plans.append(plan);return 'done'
+                task={'id':'key','resident':'ResidentA','action':'meet','expires':time.time()+300}
+                with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',side_effect=native),patch.object(skills.time,'sleep'),patch.object(meeting,'decide',side_effect=[dict(choice='counter',place='field',reason='На поле ближе'),answer]) as model:
+                    self.assertEqual(meeting.execute({'resident':'Mira','place':'fountain'},c,'sock','key',task,d),expected)
+                    self.assertEqual(model.call_count,2)
+                    routes=[p for p in plans if p['skill']=='travel_to']
+                    self.assertEqual(len(routes),2 if expected=='done' else 0)
+                    self.assertTrue(all(p['params']['map']=='prt_fild08' for p in routes))
+                    # Повтор той же сохранённой договорённости не вызывает новые голоса.
+                    self.assertEqual(meeting.execute({'resident':'Mira','place':'fountain'},c,'sock','key',task,d),expected)
+                    self.assertEqual(model.call_count,2)
+
+    def test_meeting_chat_on_either_side_interrupts_both_routes(self):
+        import tempfile
+        from packages.resident_world.skills import interrupted
+        with tempfile.TemporaryDirectory() as tmp:
+            import pathlib
+            root=pathlib.Path(tmp);a=root/'a';b=root/'b';a.mkdir();b.mkdir();(b/'CHAT_PENDING').touch()
+            task={'origin':'brain','meeting_chat_dirs':[str(a),str(b)]}
+            self.assertTrue(interrupted(task,'travel_to',a))
+            self.assertTrue(interrupted(task,'travel_to',b))
+
+    def test_replayed_meeting_keeps_persisted_votes_and_finished_task_has_no_side_effects(self):
+        import tempfile,pathlib,json,time
+        from contextlib import nullcontext
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        c={'residents':[{'name':'Mira','resident_id':'b'},{'name':'Borin','resident_id':'c'}],'places':{'field':{}}}
+        args={'resident':'Borin','place':'field'}
+        with tempfile.TemporaryDirectory() as tmp:
+            root=pathlib.Path(tmp);d=root/'b';d.mkdir()
+            old={'id':'same','resident':'Mira','action':'meet','args':args,'origin':'manual','started':time.time()-10,'expires':time.time()+290,'outcome':'done','ended':time.time(),'meeting_votes':{'peer':{'status':'claimed'}}}
+            (d/'manual_task.json').write_text(json.dumps(old))
+            with patch.object(skills,'config',return_value=c),patch.object(skills,'STATE',root),patch.object(skills,'manual',return_value=nullcontext((d,'sock'))) as writer,patch.object(skills,'execute_native_menu',return_value='failed(MEETING_MODEL_UNAVAILABLE)') as run:
+                self.assertEqual(skills.execute('Mira','meet',args,task_id='same'),old)
+                writer.assert_not_called();run.assert_not_called()
+                del old['ended'];old['outcome']=None
+                (d/'manual_task.json').write_text(json.dumps(old))
+                recovered=skills.execute('Mira','meet',args,task_id='same')
+                self.assertEqual(recovered['meeting_votes'],old['meeting_votes'])
+                self.assertEqual(recovered['started'],old['started'])
+                self.assertEqual(recovered['expires'],old['expires'])
+
     def test_walk_has_one_global_minute_including_retries(self):
         from packages.resident_world.skills import execution_deadline
         self.assertEqual(execution_deadline('walk_to',100),160)

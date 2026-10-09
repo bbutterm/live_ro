@@ -83,7 +83,8 @@ def validate_reply(d,event,c,s):
 
 def meeting_protocol(event,task):
     if task.get('action')!='meet':return False
-    label='у фонтана' if task.get('args',{}).get('place')=='fountain' else 'в таверне'
+    if event['text'] in task.get('protocol_speech',[]):return True
+    label='у фонтана' if task.get('args',{}).get('place')=='fountain' else 'на поле'
     return event['text'] in ('Предлагаю встречу '+label+'.','Договорились: встреча '+label+'.')
 
 def ingest(store,c):
@@ -113,7 +114,7 @@ def ingest(store,c):
             if source:
                 try:
                     task=json.loads((STATE/source['resident_id']/'manual_task.json').read_text())
-                    internal=task.get('started',0)<=event['ts']+1<=task.get('ended',time.time())+2 and meeting_protocol(event,task)
+                    internal=task.get('started',0)<=event['ts']+1<=min(task.get('ended',time.time()),task.get('expires',time.time()))+2 and meeting_protocol(event,task)
                 except (OSError,ValueError):pass
             responder=None if internal else select_responder(event,c['residents'],states,time.time(),c.get('chat_radius',14))
             store.enqueue(event,responder['name'] if responder else None,event['char_id'] in ids,time.time())

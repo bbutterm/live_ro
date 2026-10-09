@@ -48,11 +48,13 @@ def witness_at(status,point,now,radius=5):
 
 def follow_verified(samples):return bool(samples) and sum(bool(p.get('near')) for p in samples)*100>=len(samples)*70
 
-def execution_deadline(action,started):return started+(60 if action=='walk_to' else 1200)
+def execution_deadline(action,started):return started+(60 if action=='walk_to' else 300 if action=='meet' else 1200)
 
-def retry_allowed(action,attempt,result):return action in REVERSIBLE and attempt<3 and result not in ('done','failed(CHAT_INTERRUPT)')
+def retry_allowed(action,attempt,result):return action in REVERSIBLE and action!='meet' and attempt<3 and result not in ('done','failed(CHAT_INTERRUPT)')
 
 def interrupted(task,skill,d):
+    if skill not in ('buy_potions','sell_loot') and task.get('meeting_chat_dirs'):
+        return any((pathlib.Path(path)/'CHAT_PENDING').exists() for path in task['meeting_chat_dirs'])
     return task.get('origin')!='chat' and skill not in ('buy_potions','sell_loot') and (d/'CHAT_PENDING').exists()
 
 
@@ -179,27 +181,8 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         task['follow_samples']=proof;atomic(d/'manual_task.json',task)
         return 'done' if follow_verified(proof) else 'failed(FOLLOW_DISTANCE)'
     if action=='meet':
-        from concurrent.futures import ThreadPoolExecutor
-        target=next(r for r in c['residents'] if r['name']==args['resident']);p=c['places'][args['place']]
-        label='у фонтана' if args['place']=='fountain' else 'на поле'
-        try:
-            with manual(target) as (other_d,other_sock):
-                peer={'id':key+'-peer','resident':target['name'],'action':'meet','args':args,'started':time.time()}
-                result=run_native(sock,dict(skill='whisper',params={'to_name':target['name'],'text':'Предлагаю встречу '+label+'.'},timeout=15),key+'-proposal',task,d)
-                if result!='done':return result
-                result=run_native(other_sock,dict(skill='say',params={'text':'Договорились: встреча '+label+'.'},timeout=15),key+'-agreement',peer,other_d)
-                if result!='done':return result
-                route=dict(skill='travel_to',params=dict(p,r=3),timeout=180)
-                with ThreadPoolExecutor(max_workers=2) as pool:
-                    first=pool.submit(run_native,sock,route,key+'-self',task,d)
-                    second=pool.submit(run_native,other_sock,route,key+'-peer',peer,other_d)
-                    results=[first.result(),second.result()]
-                if results!=['done','done']:return next(r for r in results if r!='done')
-                a=request(sock,{'op':'status'});b=request(other_sock,{'op':'status'})
-                if not witness_at(a,p,time.time()) or not witness_at(b,p,time.time()):return 'failed(MEETING_NO_WITNESS)'
-                task['meeting_witness']={'self':a['projection']['server_pos'],'peer':b['projection']['server_pos'],'peer_actions':peer.get('native_results',[])}
-                atomic(d/'manual_task.json',task);return 'done'
-        except BlockingIOError:return 'failed(TARGET_BUSY)'
+        from .meeting import execute as negotiate_meeting
+        return negotiate_meeting(args,c,sock,key,task,d)
     raise ValueError('UNSUPPORTED')
 
 def execute(name,action,args,*,origin='manual',task_id=None,say=''):
@@ -209,6 +192,13 @@ def execute(name,action,args,*,origin='manual',task_id=None,say=''):
     started=time.time();task={'id':task_id or str(uuid.uuid4()),'resident':r['name'],'origin':origin,'action':action,'args':args,'started':started,'outcome':None,'attempts':0,'expires':execution_deadline(action,started)}
     if origin=='brain' and action=='walk_to':task['expires']=started+300
     if origin=='brain' and action=='hunt':task['expires']=started+args['minutes']*60+300
+    previous=STATE/r['resident_id']/'manual_task.json'
+    if action=='meet' and task_id and previous.exists():
+        saved=json.loads(previous.read_text())
+        if saved.get('id')==task_id:
+            if saved.get('action')!=action or saved.get('args')!=args:raise ValueError('MEETING_ID_CONFLICT')
+            if saved.get('ended'):return saved
+            task=saved
     with manual(r) as (d,sock):
         if origin=='brain':
             lease=json.loads((d/'MANUAL').read_text());lease['expires']=max(lease['expires'],task['expires']);atomic(d/'MANUAL',lease)

@@ -1,6 +1,40 @@
 import unittest,tempfile,pathlib,json
 
 class WorldMindTests(unittest.TestCase):
+    def test_meeting_schema_is_bounded_and_counter_requires_another_place(self):
+        from packages.resident_world.meeting import validate_vote
+        c={'places':{'fountain':{},'field':{}}}
+        for choice,place in [('accept','fountain'),('decline','fountain'),('counter','field')]:
+            vote={'choice':choice,'place':place,'reason':'Хочу поговорить'}
+            self.assertEqual(validate_vote(vote,c,'fountain',True),vote)
+        for vote in [dict(choice='counter',place='fountain',reason='Нет'),dict(choice='accept',place='field',reason='Да'),dict(choice='accept',place='fountain',reason='Да',command='shell')]:
+            with self.assertRaises(ValueError):validate_vote(vote,c,'fountain',True)
+        with self.assertRaises(ValueError):validate_vote(dict(choice='counter',place='field',reason='Нет'),c,'fountain',False)
+
+    def test_meeting_budget_pause_never_becomes_scripted_acceptance(self):
+        from packages.resident_world.mind import Mind
+        from unittest.mock import Mock,patch
+        with tempfile.TemporaryDirectory() as tmp:
+            m=Mind.__new__(Mind);m.d=pathlib.Path(tmp);m.next_call=200;m._complete=Mock()
+            with patch('packages.resident_world.mind.time.time',return_value=100):
+                self.assertIsNone(m.negotiate({'resident':'ResidentA','place':'fountain'}, {},True))
+            m._complete.assert_not_called()
+
+    def test_counter_reply_honors_own_current_chat_goal_but_not_another(self):
+        from packages.resident_world import mind
+        from unittest.mock import Mock,patch
+        with tempfile.TemporaryDirectory() as tmp:
+            m=mind.Mind.__new__(mind.Mind);m.d=pathlib.Path(tmp);m.next_call=0;m.r={'name':'Mira','char_id':2};m.c={'places':{'field':{}}};m.persona='Житель';m.history=[]
+            m._complete=Mock(return_value=json.dumps({'choice':'accept','place':'field','reason':'Хочу поговорить'}))
+            (m.d/'chat-goal.json').write_text(json.dumps({'id':'own-meeting'}))
+            offer={'resident':'Borin','place':'field','meeting_id':'own-meeting'}
+            with patch.object(mind,'record'):
+                self.assertEqual(m.negotiate(offer,{},False)['choice'],'accept')
+                self.assertEqual(m._complete.call_args.kwargs['timeout'],3)
+                offer['meeting_id']='another-meeting'
+                self.assertIsNone(m.negotiate(offer,{},False))
+                self.assertEqual(m._complete.call_count,1)
+
     def test_scoped_expiring_429_enters_persisted_pause_without_provider_call(self):
         from packages.resident_world import mind
         from unittest.mock import patch
