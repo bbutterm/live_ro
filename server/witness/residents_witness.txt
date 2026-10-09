@@ -40,12 +40,7 @@ S_Record:
 	query_sql("SELECT COUNT(*) FROM residents.registry WHERE enabled=1 AND char_id="+.@cid, .@allowed);
 	if (!.@allowed) return;
 	if (getmapxy(.@map$, .@x, .@y, BL_PC, .@name$)) return;
-	if (.@kind$ == "pos") {
-		.@dx = .@x - .px[.@cid];
-		.@dy = .@y - .py[.@cid];
-		if (.pm$[.@cid] == .@map$ && .@dx*.@dx + .@dy*.@dy <= 9) return;
-		.pm$[.@cid] = .@map$; .px[.@cid] = .@x; .py[.@cid] = .@y;
-	}
+	// Keep stationary probes: absence of movement events is not a fresh observation.
 	.@a1 = getarg(2, 0);
 	.@a2 = getarg(3, 0);
 	query_sql("INSERT INTO residents.resident_events(char_id,kind,map,x,y,a1,a2) VALUES ("+.@cid+",'"+.@kind$+"','"+escape_sql(.@map$)+"',"+.@x+","+.@y+","+.@a1+","+.@a2+")");

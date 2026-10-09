@@ -7,6 +7,7 @@ class ATools(unittest.TestCase):
  def test_position_is_5s_and_filtered(self):
   s=(ROOT/'server/witness/residents_witness.txt').read_text()
   self.assertIn('OnTimer5000:',s)
-  self.assertIn('.@dx*.@dx + .@dy*.@dy <= 9',s)
+  self.assertIn('FROM residents.registry WHERE enabled=1 AND char_id=',s)
+  self.assertNotIn('.@dx*.@dx + .@dy*.@dy <= 9) return;',s) # B needs fresh stationary observations
   self.assertIn('OnPCBaseLvUpEvent:',s)
   self.assertIn('OnPCJobLvUpEvent:',s)

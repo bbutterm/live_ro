@@ -1,4 +1,8 @@
 // Persistent witness coverage on test maps.
+izlude_a	mapflag	loadevent
+prt_fild08a	mapflag	loadevent
+prt_in	mapflag	loadevent
+int_land01	mapflag	loadevent
 prontera	mapflag	loadevent
 prt_fild08	mapflag	loadevent
 izlude	mapflag	loadevent

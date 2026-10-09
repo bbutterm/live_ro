@@ -1,0 +1,55 @@
+{
+  "kind": "historical_launch_commands_NOT_a_launch_authorization",
+  "source_run": "/root/ragnarok/run/owner-agency-20261008T2022",
+  "source_summary_status": "BOUNDED_CHAT_FINISHED",
+  "started_epoch": 1791490991.9909275,
+  "finished_epoch": 1791492086.9488523,
+  "absolute_deadline_epoch": 1791492161.174833,
+  "controller": {
+    "argv": ["/usr/bin/python3", "-u", "/root/ragnarok/run/owner-agency-20261008T2022/driver.py"],
+    "cwd": "/root/ragnarok/repos/live_ro",
+    "note": "Историческая команда; допуск истёк. Архивный driver.py нельзя запускать в checkout."
+  },
+  "body_commands": [
+    {
+      "resident": "resident_a",
+      "cwd": "/root/ragnarok/repos/openkore",
+      "argv": ["/usr/bin/perl", "openkore.pl", "--control=/root/ragnarok/run/Demo/resident_a/control", "--tables=/root/ragnarok/run/Demo/resident_a/tables:tables", "--fields=/root/ragnarok/run/Demo/resident_a/fields", "--plugins=/root/ragnarok/repos/live_ro/plugins", "--logs=/root/ragnarok/run/owner-agency-20261008T2022/resident_a/body-logs", "--ai=auto"],
+      "env_overrides": {
+        "RESIDENT_SOCKET": "/root/ragnarok/run/owner-agency-20261008T2022/resident_a/body.sock",
+        "RESIDENT_RUN_DIR": "/root/ragnarok/run/owner-agency-20261008T2022/resident_a",
+        "RESIDENT_ESTOP": "/root/ragnarok/run/owner-agency-20261008T2022/ESTOP"
+      }
+    },
+    {
+      "resident": "resident_b",
+      "cwd": "/root/ragnarok/repos/openkore",
+      "argv": ["/usr/bin/perl", "openkore.pl", "--control=/root/ragnarok/run/Demo/resident_b/control", "--tables=/root/ragnarok/run/Demo/resident_b/tables:tables", "--fields=/root/ragnarok/run/Demo/resident_b/fields", "--plugins=/root/ragnarok/repos/live_ro/plugins", "--logs=/root/ragnarok/run/owner-agency-20261008T2022/resident_b/body-logs", "--ai=auto"],
+      "env_overrides": {
+        "RESIDENT_SOCKET": "/root/ragnarok/run/owner-agency-20261008T2022/resident_b/body.sock",
+        "RESIDENT_RUN_DIR": "/root/ragnarok/run/owner-agency-20261008T2022/resident_b",
+        "RESIDENT_ESTOP": "/root/ragnarok/run/owner-agency-20261008T2022/ESTOP"
+      }
+    }
+  ],
+  "body_command_provenance": "NATIVE_CURRENT.commands + driver.py:111-114; реконструкция по сохранённым метаданным и source, НЕ новый /proc argv capture. Остальная env наследовалась из NATIVE_CURRENT и окружения; здесь не экспортируется.",
+  "gateway_source_template": {
+    "argv": ["/usr/bin/python3", "-u", "-m", "packages.body_gateway.service", "--socket", "<RUN>/<RESIDENT>/body.sock", "--store", "<RUN>/<RESIDENT>/journal.sqlite", "--resident", "<RESIDENT>", "--char-id", "<CHAR_ID>", "--char-name", "<CHAR_NAME>", "--duration", "<remaining original deadline seconds at launch>"],
+    "cwd": "/root/ragnarok/repos/live_ro",
+    "provenance": "driver.py:105-107; шаблон из source, не сохранённый argv с точным duration"
+  },
+  "units": {
+    "latest_live_run": "Прямой Python-контроллер с subprocess. Отдельный systemd-unit этого прогона не создавался; прежний canonical unit проверялся inactive.",
+    "rathena": "ops/units/ro-residents-{login,char,map}.service уже были в repo; установки, reload и restart при snapshot нет."
+  },
+  "private_prerequisites_not_copied": ["NATIVE_CURRENT и игровые control profiles", "provider config/key и накопительный budget ledger", "исходные conversation files обоих жителей", "field/client resources"],
+  "source_files": [
+    {"source": "/root/ragnarok/run/owner-agency-20261008T2022/driver.py", "repository": "packages/resident_demo/scenarios/owner_agency_20261008/driver.py", "sha256": "ea36bd6a1a64191cc5c8ef004aa9dcb08688b614a45e4df517924b6a5d0c5045", "byte_identical": true},
+    {"source": "/root/ragnarok/run/owner-agency-20261008T2022/city_catalogue.py", "repository": "packages/resident_demo/scenarios/owner_agency_20261008/city_catalogue.py", "sha256": "1a99d800c7b0289075aa16b3e821b345e1cce4480abbd0719c734c5cee124a22", "byte_identical": true}
+  ],
+  "plugin": {
+    "path": "plugins/residentBody/residentBody.pl",
+    "sha256": "d6d047a291fadb9f0cf7dd1331fd04eaed90a9f8ff13c9fe9a2f736a1e2f42c8",
+    "provenance": "Последний прогон использовал --plugins=/root/ragnarok/repos/live_ro/plugins. Отдельной private plugin-копии этого прогона нет; существующий dirty plugin сохранён, не заменён более ранними duo-вариантами."
+  }
+}

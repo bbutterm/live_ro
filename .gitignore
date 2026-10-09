@@ -1,14 +1,43 @@
+# Runtime, agent workspaces and raw evidence
+/.hermes/
+/run/
+/evidence/
+/docs/evidence/
 run/
 logs/
-/evidence/
 artifacts/
 research/
+
+# Private configuration and credentials
+*.cnf
 .env
 .env.*
+control/config.txt
+credentials.json
+
+# Databases and dumps (schema source files in server/schema stay tracked)
 *.db
 *.sqlite*
+*.sql
+!server/schema/*.sql
+!server/qa/*.sql
+!server/patches/*.sql
 *.sql.gz
+*.sql.bz2
+*.sql.xz
+*.sql.zst
+*.dump
+*.dump.*
+*.bak
+*.backup
+/dumps/
+/backups/
+
+# Logs and build/cache output
 *.log
+*.log.*
+*.out
+*.err
 *.o
 *.so
 __pycache__/

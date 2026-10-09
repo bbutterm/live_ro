@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Bounded resident operator CLI. No arbitrary console execution."""
+import pathlib,sys
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
+from packages.body_gateway.cli import main
+if __name__=='__main__':sys.exit(main())

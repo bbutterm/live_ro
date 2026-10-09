@@ -16,6 +16,9 @@ class Session:
    if not isinstance(msg.get('map'),str) or not msg['map']:raise ValueError('MAP')
    for key in ('pos','dest'):
     if not isinstance(msg.get(key),dict) or any(type(msg[key].get(axis))!=int or not 0<=msg[key][axis]<=2048 for axis in ('x','y')):raise ValueError('POSITION')
+  elif kind in ('skill_accepted','skill_rejected','skill_progress','skill_result','event'):
+   if self.epoch is None or epoch!=self.epoch:raise ValueError('EPOCH')
+   if kind!='event' and not isinstance(msg.get('action_id'),str):raise ValueError('ACTION_ID')
   else:raise ValueError('MESSAGE_TYPE')
   self.epoch=epoch;self.seq=seq
   return msg
