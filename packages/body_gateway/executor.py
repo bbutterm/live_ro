@@ -65,11 +65,17 @@ class Executor:
   if skill=='say' and (not isinstance(params,dict) or not isinstance(params.get('text'),str) or not 0<len(params['text'])<=120 or params['text'].lstrip().startswith(('@','#','/')) or any(ord(c)<32 or ord(c)==127 for c in params['text'])):raise ValueError('INVALID_TEXT')
   key=idem or str(uuid.uuid4());old=[a for a in self.j.actions() if a['resident']==self.resident and a['idem_key']==key]
   if old:return old[0]
+  if skill=='sell_loot' and (isinstance(params,dict) and 'items' in params or (self.telemetry or {}).get('behavior_v1') is True):
+   items=params.get('items') if isinstance(params,dict) else None
+   bag=(self.telemetry or {}).get('inventory')
+   if not isinstance(items,dict) or not items or any(k not in ('909','713','938') or type(n) is not int or not 1<=n<=1000 for k,n in items.items()):raise ValueError('INVALID_ITEMS')
+   if not isinstance(bag,dict) or any(type(bag.get(k)) is not int or n>bag[k] for k,n in items.items()):raise ValueError('INVALID_ITEMS')
+   params={**params,'items':dict(items)}
   if skill in ('buy_potions','sell_loot'):params={**params,'_inventory_before':dict((self.telemetry or {}).get('inventory',{})),'_picklog_baseline':self.j.cursor('picklog')}
   now=time.time();a=self.j.plan(self.resident,skill,params,key,now+deadline,self.epoch,self.j.cursor('witness'));aid=a['action_id']
   if not self.telemetry or now-self.telemetry['ts']>3 or now-self.received>3:reason='STALE_TELEMETRY'
   elif self.telemetry.get('dead') and skill!='respawn':reason='DIED'
-  elif len(self.active())>1:reason='BUSY'
+  elif any(a['action_id']!=aid and ((a['skill'] in ('say','whisper')) == (skill in ('say','whisper'))) for a in self.active()):reason='BUSY'
   else:reason=None
   if reason:self.j.transition(aid,'rejected_local',reason,{});return self.j.action(aid)
   m={'proto':1,'type':'skill_start','action_id':aid,'idem_key':key,'skill':skill,'params':params,'deadline_ts':a['deadline'],'expect_epoch':self.epoch}
@@ -85,7 +91,7 @@ class Executor:
    rows=[r for r in rows if r['id']>a['baseline'] and r['char_id']==self.char_id]
    server_alive=self.projection.get('server_dead',{}).get('value') is not True and self.projection.get('server_online',{}).get('value') is not False
    server_map_ok=not t or self.projection.get('server_map',{}).get('value',t['map'])==t['map']
-   if state in ('verifying','unknown') and t and now-t['ts']<=3 and now-self.received<=3 and not t.get('dead') and not t.get('running') and server_alive and server_map_ok:
+   if state in ('verifying','unknown') and t and now-t['ts']<=3 and now-self.received<=3 and not t.get('dead') and (a['skill'] in ('say','whisper') or not t.get('running')) and server_alive and server_map_ok:
     if a['skill']=='travel_to':
      def near(x,y,r):return 'x' not in p or max(abs(x-p['x']),abs(y-p['y']))<=r
      hit=next((r for r in reversed(rows) if r['kind'] in ('pos','loadmap') and r['map']==p['map'] and near(r['x'],r['y'],p['r'])),None)
@@ -98,13 +104,19 @@ class Executor:
      before=p['_inventory_before'];bag=t.get('inventory',{})
      if a['skill']=='buy_potions':
       need=p['stock_goal']-before.get('501',0);hits=[r for r in trades if r['item_id']==501 and r['amount']>0];ok=need>0 and sum(r['amount'] for r in hits)>=need and bag.get('501',0)>=p['stock_goal']
+     elif 'items' in p:
+      # Explicit plans are quantities, never an instruction to liquidate stacks.
+      expected={int(k):n for k,n in p['items'].items()}
+      hits=[r for r in trades if r['amount']<0]
+      ok=self.epoch==a['epoch']==t.get('body_epoch') and bool(expected) and all(r['item_id'] in expected for r in hits) and all(sum(-r['amount'] for r in hits if r['item_id']==iid)==n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in expected.items())
      else:
       ids={909,914,705,935,919,908,916};expected={int(k):v for k,v in before.items() if int(k) in ids and v>0};hits=[r for r in trades if r['item_id'] in expected and r['amount']<0];ok=bool(expected) and all(sum(-r['amount'] for r in hits if r['item_id']==iid)>=n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in expected.items())
      if ok:self.j.transition(aid,'confirmed','BOUGHT' if a['skill']=='buy_potions' else 'SOLD',{'server_picklog':hits,'body':t});continue
     elif a['skill'] in ('rest','respawn'):
      hit=next((r for r in reversed(rows) if r['kind'] in ('pos','loadmap','login') and r['map']==t['map']),None)
      hp_ok=a['skill']=='respawn' or (t.get('hp_max',0)>0 and t.get('hp',0)*100/t['hp_max']>=p['hp_pct'])
-     if hit and hp_ok:self.j.transition(aid,'confirmed','RESPAWNED' if a['skill']=='respawn' else 'RESTED',{'server':hit,'body':t});continue
+     sitting_ok=a['skill']!='rest' or t.get('behavior_v1') is not True or t.get('sitting') is True
+     if hit and hp_ok and sitting_ok:self.j.transition(aid,'confirmed','RESPAWNED' if a['skill']=='respawn' else 'RESTED',{'server':hit,'body':t});continue
     elif a['skill']=='say':
      spoken=any(r['state']=='verifying' and r['code']=='SPOKEN' for r in self.j.trace(aid))
      hits=[json.loads(r[0]) for r in self.j.db.execute("SELECT payload FROM events WHERE source='chat' AND ts BETWEEN ? AND ?",(a['created']-1,a['deadline']))]

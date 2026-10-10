@@ -184,6 +184,15 @@ def supervise():
 def main():
     p=argparse.ArgumentParser();p.add_argument('--brain');a=p.parse_args()
     if a.brain:
+        # Ownership routing MUST precede the legacy virtualenv re-exec.
+        from packages.resident_behavior.ownership import read_lease, lease_active
+        if lease_active(read_lease(STATE/a.brain)):
+            interpreter='/usr/bin/python3'
+            if pathlib.Path(interpreter).resolve()!=pathlib.Path(sys.executable).resolve():
+                return os.execv(interpreter,[interpreter,'-m','packages.resident_world.supervisor','--brain',a.brain])
+            from packages.resident_behavior.live import run
+            r=next(r for r in config()['residents'] if r['resident_id']==a.brain)
+            return run(r,STATE/a.brain)
         interpreter=config().get('brain_python',sys.executable)
         if pathlib.Path(interpreter).resolve()!=pathlib.Path(sys.executable).resolve():
             return os.execv(interpreter,[interpreter,'-m','packages.resident_world.supervisor','--brain',a.brain])

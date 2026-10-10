@@ -6,7 +6,9 @@ class WorldSupervisorTests(unittest.TestCase):
         from unittest.mock import patch
         from packages.resident_world import supervisor
         c={'brain_python':'/opt/test/python','residents':[{'resident_id':'resident_a'}]}
-        with patch.object(supervisor,'config',return_value=c),patch('sys.argv',['world','--brain','resident_a']),patch('sys.executable','/usr/bin/python3'),patch.object(supervisor.os,'execv') as execute,patch.object(supervisor,'brain') as brain:
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp,patch.object(supervisor,'STATE',Path(tmp)),patch.object(supervisor,'config',return_value=c),patch('sys.argv',['world','--brain','resident_a']),patch('sys.executable','/usr/bin/python3'),patch.object(supervisor.os,'execv') as execute,patch.object(supervisor,'brain') as brain:
             supervisor.main()
         execute.assert_called_once_with('/opt/test/python',['/opt/test/python','-m','packages.resident_world.supervisor','--brain','resident_a'])
         brain.assert_not_called()

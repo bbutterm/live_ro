@@ -121,6 +121,48 @@ def ingest(store,c):
         with store.db:store.put('last_poll',time.time())
 
 
+def queue_behavior_chat(d,event,r,c,s,lease):
+    """Only parse an intent here: no legacy model, cancellation, motor or speech."""
+    import hashlib
+    from packages.resident_behavior.chat_intents import enqueue
+    from packages.resident_behavior.config import load_behavior
+    decision=fallback_reply(r['name'],event,s)
+    if decision.get('action') in ('walk_to','meet'):
+        requested=decision['args'].get('place')
+        point=c.get('places',{}).get(requested)
+        places=load_behavior('config/behavior.yaml')['places']
+        matched=next((name for name,p in places.items() if point and all(point.get(k)==p.get(k) for k in ('map','x','y'))),None)
+        if matched:
+            decision['args']['place']=matched
+        else:
+            decision={'action':'unsupported','args':{}}
+    # Unknown/draining leases fence legacy too, but never enqueue for a different owner.
+    if lease.get('phase') not in ('controlled','draining') or not lease.get('token'):
+        return {'outcome':'behavior_unavailable','mode':'controlled'}
+    intent=dict(id='chat-'+str(event['id']),event=event,decision=decision,
+                lease_id=hashlib.sha256(lease['token'].encode()).hexdigest())
+    enqueue(d,intent)
+    return {'outcome':'queued_behavior','mode':'controlled','intent_id':intent['id']}
+
+
+def legacy_chat_gate(d):
+    """Hold the cutover lock from the final legacy permission check through dispatch."""
+    from contextlib import contextmanager
+    @contextmanager
+    def locked():
+        import fcntl
+        from packages.resident_behavior.ownership import read_lease
+        with (d/'behavior-lease.lock').open('a+') as lock:
+            fcntl.flock(lock,fcntl.LOCK_SH)
+            try:
+                lease=read_lease(d)
+                from packages.resident_behavior.ownership import lease_active
+                yield lease if lease_active(lease) else None
+            finally:
+                fcntl.flock(lock,fcntl.LOCK_UN)
+    return locked()
+
+
 def handle(event,r,c,store,model=None):
     import time
     from .supervisor import STATE,atomic
@@ -131,6 +173,11 @@ def handle(event,r,c,store,model=None):
     started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+10}
     try:
         s=request(str(d/'actions.sock.control'),{'op':'status'})
+        from packages.resident_behavior.ownership import read_lease,lease_active
+        lease=read_lease(d)
+        if lease_active(lease):
+            store.finish(event['id'],queue_behavior_chat(d,event,r,c,s,lease))
+            return
         from .memory import day_decision
         daily=day_decision(r,event,d)
         decision=validate_reply(daily or fallback_reply(r['name'],event,s),event,c,s)
@@ -139,17 +186,21 @@ def handle(event,r,c,store,model=None):
         # The same resident writer owns speech and its persisted movement commitment.
         while time.time()<event['ts']+8:
             try:
-                with manual(r,wait_limit=2) as (d,sock):
-                    phrase=decision['args'].get('text',decision.get('say',''))
-                    skill='whisper' if decision['action']=='whisper' else 'say'
-                    params={'to_name':event['name'],'text':phrase} if skill=='whisper' else {'text':phrase}
-                    task['decision']=decision
-                    if decision['action'] not in ('say','whisper'):
-                        atomic(d/'chat-goal.json',{'id':task['id'],'event_id':event['id'],'decision':decision,'at':time.time()})
-                    result=run_native(sock,{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,d)
-                    task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
-                    record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,seconds=time.time()-event['ts'])
-                    return
+                with legacy_chat_gate(d) as lease:
+                    if lease:
+                        store.finish(event['id'],queue_behavior_chat(d,event,r,c,s,lease))
+                        return
+                    with manual(r,wait_limit=2) as (d,sock):
+                        phrase=decision['args'].get('text',decision.get('say',''))
+                        skill='whisper' if decision['action']=='whisper' else 'say'
+                        params={'to_name':event['name'],'text':phrase} if skill=='whisper' else {'text':phrase}
+                        task['decision']=decision
+                        if decision['action'] not in ('say','whisper'):
+                            atomic(d/'chat-goal.json',{'id':task['id'],'event_id':event['id'],'decision':decision,'at':time.time()})
+                        result=run_native(sock,{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,d)
+                        task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
+                        record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,seconds=time.time()-event['ts'])
+                        return
             except BlockingIOError:time.sleep(.1)
         store.finish(event['id'],{'outcome':'failed(WRITER_BUSY)'})
     finally:marker.unlink(missing_ok=True)

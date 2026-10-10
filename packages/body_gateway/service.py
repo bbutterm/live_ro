@@ -19,6 +19,64 @@ def read_witness_batch(char_id,char_name,cursors,stop):
  picks=[json.loads(line) for line in query(DEFAULTS,sql).splitlines()]
  return rows,chat,picks
 
+SPEECH={'say','whisper'}
+
+def control_request(e,j,send,directory,m):
+ """Per-actor fence at the actual control boundary, including legacy clients."""
+ from packages.resident_behavior.ownership import read_lease,lease_active,dispatch_allowed
+ op=m.get('op');j.log(op,m);token=m.get('behavior_owner');lease=read_lease(directory)
+ def owner(a):
+  return None if a['skill'] in SPEECH else json.loads(a['params']).get('_behavior_owner')
+ def cleanup(a=None):
+  # A saved owner survives expiry, release and coordinator recovery.
+  saved=owner(a) if a else None
+  if saved and token!=saved:raise ValueError('BEHAVIOR_OWNER')
+  if lease_active(lease) and (lease.get('invalid') or not token or token!=lease.get('token')):raise ValueError('BEHAVIOR_OWNER')
+ def dispatch(a=None):
+  if a and owner(a) and (token!=owner(a) or not dispatch_allowed(lease,token,time.time())):raise ValueError('BEHAVIOR_OWNER')
+  if token and lease is not None and not dispatch_allowed(lease,token,time.time()):raise ValueError('BEHAVIOR_OWNER')
+  if lease_active(lease) and not dispatch_allowed(lease,token,time.time()):raise ValueError('BEHAVIOR_OWNER')
+ if op=='status':
+  actions=[a for a in e.active() if not owner(a) or owner(a)==token]
+  ownership={'fencing_version':1,'active':lease_active(lease),'phase':lease.get('phase') if lease else 'legacy','deadline':lease.get('deadline') if lease else None,'invalid':bool(lease and lease.get('invalid'))}
+  telemetry=e.telemetry
+  if telemetry and telemetry.get('running'):
+   aid=telemetry['running'].get('action_id')
+   hidden=next((a for a in e.active() if a['action_id']==aid and owner(a) and owner(a)!=token),None)
+   if hidden:telemetry={**telemetry,'running':None}
+  projection=dict(e.projection)
+  if telemetry is not e.telemetry and 'running' in projection:projection['running']={**projection['running'],'value':None}
+  return {'resident':e.resident,'epoch':e.epoch,'telemetry':telemetry,'age':time.time()-e.received if e.received else None,'projection':projection,'actions':actions,'ownership':ownership}
+ if op=='run':
+  if m.get('resident',e.resident)!=e.resident:raise ValueError('RESIDENT')
+  skill=m['skill'];params=m['params']
+  if skill not in SPEECH:
+   dispatch()
+   if isinstance(params,dict):
+    params={k:v for k,v in params.items() if k!='_behavior_owner'}
+    if lease_active(lease):params['_behavior_owner']=token
+   if m.get('idem'):
+    for a in j.actions():
+     if a['resident']==e.resident and a['idem_key']==m['idem']:dispatch(a)
+  return e.run(skill,params,m.get('deadline',60),m.get('idem'))
+ if op=='action':return dict(j.action(m['action_id']),trace=j.trace(m['action_id']))
+ if op=='actions':return j.actions()
+ if op=='trace':return j.trace(m['action_id'])
+ if op=='cancel':
+  a=j.action(m['action_id'])
+  if a['skill'] not in SPEECH:cleanup(a)
+  return e.cancel(m['action_id'])
+ if op=='safe_stop':
+  cleanup()
+  for a in e.active():
+   if a['skill'] not in SPEECH:cleanup(a)
+  e.safe_stop();return {'queued':True}
+ if op=='resend':
+  a=j.action(m['action_id'])
+  if a['skill'] not in SPEECH:dispatch(a)
+  send({'proto':1,'type':'skill_start','action_id':a['action_id'],'idem_key':a['idem_key'],'skill':a['skill'],'params':json.loads(a['params']),'deadline_ts':a['deadline'],'expect_epoch':a['epoch']});return {'queued':True}
+ raise ValueError('OPERATION')
+
 def serve(path,store,resident,char_id,char_name,duration,witness=True):
  path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True,mode=0o700);store=pathlib.Path(store);store.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
  os.umask(0o077);j=Journal(str(store));sel=selectors.DefaultSelector();listeners={};peers={};body=None;outbox=bytearray();deadline=float('inf') if duration is None else time.monotonic()+duration;last_poll=0;last_ping=0;stopping=False
@@ -39,19 +97,7 @@ def serve(path,store,resident,char_id,char_name,duration,witness=True):
   except Exception:pass
   peers.pop(c,None);c.close()
  def control(m):
-  op=m.get('op');j.log(op,m)
-  if op=='status':return {'resident':resident,'epoch':e.epoch,'telemetry':e.telemetry,'age':time.time()-e.received if e.received else None,'projection':e.projection,'actions':e.active()}
-  if op=='run':
-   if m.get('resident',resident)!=resident:raise ValueError('RESIDENT')
-   return e.run(m['skill'],m['params'],m.get('deadline',60),m.get('idem'))
-  if op=='action':return dict(j.action(m['action_id']),trace=j.trace(m['action_id']))
-  if op=='actions':return j.actions()
-  if op=='trace':return j.trace(m['action_id'])
-  if op=='cancel':return e.cancel(m['action_id'])
-  if op=='safe_stop':e.safe_stop();return {'queued':True}
-  if op=='resend':
-   a=j.action(m['action_id']);send({'proto':1,'type':'skill_start','action_id':a['action_id'],'idem_key':a['idem_key'],'skill':a['skill'],'params':json.loads(a['params']),'deadline_ts':a['deadline'],'expect_epoch':a['epoch']});return {'queued':True}
-  raise ValueError('OPERATION')
+  return control_request(e,j,send,path.parent,m)
  try:
   for name,p in (('body',path),('control',pathlib.Path(str(path)+'.control'))):
    if p.exists():raise RuntimeError('Socket exists; explicit cleanup required')

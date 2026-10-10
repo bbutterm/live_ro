@@ -1,15 +1,15 @@
 # STATUS
-P0–P2 выполнены; мир включён, меню прежнее.
-P3: модель/валидатор/fallback работают; разнообразие длительного окна не принято.
-P4: follow/accept/обе позиции/память подтверждены ранее; новый decline/полный counter открыты.
-P5: дневная witness-память; fallback не выдумывает события.
-P6: медленный SELECT больше не блокирует управление; полная приёмка не закрыта.
-Pyright основного Hermes отключён: config + обратимо убран cached launcher, перезапуска ботов нет.
-После Python-правки не возобновился; доступно 834.4 MiB RAM, swap не очищался.
-Переговоры получили текущую задачу/недавние witness-встречи, без заданного отказа.
-Явный CANCELLED не повторяется; live-контроль пропущен без подходящего native-idle.
-Brains обновлены отдельно; world/тела/gateways не перезапускались, chat отдельно восстановлен.
-120 с: 24/24 здоровых выборки каждого, RPC ≤0.0243 с; сервер: 24 позиции каждого, 7 kill Mira.
-make check: 231 тест OK; доказательства вне Git, memory-relief-world-proof.json.
-BLOCKED: LLM DAILY_LIMIT; временный $3 override убран, лимит $2/старый журнал сохранены. Перевес/редкие ветви открыты.
-Продолжаю: P6, пункт 6 — приёмка по свидетелю в разрешённых коротких окнах.
+Цель: docs/RESIDENT_BEHAVIOR_V1.md; полная игровая приёмка не завершена.
+Результат: docs/RESULT_BEHAVIOR_V1.md; ошибки: docs/ERRORS_BEHAVIOR_V1.md.
+B2: reducer/store/outbox/contracts/replay реализованы; финальная полнота открыта.
+B3: canary ResidentA вернулся в released после ContractError(invalid_keys).
+B4: DeepSeek V3.2/Controller/chat реализованы; успешный backend chat получен.
+В canary: 437 evaluation, 1 paid decision, invalid_response; source=fallback.
+Маршрут accepted; свидетель подтвердил prt_fild08, но итог failed/interrupted.
+Игровой ответ игроку и успешное модельное действие не доказаны.
+Речь изолирована от motor; chat cadence/RNG и strict chat JSON исправлены.
+Штатный cap 2 USD; разрешённый временный cap 3 недействителен после released.
+Неизвестные резервы не удалены; ledger/секреты/runtime остаются вне Git.
+Последний make check: 433 теста OK; git-checkpoint-check.log.
+ro status: все трое онлайн, безопасная пауза из-за перевеса; мир не остановлен.
+По поручению владельца сохраняется Git-checkpoint, без расширения rollout.
