@@ -89,6 +89,29 @@ class WorldSkillsTests(unittest.TestCase):
                 self.assertEqual(len([p for p in plans if p['skill']=='travel_to']),2 if mode=='release' else 0)
                 self.assertEqual(task['expires'],1300)
 
+    def test_meeting_decline_is_terminal_even_when_peer_cannot_speak(self):
+        import tempfile,pathlib,time
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from packages.resident_world import skills,meeting
+        c={'residents':[{'name':'Mira','resident_id':'b'}],'places':{'field':{}}}
+        for mode in ('busy','speech_failed','speech_done'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                root=pathlib.Path(tmp);d=root/'a';d.mkdir();peer=root/'b';peer.mkdir();plans=[]
+                @contextmanager
+                def writer(*args,**kwargs):
+                    if mode=='busy':raise BlockingIOError('WRITER_BUSY')
+                    yield peer,'peer-sock'
+                def native(sock,plan,*args):
+                    plans.append(plan)
+                    return 'failed(NO_EVIDENCE)' if sock=='peer-sock' and mode=='speech_failed' else 'done'
+                task={'id':'key','resident':'ResidentA','expires':time.time()+300}
+                with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value={'age':1,'actions':[]}),patch.object(skills,'run_native',side_effect=native),patch.object(skills,'manual',side_effect=writer) as arbiter,patch.object(meeting.time,'sleep',side_effect=AssertionError('Отказ не должен ждать writer')) as sleep,patch.object(meeting,'decide',return_value=dict(choice='decline',place='field',reason='Хочу отдыхать')) as model:
+                    self.assertEqual(meeting.execute({'resident':'Mira','place':'field'},c,'sock','key',task,d),'failed(MEETING_DECLINED)')
+                    arbiter.assert_called_once();model.assert_called_once();sleep.assert_not_called()
+                self.assertFalse(any(p['skill']=='travel_to' for p in plans))
+                self.assertEqual(task['meeting_reply'],{'choice':'decline','outcome':'not_sent(TARGET_BUSY)' if mode=='busy' else 'failed(NO_EVIDENCE)' if mode=='speech_failed' else 'done'})
+
     def test_meeting_chat_on_either_side_interrupts_both_routes(self):
         import tempfile
         from packages.resident_world.skills import interrupted

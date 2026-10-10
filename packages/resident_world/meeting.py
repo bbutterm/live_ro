@@ -60,6 +60,11 @@ def execute(args,c,sock,key,task,d):
     answer=vote(target,other_d,s,args['place'],True,'peer')
     if answer is None:return 'failed(MEETING_MODEL_UNAVAILABLE)'
     if busy():return 'failed(CHAT_INTERRUPT)'
+    def reply(choice,result):
+        task['meeting_reply']={'choice':choice,'outcome':result}
+        atomic(d/'manual_task.json',task)
+        if result=='failed(CHAT_INTERRUPT)' or busy():return 'failed(CHAT_INTERRUPT)'
+        return 'failed(MEETING_DECLINED)' if choice=='decline' else result
     peer=None
     @contextlib.contextmanager
     def peer_writer():
@@ -72,7 +77,11 @@ def execute(args,c,sock,key,task,d):
                 try:
                     owned=stack.enter_context(skills.manual(target,wait_limit=2))
                     break
-                except BlockingIOError:time.sleep(.2)
+                except BlockingIOError:
+                    # A refusal is already terminal; speech must not hold the
+                    # initiator for the rest of the lease or cancel economics.
+                    if answer['choice']=='decline':raise
+                    time.sleep(.2)
             try:yield owned
             finally:
                 if peer is not None:
@@ -85,8 +94,8 @@ def execute(args,c,sock,key,task,d):
             text=('Договорились: встреча ' if choice=='accept' else 'Предлагаю вместо этого встречу ' if choice=='counter' else 'Сегодня встречу отклоняю, занят.')
             if choice!='decline':text+=label(place)+'.'
             result=speak(other_sock,other_d,peer,text,'peer-vote',task['resident'])
+            result=reply(choice,result)
             if result!='done':return result
-            if choice=='decline':return 'failed(MEETING_DECLINED)'
             if choice=='counter':
                 initiator=next(r for r in c['residents'] if r['name']==task['resident'])
                 if busy():return 'failed(CHAT_INTERRUPT)'
@@ -94,8 +103,8 @@ def execute(args,c,sock,key,task,d):
                 if final is None:return 'failed(MEETING_MODEL_UNAVAILABLE)'
                 text='Договорились: встреча '+label(place)+'.' if final['choice']=='accept' else 'Сегодня встречу отклоняю, занят.'
                 result=speak(sock,d,task,text,'final-vote',target['name'])
+                result=reply(final['choice'],result)
                 if result!='done':return result
-                if final['choice']=='decline':return 'failed(MEETING_DECLINED)'
             if busy():return 'failed(CHAT_INTERRUPT)'
             p=c['places'][place];task['meeting_place']=place
             route=dict(skill='travel_to',params=dict(p,r=3),timeout=180)
@@ -111,4 +120,5 @@ def execute(args,c,sock,key,task,d):
             return 'done'
     except BlockingIOError:
         if busy():return 'failed(CHAT_INTERRUPT)'
+        if answer['choice']=='decline':return reply('decline','not_sent(TARGET_BUSY)')
         return 'timeout' if time.time()+5>=task.get('expires',float('inf')) else 'failed(TARGET_BUSY)'
