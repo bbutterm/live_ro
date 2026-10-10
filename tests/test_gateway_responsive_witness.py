@@ -17,7 +17,7 @@ def blocked_gateway(path, store, entered, release):
         entered.set()
         release.wait(3)
         return []
-    with patch('packages.body_gateway.service.get_events', events), patch('tools.events.query', return_value=''):
+    with patch('packages.body_gateway.service.get_events', events), patch('packages.body_gateway.service.query', return_value=''):
         serve(path, store, 'resident_a', 150001, 'ResidentA', 2)
 
 

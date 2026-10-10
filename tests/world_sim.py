@@ -31,6 +31,22 @@ class FakeWorld:
         now=time.time()
         return self._add('witness',{'ts':local(now),'ts_utc':datetime.datetime.fromtimestamp(now,datetime.timezone.utc).isoformat(),'char_id':self.char_id,'kind':kind,'map':m,'x':x,'y':y,'a1':a1,'a2':a2,'db_timezone':'Europe/Amsterdam'})
     def chat(self,kind,text,to=''):return self._add('chat',{'ts':local(time.time()),'type':kind,'char_id':self.char_id,'to':to,'text':text})
+    def say_as(self,name,char_id,text,m,x,y,kind='O',to=''):
+        """A player (not the resident) speaks: the same chatlog the chat service reads."""
+        return self._add('chat',{'ts':local(time.time()),'type':kind,'char_id':char_id,'name':name,'to':to,'text':text,'map':m,'x':x,'y':y})
+    def chatlog_query(self,residents):
+        """tools.events.query stand-in for chat.ingest (JOIN char → name, UNIX_TIMESTAMP)."""
+        names={r['char_id']:r['name'] for r in residents}
+        def query(defaults,sql):
+            if 'MAX(id)' in sql:return '0\n'
+            cursor=int(re.search(r'l\.id>(\d+)',sql).group(1));out=[]
+            for r in self.rows('chat'):
+                if r['id']<=cursor or r['type'] not in ('O','W'):continue
+                ts=datetime.datetime.fromisoformat(r['ts']).replace(tzinfo=AMS).timestamp()
+                out.append({'id':r['id'],'ts':ts,'name':r.get('name',names.get(r['char_id'],'?')),'char_id':r['char_id'],'type':r['type'],'to':r.get('to',''),
+                            'map':r.get('map',''),'x':r.get('x',0),'y':r.get('y',0),'text':r['text']})
+            return ''.join(json.dumps(o,ensure_ascii=False)+'\n' for o in out)
+        return query
     def pick(self,item,amount,m):return self._add('picklog',{'ts':local(time.time()),'char_id':self.char_id,'type':'S','item_id':item,'amount':amount,'map':m})
     def rows(self,kind):
         return [json.loads(l) for l in (self.root/(kind+'.jsonl')).read_text().splitlines() if l]

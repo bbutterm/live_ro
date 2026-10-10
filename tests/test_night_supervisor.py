@@ -15,7 +15,7 @@ class SupervisorTests(unittest.TestCase):
     def test_expired_deadline_never_spawns(self):
         self.assertTrue(SOURCE.exists(), 'Night supervisor missing')
         mod = __import__('packages.resident_demo.supervisor', fromlist=['supervise'])
-        with tempfile.TemporaryDirectory(dir='/root/ragnarok/run', prefix='supervisor-test-') as d:
+        with tempfile.TemporaryDirectory(prefix='supervisor-test-') as d:
             marker = pathlib.Path(d) / 'spawned'
             commands = [{'name': 'probe', 'cwd': d, 'argv': ['/usr/bin/touch', str(marker)]}]
             with self.assertRaisesRegex(RuntimeError, 'DEADLINE'):
@@ -27,7 +27,7 @@ class SupervisorTests(unittest.TestCase):
         import os
         import sys
         mod = __import__('packages.resident_demo.supervisor', fromlist=['supervise'])
-        with tempfile.TemporaryDirectory(dir='/root/ragnarok/run', prefix='supervisor-test-') as d:
+        with tempfile.TemporaryDirectory(prefix='supervisor-test-') as d:
             commands = [{'name': 'probe', 'cwd': d, 'argv': [sys.executable, '-c', 'import time; time.sleep(30)']}]
             mod.supervise(commands, d, time.time() + 0.3)
             state = json.loads((pathlib.Path(d) / 'identity.json').read_text())
@@ -43,7 +43,7 @@ class SupervisorTests(unittest.TestCase):
         import os
         import sys
         mod = __import__('packages.resident_demo.supervisor', fromlist=['supervise'])
-        with tempfile.TemporaryDirectory(dir='/root/ragnarok/run', prefix='supervisor-test-') as d:
+        with tempfile.TemporaryDirectory(prefix='supervisor-test-') as d:
             pidfile = pathlib.Path(d) / 'descendant'
             code = "import subprocess,time,pathlib; p=subprocess.Popen(['sleep','30']); pathlib.Path(%r).write_text(str(p.pid)); time.sleep(.2)" % str(pidfile)
             commands = [{'name': 'probe', 'cwd': d, 'argv': [sys.executable, '-c', code]}]
