@@ -1,5 +1,5 @@
 """Ограниченные переговоры: никакого согласия без отдельного решения модели."""
-import contextlib,re,time
+import contextlib,json,re,time
 from .supervisor import atomic
 
 
@@ -78,6 +78,19 @@ def execute(args,c,sock,key,task,d):
                     owned=stack.enter_context(skills.manual(target,wait_limit=2))
                     break
                 except BlockingIOError:
+                    # Two reciprocal initiators each own their own writer.
+                    # Only one yields; the survivor still needs its saved vote,
+                    # normal peer arbitration and server-confirmed arrival.
+                    if answer['choice']!='decline' and task['resident']>target['name']:
+                        try:other=json.loads((other_d/'manual_task.json').read_text())
+                        except (OSError,ValueError):other={}
+                        if (other.get('id') and other.get('resident')==target['name'] and other.get('action')=='meet'
+                            and other.get('args',{}).get('resident')==task['resident']
+                            and not other.get('ended') and other.get('outcome') is None
+                            and other.get('started',float('inf'))<=time.time()<other.get('expires',0)):
+                            task['meeting_collision']={'peer_task':other['id'],'yield_to':target['name']}
+                            atomic(d/'manual_task.json',task)
+                            raise BlockingIOError('MEETING_COLLISION')
                     # A refusal is already terminal; speech must not hold the
                     # initiator for the rest of the lease or cancel economics.
                     if answer['choice']=='decline':raise
@@ -118,7 +131,8 @@ def execute(args,c,sock,key,task,d):
             task['meeting_witness']={'self':a['projection']['server_pos'],'peer':b['projection']['server_pos'],'peer_actions':peer.get('native_results',[])}
             atomic(d/'manual_task.json',task)
             return 'done'
-    except BlockingIOError:
+    except BlockingIOError as error:
         if busy():return 'failed(CHAT_INTERRUPT)'
+        if str(error)=='MEETING_COLLISION':return 'failed(MEETING_COLLISION)'
         if answer['choice']=='decline':return reply('decline','not_sent(TARGET_BUSY)')
         return 'timeout' if time.time()+5>=task.get('expires',float('inf')) else 'failed(TARGET_BUSY)'

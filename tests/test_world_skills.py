@@ -82,25 +82,29 @@ class WorldSkillsTests(unittest.TestCase):
         from unittest.mock import patch
         from packages.resident_world import skills,meeting
         c={'residents':[{'name':'Mira','resident_id':'b'}],'places':{'field':{'map':'prt_fild08','x':170,'y':240}}}
-        for mode,expected in [('release','done'),('chat','failed(CHAT_INTERRUPT)'),('deadline','timeout')]:
+        for mode,expected in [('release','done'),('chat','failed(CHAT_INTERRUPT)'),('deadline','timeout'),('collision','failed(MEETING_COLLISION)'),('expired_collision','done'),('collision_winner','done')]:
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
                 root=pathlib.Path(tmp);d=root/'a';d.mkdir();peer=root/'b';peer.mkdir()
                 clock=[1000];calls=[];plans=[]
+                if 'collision' in mode:
+                    import json
+                    (peer/'manual_task.json').write_text(json.dumps({'id':'other','resident':'Mira','action':'meet','args':{'resident':'Borin' if mode=='collision_winner' else 'ResidentA','place':'field'},'started':990,'expires':999 if mode=='expired_collision' else 1300}))
                 s={'actions':[],'age':1,'projection':{'server_map':{'value':'prt_fild08'},'server_pos':{'value':{'x':170,'y':240},'ts':1000}}}
                 @contextmanager
                 def writer(*args,**kwargs):
                     calls.append(1)
-                    if len(calls)==1 or mode!='release':raise BlockingIOError('WRITER_BUSY')
+                    if len(calls)==1 or mode not in ('release','expired_collision','collision_winner'):raise BlockingIOError('WRITER_BUSY')
                     yield peer,'peer-sock'
                 def sleep(seconds):
+                    if mode=='collision':raise AssertionError('Взаимная встреча не должна ждать свой timeout')
                     if mode=='chat':(peer/'CHAT_PENDING').touch()
                     if mode=='deadline':clock[0]=1296
                 def native(sock,plan,*args):plans.append(plan);return 'done'
-                task={'id':'key','resident':'ResidentA','action':'meet','expires':1300}
+                task={'id':'key','resident':'Borin' if mode=='collision_winner' else 'ResidentA','action':'meet','expires':1300}
                 with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',side_effect=native),patch.object(skills,'manual',side_effect=writer),patch.object(meeting.time,'time',side_effect=lambda:clock[0]),patch.object(meeting.time,'sleep',side_effect=sleep),patch.object(meeting,'decide',return_value=dict(choice='accept',place='field',reason='Хочу поговорить')) as model:
                     self.assertEqual(meeting.execute({'resident':'Mira','place':'field'},c,'sock','key',task,d),expected)
                     model.assert_called_once()
-                self.assertEqual(len([p for p in plans if p['skill']=='travel_to']),2 if mode=='release' else 0)
+                self.assertEqual(len([p for p in plans if p['skill']=='travel_to']),2 if mode in ('release','expired_collision','collision_winner') else 0)
                 self.assertEqual(task['expires'],1300)
 
     def test_meeting_decline_is_terminal_even_when_peer_cannot_speak(self):
