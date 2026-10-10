@@ -63,13 +63,23 @@ def execute(args,c,sock,key,task,d):
     peer=None
     @contextlib.contextmanager
     def peer_writer():
-        with skills.manual(target,wait_limit=2) as owned:
+        # A model-owned hunt keeps manual.lock until its terminal outcome.
+        # Wait for that writer, not for another model vote, within the same lease.
+        expires=task.get('expires',time.time()+300)
+        with contextlib.ExitStack() as stack:
+            while True:
+                if busy() or time.time()+5>=expires:raise BlockingIOError('MEETING_WAIT_ENDED')
+                try:
+                    owned=stack.enter_context(skills.manual(target,wait_limit=2))
+                    break
+                except BlockingIOError:time.sleep(.2)
             try:yield owned
             finally:
                 if peer is not None:
                     peer['ended']=time.time();atomic(owned[0]/'manual_task.json',peer)
     try:
         with peer_writer() as (other_d,other_sock):
+            if busy():return 'failed(CHAT_INTERRUPT)'
             peer={'id':key+'-peer','resident':target['name'],'origin':'brain','action':'meet','args':{'resident':task['resident'],'place':answer['place']},'started':time.time(),'expires':task.get('expires',time.time()+300),'meeting_chat_dirs':task['meeting_chat_dirs']}
             place=answer['place'];choice=answer['choice']
             text=('Договорились: встреча ' if choice=='accept' else 'Предлагаю вместо этого встречу ' if choice=='counter' else 'Сегодня встречу отклоняю, занят.')
@@ -99,4 +109,6 @@ def execute(args,c,sock,key,task,d):
             task['meeting_witness']={'self':a['projection']['server_pos'],'peer':b['projection']['server_pos'],'peer_actions':peer.get('native_results',[])}
             atomic(d/'manual_task.json',task)
             return 'done'
-    except BlockingIOError:return 'failed(TARGET_BUSY)'
+    except BlockingIOError:
+        if busy():return 'failed(CHAT_INTERRUPT)'
+        return 'timeout' if time.time()+5>=task.get('expires',float('inf')) else 'failed(TARGET_BUSY)'

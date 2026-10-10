@@ -62,6 +62,33 @@ class WorldSkillsTests(unittest.TestCase):
                     self.assertEqual(meeting.execute({'resident':'Mira','place':'fountain'},c,'sock','key',task,d),expected)
                     self.assertEqual(model.call_count,2)
 
+    def test_meeting_waits_for_peer_writer_without_repeating_vote(self):
+        import tempfile,pathlib
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from packages.resident_world import skills,meeting
+        c={'residents':[{'name':'Mira','resident_id':'b'}],'places':{'field':{'map':'prt_fild08','x':170,'y':240}}}
+        for mode,expected in [('release','done'),('chat','failed(CHAT_INTERRUPT)'),('deadline','timeout')]:
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                root=pathlib.Path(tmp);d=root/'a';d.mkdir();peer=root/'b';peer.mkdir()
+                clock=[1000];calls=[];plans=[]
+                s={'actions':[],'age':1,'projection':{'server_map':{'value':'prt_fild08'},'server_pos':{'value':{'x':170,'y':240},'ts':1000}}}
+                @contextmanager
+                def writer(*args,**kwargs):
+                    calls.append(1)
+                    if len(calls)==1 or mode!='release':raise BlockingIOError('WRITER_BUSY')
+                    yield peer,'peer-sock'
+                def sleep(seconds):
+                    if mode=='chat':(peer/'CHAT_PENDING').touch()
+                    if mode=='deadline':clock[0]=1296
+                def native(sock,plan,*args):plans.append(plan);return 'done'
+                task={'id':'key','resident':'ResidentA','action':'meet','expires':1300}
+                with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',side_effect=native),patch.object(skills,'manual',side_effect=writer),patch.object(meeting.time,'time',side_effect=lambda:clock[0]),patch.object(meeting.time,'sleep',side_effect=sleep),patch.object(meeting,'decide',return_value=dict(choice='accept',place='field',reason='Хочу поговорить')) as model:
+                    self.assertEqual(meeting.execute({'resident':'Mira','place':'field'},c,'sock','key',task,d),expected)
+                    model.assert_called_once()
+                self.assertEqual(len([p for p in plans if p['skill']=='travel_to']),2 if mode=='release' else 0)
+                self.assertEqual(task['expires'],1300)
+
     def test_meeting_chat_on_either_side_interrupts_both_routes(self):
         import tempfile
         from packages.resident_world.skills import interrupted
