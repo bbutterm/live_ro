@@ -44,7 +44,7 @@ class WorldMindTests(unittest.TestCase):
             offer={'resident':'Borin','place':'field','meeting_id':'own-meeting'}
             with patch.object(mind,'record'):
                 self.assertEqual(m.negotiate(offer,{},False)['choice'],'accept')
-                self.assertEqual(m._complete.call_args.kwargs['timeout'],3)
+                self.assertEqual(m._complete.call_args.kwargs['timeout'],20)
                 offer['meeting_id']='another-meeting'
                 self.assertIsNone(m.negotiate(offer,{},False))
                 self.assertEqual(m._complete.call_count,1)
