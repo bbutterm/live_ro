@@ -206,7 +206,11 @@ def execute(name,action,args,*,origin='manual',task_id=None,say=''):
             task['attempts']=attempt;atomic(d/'manual_task.json',task)
             # Speech actions already own their text and channel. An optional
             # prelude would duplicate say or publicly disclose a whisper.
-            spoken=run_native(sock,{'skill':'say','params':{'text':say},'timeout':10},task['id']+'-speech-'+str(attempt),task,d) if say and action not in ('say','whisper') else 'done'
+            # A confirmed prelude belongs to the goal, not each movement retry.
+            spoken='done'
+            if say and action not in ('say','whisper') and task.get('prelude_outcome')!='done':
+                spoken=run_native(sock,{'skill':'say','params':{'text':say},'timeout':10},task['id']+'-speech-'+str(attempt),task,d)
+                task['prelude_outcome']=spoken;atomic(d/'manual_task.json',task)
             result=execute_native_menu(action,args,c,sock,task['id']+'-'+str(attempt),task,d) if spoken=='done' else spoken
             task['outcome']=result;atomic(d/'manual_task.json',task)
             if not retry_allowed(action,attempt,result) or task.get('unresolved') or time.time()+5>=task['expires']:break

@@ -16,6 +16,22 @@ class WorldSkillsTests(unittest.TestCase):
                     self.assertEqual(prelude.call_count,1 if action=='walk_to' else 0)
                     run.assert_called_once()
 
+    def test_retry_reuses_confirmed_prelude_but_retries_failed_speech(self):
+        import tempfile,pathlib
+        from contextlib import nullcontext
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        c={'residents':[{'name':'Mira','resident_id':'b'}],'places':{}}
+        for speech_results,menu_results,spoken_count in [(['done'],['failed(TARGET_NOT_VISIBLE)','done'],1),(['failed(NO_EVIDENCE)','done'],['done'],2)]:
+            with self.subTest(speech_results=speech_results),tempfile.TemporaryDirectory() as tmp:
+                root=pathlib.Path(tmp);d=root/'b';d.mkdir()
+                with patch.object(skills,'STATE',root),patch.object(skills,'config',return_value=c),patch.object(skills,'manual',return_value=nullcontext((d,'sock'))),patch.object(skills.time,'sleep'),patch.object(skills,'run_native',side_effect=speech_results) as prelude,patch.object(skills,'execute_native_menu',side_effect=menu_results) as run:
+                    result=skills.execute('Mira','follow',{'player':'Borin','minutes':1},say='Пойдём вместе!')
+                    self.assertEqual(result['outcome'],'done')
+                    self.assertEqual(prelude.call_count,spoken_count)
+                    self.assertEqual(run.call_count,len(menu_results))
+                    self.assertEqual(result['prelude_outcome'],'done')
+
     def test_cli_do_routes_validated_json_to_menu(self):
         import io,sys
         from contextlib import redirect_stdout
