@@ -50,7 +50,7 @@ def follow_verified(samples):return bool(samples) and sum(bool(p.get('near')) fo
 
 def execution_deadline(action,started):return started+(60 if action=='walk_to' else 300 if action=='meet' else 1200)
 
-def retry_allowed(action,attempt,result):return action in REVERSIBLE and action!='meet' and attempt<3 and result not in ('done','failed(CHAT_INTERRUPT)')
+def retry_allowed(action,attempt,result):return action in REVERSIBLE and action!='meet' and attempt<3 and result not in ('done','failed(CHAT_INTERRUPT)','failed(CANCELLED)')
 
 def interrupted(task,skill,d):
     if skill not in ('buy_potions','sell_loot') and task.get('meeting_chat_dirs'):

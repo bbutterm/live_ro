@@ -257,6 +257,9 @@ class WorldSkillsTests(unittest.TestCase):
         self.assertIsNone(outcome({'state':'unknown','code':'VERIFY_TIMEOUT'}))
         self.assertEqual(outcome({'state':'timed_out','code':'TIMEOUT'}),'timeout')
         self.assertEqual(outcome({'state':'failed','code':'NO_ROUTE'}),'failed(NO_ROUTE)')
+    def test_explicit_cancellation_never_restarts_the_cancelled_goal(self):
+        self.assertFalse(retry_allowed('hunt',1,'failed(CANCELLED)'))
+        self.assertFalse(retry_allowed('walk_to',1,'failed(CANCELLED)'))
     def test_economic_uncertainty_never_gets_a_blind_retry(self):
         self.assertFalse(retry_allowed('town_service',1,'failed(NO_EVIDENCE)'))
         self.assertTrue(retry_allowed('walk_to',1,'failed(NO_ROUTE)'))

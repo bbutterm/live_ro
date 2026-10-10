@@ -15,6 +15,30 @@ class WorldMindTests(unittest.TestCase):
                 self.assertIsNone(m.choose({}))
             m._complete.assert_not_called()
 
+    def test_meeting_activity_uses_only_verified_recent_meetings(self):
+        from packages.resident_world.mind import meeting_activity
+        import tempfile,json
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d);(p/'manual_task.json').write_text(json.dumps({'action':'hunt','started':90,'expires':140}))
+            meeting={'self':{'source':'witness','ts':95},'peer':{'source':'witness','ts':94}}
+            m={'source':'witness','evidence':{'meetings':[meeting,{'self':{'source':'telemetry','ts':96},'peer':{'source':'witness','ts':96}}]}}
+            self.assertEqual(meeting_activity(p,m,100),{'current_action':'hunt','recent_meetings':1,'last_meeting_seconds':6})
+            self.assertEqual(meeting_activity(p,{'source':'model','evidence':m['evidence']},100)['recent_meetings'],0)
+    def test_negotiation_receives_current_activity_context(self):
+        from packages.resident_world import mind
+        from unittest.mock import Mock,patch
+        with tempfile.TemporaryDirectory() as tmp:
+            m=mind.Mind.__new__(mind.Mind);m.d=pathlib.Path(tmp);m.next_call=0;m.r={'name':'Mira','char_id':2};m.c={'places':{'field':{}}};m.persona='Житель';m.history=[]
+            (m.d/'manual_task.json').write_text(json.dumps({'action':'hunt','started':90,'expires':140}))
+            m._complete=Mock(return_value=json.dumps({'choice':'decline','place':'field','reason':'Заканчиваю охоту'}))
+            with patch.object(mind.time,'time',return_value=100),patch.object(mind,'record'):
+                self.assertEqual(m.negotiate({'resident':'Borin','place':'field'}, {},True)['choice'],'decline')
+            # Read the exact untrusted context passed to the separate resident vote.
+            context=json.loads(m._complete.call_args.args[0][1]['content'])
+            self.assertEqual(context['activity']['current_action'],'hunt')
+            self.assertLessEqual(len(m._complete.call_args.args[0][1]['content'].encode()),1536)
+
     def test_meeting_schema_is_bounded_and_counter_requires_another_place(self):
         from packages.resident_world.meeting import validate_vote
         c={'places':{'fountain':{},'field':{}}}
