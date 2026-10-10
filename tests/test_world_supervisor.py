@@ -25,6 +25,12 @@ class WorldSupervisorTests(unittest.TestCase):
     def test_fallback_death_and_low_hp_never_hunt(self):
         self.assertEqual(fallback({'dead':True})['skill'],'respawn')
         self.assertEqual(fallback({'hp':10,'hp_max':100})['skill'],'rest')
+        t={'hp':10,'hp_max':100,'weight':50,'weight_max':100,'map':'prt_fild08','inventory':{},'zeny':100}
+        self.assertEqual(fallback(t)['params']['map'],'prontera')
+        t['inventory']['909']=1
+        self.assertEqual(fallback(t)['params']['map'],'prt_in')
+        t.update(map='prt_in',hp=70)
+        self.assertEqual(fallback(t)['skill'],'sell_loot')
     def test_fallback_reuses_life_supply_rules(self):
         t={'hp':100,'hp_max':100,'inventory':{},'map':'prontera','zeny':100}
         self.assertEqual(fallback(t)['skill'],'travel_to')

@@ -18,6 +18,8 @@ class FallbackLifeTests(unittest.TestCase):
         self.assertEqual(city_goal(s,state,402,c)['action'],'idle')
         t['hp']=10
         self.assertEqual(city_goal(s,state,402,c)['action'],'idle')
+        t['weight']=1775
+        self.assertEqual(city_goal(s,state,402,c)['action'],'idle')
         t['inventory']['909']=1
         self.assertIsNone(city_goal(s,state,402,c))
         del t['inventory']['909'];t['dead']=True

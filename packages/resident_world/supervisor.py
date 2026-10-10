@@ -22,8 +22,15 @@ def online(status,now):
     p=status.get('projection',{});server=p.get('server_online',{});pos=p.get('server_pos',{})
     return status.get('age') is not None and status['age']<4 and server.get('value') is True and now-pos.get('ts',0)<15
 
+def regeneration_blocked(t):
+    return bool(t.get('weight_max',0) and t.get('weight',0)*2>=t['weight_max'])
+
 def fallback(t):
     if t.get('dead'):return dict(skill='respawn',params={},timeout=60,reason='Возрождаюсь')
+    if regeneration_blocked(t) and t.get('hp',0)*100<max(1,t.get('hp_max',0))*80:
+        if any(t.get('inventory',{}).get(k,0)>0 for k in LOOT):
+            return choose('sell' if t.get('map')=='prt_in' else 'town',t,300)
+        return dict(skill='travel_to',params=dict(config()['places']['fountain'],r=3),timeout=240,reason='В безопасный город: регенерация отключена перевесом')
     if t.get('hp',0)*100<max(1,t.get('hp_max',0))*60:
         return dict(skill='rest',params={'hp_pct':85},timeout=240,reason='Восстанавливаю здоровье')
     if t.get('map')=='prt_in':

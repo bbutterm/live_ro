@@ -88,6 +88,15 @@ class WorldMindTests(unittest.TestCase):
         c={'places':{},'residents':[]};d={'action':'hunt','args':{'map':'prt_fild08','minutes':5},'reason':'Охота'}
         with self.assertRaises(ValueError):validate_decision(d,c,{'telemetry':{'hp':30,'hp_max':100,'inventory':{'501':10}}})
         with self.assertRaises(ValueError):validate_decision(d,c,{'telemetry':{'hp':100,'hp_max':100,'inventory':{}}})
+    def test_rest_rejects_regeneration_disabled_at_half_weight(self):
+        from packages.resident_world.mind import validate_decision
+        c={'places':{},'residents':[]};d={'action':'rest','args':{'until_hp':85},'reason':'Восстановить здоровье'}
+        for weight in (50,81):
+            with self.subTest(weight=weight),self.assertRaisesRegex(ValueError,'OVERWEIGHT'):
+                validate_decision(d,c,{'telemetry':{'weight':weight,'weight_max':100}})
+        for t in ({'weight':49,'weight_max':100},{'weight':50,'weight_max':0},{}):
+            self.assertEqual(validate_decision(d,c,{'telemetry':t}),d)
+
     def test_state_is_utf8_bounded_and_does_not_include_unconfirmed_claims(self):
         from packages.resident_world.mind import compact_state
         r={'name':'Mira','char_id':150002};s={'telemetry':{'hp':100,'hp_max':100,'nearby_players':[{'name':'x'*100,'pos':{'x':1,'y':1}}]*50},'projection':{'server_pos':{'value':{'x':1,'y':1}},'server_map':{'value':'prontera'}}}

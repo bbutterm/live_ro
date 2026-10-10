@@ -1,12 +1,14 @@
 """Durable city visits only when the model has declined a goal; no paid calls."""
 from .skills import witness_at
+from .supervisor import regeneration_blocked
 from packages.resident_demo.life_cycle import LOOT
 
 def city_goal(status,state,now,c):
     t=status.get('telemetry') or {}
     # The shop cannot reduce weight outside its fixed sale whitelist. Do not
     # alternate shop/field forever or request rest with regeneration disabled.
-    if (not t.get('dead') and t.get('weight',0)>t.get('weight_max',100000)*.8
+    if (not t.get('dead') and (t.get('weight',0)>t.get('weight_max',100000)*.8
+        or (regeneration_blocked(t) and t.get('hp',0)*100<max(1,t.get('hp_max',0))*80))
         and not any(t.get('inventory',{}).get(k,0)>0 for k in LOOT)):
         point=c.get('places',{}).get('fountain')
         if not point:return None
