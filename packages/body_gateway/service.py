@@ -4,6 +4,20 @@ from .journal import Journal
 from .protocol import Session
 from .executor import Executor
 from tools.events import DEFAULTS,get_events,query
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+
+
+def read_witness_batch(char_id,char_name,cursors,stop):
+ if stop.is_set():return None
+ rows=get_events(DEFAULTS,char_name,cursors['witness'])
+ if stop.is_set():return None
+ sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'type',type,'char_id',src_charid,'to',dst_charname,'text',message) FROM ro_residents_logs.chatlog WHERE src_charid={char_id} AND id>{cursors['chat']} ORDER BY id LIMIT 200"
+ chat=[json.loads(line) for line in query(DEFAULTS,sql).splitlines()]
+ if stop.is_set():return None
+ sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'char_id',char_id,'type',type,'item_id',nameid,'amount',amount,'map',map) FROM ro_residents_logs.picklog WHERE char_id={char_id} AND id>{cursors['picklog']} ORDER BY id LIMIT 200"
+ picks=[json.loads(line) for line in query(DEFAULTS,sql).splitlines()]
+ return rows,chat,picks
 
 def serve(path,store,resident,char_id,char_name,duration,witness=True):
  path=pathlib.Path(path);path.parent.mkdir(parents=True,exist_ok=True,mode=0o700);store=pathlib.Path(store);store.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
@@ -16,6 +30,8 @@ def serve(path,store,resident,char_id,char_name,duration,witness=True):
   if body is None:raise RuntimeError('NO_BODY')
   outbox.extend(json.dumps(m,ensure_ascii=False).encode()+b'\n')
  e=Executor(j,resident,char_id,send)
+ poll_pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='witness-reader')
+ poll_stop=Event();polling=None
  def close(c):
   nonlocal body
   if c is body:body=None;outbox.clear()
@@ -81,22 +97,25 @@ def serve(path,store,resident,char_id,char_name,duration,witness=True):
     try:n=body.send(outbox,socket.MSG_NOSIGNAL|socket.MSG_DONTWAIT);del outbox[:n]
     except BlockingIOError:pass
     except OSError:close(body)
-   if witness and now-last_poll>=1:
-    last_poll=now
+   if polling is not None and polling.done():
     try:
-     for r in get_events(DEFAULTS,char_name,j.cursor('witness')):
-      r['event_ts']=datetime.datetime.fromisoformat(r['ts_utc']).timestamp();e.witness(r)
-     cursor=j.cursor('chat')
-     sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'type',type,'char_id',src_charid,'to',dst_charname,'text',message) FROM ro_residents_logs.chatlog WHERE src_charid={char_id} AND id>{cursor} ORDER BY id LIMIT 200"
-     from zoneinfo import ZoneInfo
-     for line in query(DEFAULTS,sql).splitlines():
-      r=json.loads(line);ts=datetime.datetime.fromisoformat(r['ts']).replace(tzinfo=ZoneInfo('Europe/Amsterdam')).timestamp();j.event('chat',r['id'],ts,r,r['id'])
-     cursor=j.cursor('picklog');sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'char_id',char_id,'type',type,'item_id',nameid,'amount',amount,'map',map) FROM ro_residents_logs.picklog WHERE char_id={char_id} AND id>{cursor} ORDER BY id LIMIT 200"
-     for line in query(DEFAULTS,sql).splitlines():
-      r=json.loads(line);ts=datetime.datetime.fromisoformat(r['ts']).replace(tzinfo=ZoneInfo('Europe/Amsterdam')).timestamp();j.event('picklog',r['id'],ts,r,r['id'])
+     batch=polling.result()
+     if batch is not None:
+      rows,chat,picks=batch
+      for r in rows:
+       r['event_ts']=datetime.datetime.fromisoformat(r['ts_utc']).timestamp();e.witness(r)
+      from zoneinfo import ZoneInfo
+      for source,entries in (('chat',chat),('picklog',picks)):
+       for r in entries:
+        ts=datetime.datetime.fromisoformat(r['ts']).replace(tzinfo=ZoneInfo('Europe/Amsterdam')).timestamp();j.event(source,r['id'],ts,r,r['id'])
     except (RuntimeError,ValueError) as err:j.log('witness_read_error',{'reason':type(err).__name__})
+    polling=None;last_poll=now
+   if witness and polling is None and now-last_poll>=1:
+    cursors={source:j.cursor(source) for source in ('witness','chat','picklog')}
+    polling=poll_pool.submit(read_witness_batch,char_id,char_name,cursors,poll_stop)
    e.evaluate()
  finally:
+  poll_stop.set();poll_pool.shutdown(wait=False,cancel_futures=True)
   for c in list(peers):close(c)
   for s,(_,p,inode) in listeners.items():
    s.close()
