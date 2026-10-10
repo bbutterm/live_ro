@@ -4,7 +4,10 @@ import argparse,datetime,json,re,subprocess,time
 from zoneinfo import ZoneInfo
 DEFAULTS='/root/ragnarok/run/private/reader.cnf'
 def query(defaults,sql):
- p=subprocess.run(['mariadb','--defaults-extra-file='+defaults,'-NBr'],input=sql,text=True,capture_output=True,timeout=8)
+ try:
+  p=subprocess.run(['mariadb','--defaults-extra-file='+defaults,'-NBr'],input=sql,text=True,capture_output=True,timeout=8)
+ except subprocess.TimeoutExpired:
+  raise RuntimeError('SELECT-only query timed out; private details withheld') from None
  if p.returncode: raise RuntimeError('SELECT-only query failed; private details withheld')
  return p.stdout
 
