@@ -204,7 +204,9 @@ def execute(name,action,args,*,origin='manual',task_id=None,say=''):
             lease=json.loads((d/'MANUAL').read_text());lease['expires']=max(lease['expires'],task['expires']);atomic(d/'MANUAL',lease)
         for attempt in range(1,4):
             task['attempts']=attempt;atomic(d/'manual_task.json',task)
-            spoken=run_native(sock,{'skill':'say','params':{'text':say},'timeout':10},task['id']+'-speech-'+str(attempt),task,d) if say else 'done'
+            # Speech actions already own their text and channel. An optional
+            # prelude would duplicate say or publicly disclose a whisper.
+            spoken=run_native(sock,{'skill':'say','params':{'text':say},'timeout':10},task['id']+'-speech-'+str(attempt),task,d) if say and action not in ('say','whisper') else 'done'
             result=execute_native_menu(action,args,c,sock,task['id']+'-'+str(attempt),task,d) if spoken=='done' else spoken
             task['outcome']=result;atomic(d/'manual_task.json',task)
             if not retry_allowed(action,attempt,result) or task.get('unresolved') or time.time()+5>=task['expires']:break

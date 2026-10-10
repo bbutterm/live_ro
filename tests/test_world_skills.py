@@ -2,6 +2,20 @@ import unittest
 from packages.resident_world.skills import validate, outcome, retry_allowed, native_plan
 
 class WorldSkillsTests(unittest.TestCase):
+    def test_speech_action_does_not_repeat_optional_say_or_leak_whisper(self):
+        import tempfile,pathlib
+        from contextlib import nullcontext
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        c={'residents':[{'name':'Mira','resident_id':'b'}],'places':{'field':{}}}
+        for action,args in [('say',{'text':'Привет, сосед!'}),('whisper',{'to':'Borin','text':'Привет, сосед!'}),('walk_to',{'place':'field'})]:
+            with self.subTest(action=action),tempfile.TemporaryDirectory() as tmp:
+                root=pathlib.Path(tmp);d=root/'b';d.mkdir()
+                with patch.object(skills,'STATE',root),patch.object(skills,'config',return_value=c),patch.object(skills,'manual',return_value=nullcontext((d,'sock'))),patch.object(skills,'run_native',return_value='done') as prelude,patch.object(skills,'execute_native_menu',return_value='done') as run:
+                    self.assertEqual(skills.execute('Mira',action,args,say='Привет, сосед!')['outcome'],'done')
+                    self.assertEqual(prelude.call_count,1 if action=='walk_to' else 0)
+                    run.assert_called_once()
+
     def test_cli_do_routes_validated_json_to_menu(self):
         import io,sys
         from contextlib import redirect_stdout
