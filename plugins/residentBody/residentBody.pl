@@ -37,6 +37,15 @@ sub validSaleParams{
  my$p=shift;return 0 unless ref$p eq'HASH'&&ref$p->{items}eq'HASH'&&keys%{$p->{items}}&&keys%{$p->{items}}<=3;
  for my$id(keys%{$p->{items}}){my$n=$p->{items}{$id};return 0 unless$id=~/^(?:909|713|938)$/&&defined$n&&!ref$n&&$n=~/^\d+$/&&$n>0&&$n<=1000}return 1;
 }
+# Junk a human would sell at the tool dealer: etc/armor/weapon/headgear by OpenKore
+# client item type, never equipped, consumables, cards, ammo or the keep list.
+my%keepItems=map{$_=>1}(501,502,503,504,505,506,507,508,509,510,601,602,715,716,717,1065);
+my%sellTypes=map{$_=>1}(3,4,5,9,11,13,14);
+sub sellableItem{
+ my$i=shift;return 0 unless$i&&$i->{nameID}&&($i->{amount}//0)>0&&!$i->{equipped}&&!$i->{unsellable}&&!$keepItems{$i->{nameID}};
+ return$sellTypes{$i->{type}//-1}?1:0;
+}
+sub sellableFrame{my%bag;for my$i(@{bagItems()}){$bag{$i->{nameID}}+=0+$i->{amount}if sellableItem($i)}return\%bag}
 sub salePlan{
  my($p,$bag)=@_;return(undef,undef)unless validSaleParams($p);my%remaining=%{$p->{items}};my@order;my%expected;
  for my$i(@$bag){my$id=$i->{nameID};next unless defined$id&&($remaining{$id}//0)>0&&($i->{amount}//0)>0&&!$i->{equipped}&&!$i->{unsellable};my$n=$i->{amount}<$remaining{$id}?$i->{amount}:$remaining{$id};push@order,{ID=>$i->{ID},amount=>$n};$expected{$id}+=$n;$remaining{$id}-=$n}
@@ -62,7 +71,7 @@ sub pollShop{
    if(behaviorV1()){
     my($planned,$delta)=salePlan($active->{params},bagItems());if(!$planned){finish('error','NO_LOOT','explicit sale quantities unavailable');return}@order=@$planned;%expected=%$delta;
    }else{my%allow=map{$_=>1}(909,914,705,935,919,908,916);
-    for my$i(@{bagItems()}){next unless$allow{$i->{nameID}}&&$i->{amount}>0&&!$i->{equipped}&&!$i->{unsellable};push@order,{ID=>$i->{ID},amount=>$i->{amount}};$expected{$i->{nameID}}+=$i->{amount}}
+    for my$i(@{bagItems()}){next unless($allow{$i->{nameID}}||sellableItem($i))&&$i->{amount}>0&&!$i->{equipped}&&!$i->{unsellable};push@order,{ID=>$i->{ID},amount=>$i->{amount}};$expected{$i->{nameID}}+=$i->{amount}}
    }
    if(!@order){finish('error','NO_LOOT','no sellable whitelisted loot');return}
    $active->{expected}=\%expected;require Misc;Misc::completeNpcSell(\@order);
@@ -107,7 +116,7 @@ sub monstersFrame{
 sub learnedFrame{my%known;for my$handle(keys%{$char->{skills}//{}}){my$lv=$char->{skills}{$handle}{lv};$known{$handle}=0+$lv if defined$lv}return\%known}
 sub telemetryFrame{
  my$p=calcPosition($char);
- return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),nearby_players=>nearbyFrame(),near_players=>[map{{name=>$_->{name},x=>$_->{pos}{x},y=>$_->{pos}{y}}}@{nearbyFrame()}],near_monsters=>monstersFrame(),job_level=>defined$char->{lv_job}?0+$char->{lv_job}:undef,free_skill_points=>defined$char->{points_skill}?0+$char->{points_skill}:undef,learned_skills=>learnedFrame(),online_minutes=>defined$onlineSince?int((time()-$onlineSince)/60):undef,behavior_v1=>behaviorV1()?JSON::PP::true:JSON::PP::false,base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
+ return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),sellable=>sellableFrame(),nearby_players=>nearbyFrame(),near_players=>[map{{name=>$_->{name},x=>$_->{pos}{x},y=>$_->{pos}{y}}}@{nearbyFrame()}],near_monsters=>monstersFrame(),job_level=>defined$char->{lv_job}?0+$char->{lv_job}:undef,free_skill_points=>defined$char->{points_skill}?0+$char->{points_skill}:undef,learned_skills=>learnedFrame(),online_minutes=>defined$onlineSince?int((time()-$onlineSince)/60):undef,behavior_v1=>behaviorV1()?JSON::PP::true:JSON::PP::false,base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
 }
 sub sendFrame{
  return 0 unless$connection;my$bytes=encode_json($_[0])."\n";my$n=send($connection,$bytes,MSG_NOSIGNAL|MSG_DONTWAIT);

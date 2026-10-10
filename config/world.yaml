@@ -1,15 +1,47 @@
 {
   "state_dir": "/var/lib/ro-world",
   "daily_llm_usd": 2,
-  "llm": {"enabled": true, "max_hunt_minutes": 5},
+  "llm": {"enabled": true, "max_hunt_minutes": 15, "min_decision_seconds": 20, "min_speech_seconds": 45, "timeout_seconds": 25, "temperature": 0.8},
   "brain_python": "/opt/ro-residents/world-venv/bin/python",
   "llm_timeout_seconds": 20,
   "chat_radius": 14,
   "chat_service": "standalone",
+  "timezone": "Europe/Amsterdam",
   "residents": [
     {"resident_id":"resident_a","name":"ResidentA","char_id":150001,"profile":"/root/ragnarok/run/Demo/resident_a","enabled":true},
     {"resident_id":"resident_b","name":"Mira","char_id":150002,"profile":"/root/ragnarok/run/Demo/resident_b","enabled":true},
     {"resident_id":"resident_c","name":"Borin","char_id":150003,"profile":"/root/ragnarok/run/Demo/resident_c","enabled":true}
   ],
-  "places": {"fountain":{"map":"prontera","x":156,"y":191},"field":{"map":"prt_fild08","x":170,"y":240}}
+  "places": {
+    "fountain":{"map":"prontera","x":156,"y":191},
+    "market":{"map":"prontera","x":156,"y":180},
+    "south_gate":{"map":"prontera","x":150,"y":40},
+    "west_gate":{"map":"prontera","x":40,"y":205},
+    "east_gate":{"map":"prontera","x":272,"y":200},
+    "castle":{"map":"prontera","x":156,"y":330},
+    "church":{"map":"prontera","x":236,"y":310},
+    "fruit_stall":{"map":"prontera","x":104,"y":52},
+    "milk_stall":{"map":"prontera","x":76,"y":138},
+    "refiner":{"map":"prontera","x":176,"y":173},
+    "pet_groomer":{"map":"prontera","x":214,"y":207},
+    "field":{"map":"prt_fild08","x":170,"y":240},
+    "field_east":{"map":"prt_fild08","x":230,"y":250},
+    "field_gate":{"map":"prt_fild08","x":169,"y":319}
+  },
+  "place_labels": {
+    "fountain":"у фонтана",
+    "market":"у торговых рядов в центре",
+    "south_gate":"у южных ворот Пронтеры",
+    "west_gate":"у западных ворот",
+    "east_gate":"у восточных ворот",
+    "castle":"у ворот замка",
+    "church":"у церкви",
+    "fruit_stall":"у фруктовой лавки",
+    "milk_stall":"у молочника",
+    "refiner":"у мастера заточки",
+    "pet_groomer":"у грумера питомцев",
+    "field":"на поле",
+    "field_east":"на восточной части поля",
+    "field_gate":"на поле у городских ворот"
+  }
 }

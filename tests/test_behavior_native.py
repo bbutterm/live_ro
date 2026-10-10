@@ -116,6 +116,29 @@ sub start {my($skill,$params)=@_; residentBody::command({proto=>1,type=>'skill_s
         result = self.native("print JSON::PP::encode_json([residentBody::salePlan({items=>{'909'=>6}},[{ID=>'a',nameID=>909,amount=>5}])]);")
         self.assertIsNone(result[0])
 
+    def test_legacy_sale_sells_junk_by_type_and_keeps_gear_potions_cards(self):
+        # E05: the old fixed list could not sell what actually filled the bag.
+        bag = ("[{ID=>'a',nameID=>909,amount=>12,type=>3},{ID=>'b',nameID=>1201,amount=>1,type=>5},{ID=>'c',nameID=>2301,amount=>1,type=>4,equipped=>2},"
+               "{ID=>'d',nameID=>501,amount=>9,type=>0},{ID=>'e',nameID=>512,amount=>4,type=>0},{ID=>'f',nameID=>4001,amount=>1,type=>6},"
+               "{ID=>'g',nameID=>713,amount=>3,type=>3},{ID=>'h',nameID=>717,amount=>2,type=>3},{ID=>'i',nameID=>1750,amount=>50,type=>10}]")
+        result = self.native("$Globals::field->{baseName}='prt_in'; $Globals::char->{pos_to}={x=>126,y=>76}; $Globals::char->{items}=" + bag + "; $Globals::npcsList=bless{items=>[{ID=>'npc',name=>'Tool Dealer#test',pos=>{x=>126,y=>76}}]},'List'; my $t=residentBody::telemetryFrame(); start('sell_loot',{}); $Globals::ai_v{npc_talk}{talk}='buy_or_sell'; residentBody::pollSkill(); $Globals::ai_v{npc_talk}{talk}='sell'; residentBody::pollSkill(); my %gone=map{$_->{ID}=>1}@Misc::sold; $Globals::char->{items}=[grep{!$gone{$_->{ID}}}@{$Globals::char->{items}}]; residentBody::pollSkill(); print JSON::PP::encode_json({sellable=>$t->{sellable},sold=>[sort map{$_->{ID}}@Misc::sold],frames=>\\@frames});", enabled=False)
+        self.assertEqual(result['sellable'], {'909':12,'1201':1,'713':3})
+        self.assertEqual(result['sold'], ['a','b','g'])
+        self.assertEqual(result['frames'][-1][1]['code'], 'SOLD')
+
+    def test_native_monster_frame_passes_v1_contract_through_bridge(self):
+        # E01: the real frame carries {id: GID hex, nameID, x, y}; v1 accepts exactly {id, x, y}.
+        from packages.resident_behavior.bridge import snapshot_from_status
+        from packages.resident_behavior.contracts import ContractError, validate_telemetry
+        frame = self.native("$Globals::monstersList->{items}=[{ID=>pack('V',110001),nameID=>1002,pos=>{x=>5,y=>6}},{ID=>pack('V',110002),nameID=>1063,pos=>{x=>7,y=>8}}]; print JSON::PP::encode_json(residentBody::telemetryFrame());")
+        frame.update(ts=1791590400.0, map='prt_fild08')
+        snapshot = snapshot_from_status({'telemetry': frame}, 'resident_a', 1)
+        self.assertEqual(snapshot['near_monsters'], [{'id':'1002','x':5,'y':6}, {'id':'1063','x':7,'y':8}])
+        validate_telemetry(snapshot)
+        raw = dict(snapshot, near_monsters=frame['near_monsters'])
+        with self.assertRaisesRegex(ContractError, 'invalid_keys'):
+            validate_telemetry(raw)
+
     def test_buy_stock_and_budget_validation_v1_legacy(self):
         for enabled, stock, budget, code in [(True,8,400,'WRONG_MAP'),(True,9,400,'INVALID'),(True,8,401,'INVALID'),(True,8,1.5,'INVALID'),(False,20,300,'WRONG_MAP'),(False,8,400,'INVALID')]:
             result = self.native("start('buy_potions',{item_id=>501,stock_goal=>%s,max_zeny=>%s}); print JSON::PP::encode_json(\\@frames);"%(stock,budget), enabled)

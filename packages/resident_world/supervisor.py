@@ -1,4 +1,4 @@
-"""Permanent native world. No LLM calls in P1; no global child-failure shutdown."""
+"""Permanent native world: bodies, gateways and one brain per resident; no global child-failure shutdown."""
 import argparse,fcntl,json,logging,os,pathlib,signal,subprocess,time,sys
 from logging.handlers import RotatingFileHandler
 from dataclasses import dataclass
@@ -26,21 +26,23 @@ def regeneration_blocked(t):
     return bool(t.get('weight_max',0) and t.get('weight',0)*2>=t['weight_max'])
 
 def fallback(t):
+    from packages.resident_world.skills import has_sellable
     if t.get('dead'):return dict(skill='respawn',params={},timeout=60,reason='Возрождаюсь')
     if regeneration_blocked(t) and t.get('hp',0)*100<max(1,t.get('hp_max',0))*80:
-        if any(t.get('inventory',{}).get(k,0)>0 for k in LOOT):
-            return choose('sell' if t.get('map')=='prt_in' else 'town',t,300)
+        if has_sellable(t):
+            return dict(skill='sell_loot',params={},timeout=40,reason='Продаю добычу: перевес') if t.get('map')=='prt_in' else choose('town',t,300)
         return dict(skill='travel_to',params=dict(config()['places']['fountain'],r=3),timeout=240,reason='В безопасный город: регенерация отключена перевесом')
     if t.get('hp',0)*100<max(1,t.get('hp_max',0))*60:
         return dict(skill='rest',params={'hp_pct':85},timeout=240,reason='Восстанавливаю здоровье')
     if t.get('map')=='prt_in':
-        try:return choose('sell',t,300)
+        if has_sellable(t):return dict(skill='sell_loot',params={},timeout=40,reason='Продаю добычу')
+        try:return choose('buy',t,300)
         except RuntimeError as error:
             if str(error)!='INSUFFICIENT_EARNED_ZENY':raise
             return choose('field',t,300)
-    if t.get('zeny',0)<30 and not any(t.get('inventory',{}).get(k,0)>0 for k in LOOT):
+    if t.get('zeny',0)<30 and not has_sellable(t):
         return choose('hunt',t,300)
-    if t.get('inventory',{}).get('501',0)<3 or t.get('weight',0)>t.get('weight_max',100000)*.8:
+    if t.get('inventory',{}).get('501',0)<3 or (has_sellable(t) and t.get('weight',0)>t.get('weight_max',100000)*.6):
         return choose('town',t,300)
     return choose('hunt',t,300)
 
@@ -59,18 +61,20 @@ def brain(r):
     d=STATE/r['resident_id'];sock=str(d/'actions.sock.control');pending=None;retry=0;last=None
     from packages.resident_world.chat import start_listener
     listener=start_listener(r) if config().get('chat_service')!='standalone' and 'name' in r and 'char_id' in r else None
-    mind=None
-    if config().get('llm',{}).get('enabled') and 'name' in r and 'char_id' in r:
-        try:
-            from packages.resident_world.mind import Mind
-            mind=Mind(r,d,config())
-        except Exception:
-            logging.getLogger('world').warning('LLM init unavailable; fallback for %s',r['name'])
+    mind=None;mind_retry=0;settle_seconds=float(config().get('brain_settle_seconds',5))
     if (d/'brain.json').exists():
         old=json.loads((d/'brain.json').read_text());pending=old.get('pending')
     while not (STATE/'STOP').exists():
         try:
             if (d/'CHAT_PENDING').exists():time.sleep(.1);continue
+            # Lazy and retried: inserting the token in .env needs no restart.
+            if mind is None and config().get('llm',{}).get('enabled') and 'name' in r and 'char_id' in r and time.time()>=mind_retry:
+                try:
+                    from packages.resident_world.mind import Mind
+                    mind=Mind(r,d,config())
+                except Exception as error:
+                    mind_retry=time.time()+60
+                    logging.getLogger('world').warning('LLM mind unavailable for %s: %s',r['name'],type(error).__name__)
             chat_goal=d/'chat-goal.json'
             if chat_goal.exists():
                 from packages.resident_world.skills import execute
@@ -78,7 +82,7 @@ def brain(r):
                 proposal=json.loads(chat_goal.read_text());goal=proposal['decision']
                 result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'])
                 record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal['event_id'],task=result)
-                clear_chat_goal(d,proposal['id']);pending=None;retry=time.time()+5;continue
+                clear_chat_goal(d,proposal['id']);pending=None;retry=time.time()+settle_seconds;continue
             hold=d/'BRAIN_HOLD'
             if hold.exists() and json.loads(hold.read_text()).get('expires',0)>time.time():time.sleep(.2);continue
             lease=d/'MANUAL'
@@ -93,20 +97,25 @@ def brain(r):
                 a=request(sock,{'op':'action','action_id':pending})
                 if a['state'] not in TERMINAL:time.sleep(.5);continue
                 last=dict(state=a['state'],code=a['code'],at=time.time());pending=None
-                retry=time.time()+5
+                retry=time.time()+settle_seconds
             t=s.get('telemetry')
             if not t or s.get('age') is None or s['age']>3 or time.time()<retry:time.sleep(.5);continue
             if s['actions']:
                 pending=s['actions'][0]['action_id'];continue
             if mind is not None and not t.get('dead') and online(s,time.time()):
+                # Between two thoughts a healthy mind just lets the body be.
+                if mind.waiting():time.sleep(.5);continue
                 proposal=mind.choose(s)
                 if (d/'CHAT_PENDING').exists() or (d/'chat-goal.json').exists():time.sleep(.1);continue
                 if proposal:
                     from packages.resident_world.skills import execute
                     goal=proposal['decision']
-                    atomic(d/'brain.json',dict(pending=None,activity=goal['action'],reason=goal['reason'],source='llm',decision_id=proposal['id'],at=time.time(),last=last))
-                    result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'],say=goal.get('say',''))
-                    mind.finished(result);last={'state':result['outcome'],'at':time.time()};retry=time.time()+5;continue
+                    atomic(d/'brain.json',dict(pending=None,activity=goal['action'],reason=goal['reason'],thought=proposal.get('thought',''),plan=proposal.get('plan',''),source='llm',decision_id=proposal['id'],at=time.time(),last=last))
+                    try:result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'],say=goal.get('say',''))
+                    except ValueError as error:
+                        result={'id':proposal['id'],'action':goal['action'],'outcome':'failed('+str(error)[:40]+')'}
+                    mind.finished(result);last={'state':result['outcome'],'at':time.time()};retry=time.time()+settle_seconds;continue
+                if mind.waiting():time.sleep(.5);continue
             from packages.resident_world.fallback_life import city_goal,completed
             cycle_file=d/'fallback-life.json'
             cycle=json.loads(cycle_file.read_text()) if cycle_file.exists() else {}
@@ -116,15 +125,15 @@ def brain(r):
                 atomic(d/'brain.json',dict(pending=None,activity=city['action'],reason=city['reason'],source='fallback_city',at=time.time(),last=last))
                 result=execute(r['name'],city['action'],city['args'],origin='brain')
                 completed(cycle,city,result['outcome'],time.time());atomic(cycle_file,cycle)
-                last={'state':result['outcome'],'at':time.time()};retry=time.time()+5;continue
+                last={'state':result['outcome'],'at':time.time()};retry=time.time()+settle_seconds;continue
             intent=fallback(t)
             # Serialize dispatch with the manual writer, including the RPC reply.
             with (d/'manual.lock').open('a') as writer:
                 fcntl.flock(writer,fcntl.LOCK_EX|fcntl.LOCK_NB)
                 a=request(sock,dict(op='run',skill=intent['skill'],params=intent['params'],deadline=intent['timeout']))
-                pending=a['action_id'];atomic(d/'brain.json',dict(pending=pending,activity=intent['skill'],reason=intent['reason'],last=last,at=time.time()))
+                pending=a['action_id'];atomic(d/'brain.json',dict(pending=pending,activity=intent['skill'],reason=intent['reason'],source='fallback',last=last,at=time.time()))
         except (OSError,RuntimeError,ValueError,KeyError,TypeError):
-            retry=time.time()+5
+            retry=time.time()+settle_seconds
             time.sleep(.5)
 
 def commands(r):

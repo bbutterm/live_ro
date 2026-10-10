@@ -3,6 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+# Import before any patch: their from-imports must bind the real STATE/request,
+# not a test's mock (a first import inside patch() leaked into later tests).
+import packages.resident_world.skills, packages.resident_world.mind  # noqa: F401
 from tests.test_behavior_adapter import Clock
 from tests.test_behavior_motor import Body
 

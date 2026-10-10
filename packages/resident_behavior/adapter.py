@@ -190,7 +190,9 @@ class Adapter:
         return None
 
     def _block(self, state, p, error, now):
-        if error is None: return
+        # 'interrupted' is the Controller's own preemption, not a failure of the
+        # action: cooling it down blocked every idle for 5 minutes (E06).
+        if error is None or error == 'interrupted': return
         state['cooldowns'][p['resident_id'] + ':' + p['action']] = {
             'error': error, 'until': _iso(now+timedelta(minutes=5)),
             'resources': self._resources(state['snapshots'].get(p['resident_id'], {}))}

@@ -1,15 +1,14 @@
 # STATUS
-Цель: docs/RESIDENT_BEHAVIOR_V1.md; полная игровая приёмка не завершена.
-Результат: docs/RESULT_BEHAVIOR_V1.md; ошибки: docs/ERRORS_BEHAVIOR_V1.md.
-B2: reducer/store/outbox/contracts/replay реализованы; финальная полнота открыта.
-B3: canary ResidentA вернулся в released после ContractError(invalid_keys).
-B4: DeepSeek V3.2/Controller/chat реализованы; успешный backend chat получен.
-В canary: 437 evaluation, 1 paid decision, invalid_response; source=fallback.
-Маршрут accepted; свидетель подтвердил prt_fild08, но итог failed/interrupted.
-Игровой ответ игроку и успешное модельное действие не доказаны.
-Речь изолирована от motor; chat cadence/RNG и strict chat JSON исправлены.
-Штатный cap 2 USD; разрешённый временный cap 3 недействителен после released.
-Неизвестные резервы не удалены; ledger/секреты/runtime остаются вне Git.
-Последний make check: 433 теста OK; git-checkpoint-check.log.
-ro status: все трое онлайн, безопасная пауза из-за перевеса; мир не остановлен.
-По поручению владельца сохраняется Git-checkpoint, без расширения rollout.
+Цель: жители живут сами, LLM — их мозг. Как включить: docs/LLM_BRAIN.md. В игре ещё не принято.
+Мозг resident_world: осмотреться → спросить LLM «что дальше» → одно действие меню → свидетель.
+Токен: RO_WORLD_LLM_API_KEY в .env; проверка `tools/ro doctor`; смена токена без перезапуска.
+Деньги по факту ответа (llm-spend.json), лимит daily_llm_usd, без резервов: E04 и ночь «без API» устранены.
+429/402/401/сбой/дневной лимит: общая пауза llm-gate.json, привычки, затем LLM снова сама.
+E05 перевес: тело продаёт добычу по типу предмета; SOLD подтверждается picklog сервера.
+V1: причина E01 (лишний nameID в кадре монстра) и E06 (cooldown на interrupted) исправлены.
+V1 остаётся экспериментальным путём под lease; основной путь — resident_world.
+make check: новые тесты зелёные; 7 старых падают вне VPS (зашитые пути /root/ragnarok).
+Сквозной тест: настоящий brain + gateway, тело по протоколу плагина, 429 посередине — OK.
+Правка плагина проверена на заглушках OpenKore; на VPS её проверит test_perl_compile_against_actual_openkore.
+Не проверено вживую: первый запуск — шаги 1–3 в docs/LLM_BRAIN.md, затем `tools/ro status`.
+Прошлый checkpoint V1: docs/RESULT_BEHAVIOR_V1.md, ошибки и причины: docs/ERRORS_BEHAVIOR_V1.md.

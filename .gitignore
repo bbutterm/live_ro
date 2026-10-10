@@ -12,6 +12,7 @@ research/
 *.cnf
 .env
 .env.*
+!.env.example
 control/config.txt
 credentials.json
 

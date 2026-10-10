@@ -53,17 +53,19 @@ class ChatTests(unittest.TestCase):
             self.assertFalse(store.enqueue({'id':10,'ts':200},'Mira',True,200))
 
     def test_social_model_gets_untrusted_input_and_has_short_no_repair_fallback(self):
+        from packages.resident_world import mind as mind_module
         from packages.resident_world.mind import Mind
-        from unittest.mock import Mock
+        from unittest.mock import Mock,patch
         mind=Mind.__new__(Mind);mind.r={'name':'Mira','char_id':2};mind.c={'places':{},'residents':[]};mind.persona='Житель';mind.next_call=0;mind.history=[]
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp,patch.object(mind_module,'STATE',pathlib.Path(tmp)):
             mind.d=pathlib.Path(tmp)
             mind._complete=Mock(return_value='{"action":"say","args":{"text":"Привет, сосед!"},"reason":"Разговор"}')
             event={'name':'Other','text':'привет','type':'O'};s={'telemetry':{}}
             default={'action':'say','args':{'text':'Привет!'},'reason':'Ответ'}
             self.assertEqual(mind.respond(event,s,default)['args']['text'],'Привет, сосед!')
             self.assertIn('привет',mind._complete.call_args.args[0][1]['content'])
-            self.assertEqual(mind._complete.call_args.kwargs['timeout'],3)
+            # A player expects an answer within ~10 s of speaking: the model gets what is left.
+            self.assertTrue(2<=mind._complete.call_args.kwargs['timeout']<=8)
             mind._complete=Mock(side_effect=TimeoutError)
             self.assertEqual(mind.respond(event,s,default),default)
             self.assertEqual(mind._complete.call_count,1)

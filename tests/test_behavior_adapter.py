@@ -189,6 +189,13 @@ class AdapterTests(unittest.TestCase):
         p['server_time']=self.clock.now.isoformat(); p['expires_at']=(self.clock.now+timedelta(seconds=30)).isoformat()
         self.assertTrue(self.adapter.execute(p)['accepted'])
 
+    def test_own_interruption_does_not_cool_down_the_action(self):
+        # E06: 'interrupted' is the Controller preempting, not a failure; idle must stay possible.
+        self.executor.error = 'interrupted'
+        self.assertEqual(self.adapter.execute(execute('walk_to', {'place':'square'}))['error_code'], 'interrupted')
+        self.executor.error = None
+        self.assertTrue(self.adapter.execute(execute('walk_to', {'place':'square'}, 'b'))['accepted'])
+
     def test_authoritative_died_event_vetoes_before_next_snapshot(self):
         e = envelope(seq=2); e.update(event_id='death', type='died', data={})
         self.assertEqual(self.adapter.event(e)['status'], 'accepted')

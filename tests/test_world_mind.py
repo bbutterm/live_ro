@@ -75,22 +75,24 @@ class WorldMindTests(unittest.TestCase):
 
     def test_scoped_expiring_429_enters_persisted_pause_without_provider_call(self):
         from packages.resident_world import mind
-        from unittest.mock import patch
+        from unittest.mock import Mock,patch
         with tempfile.TemporaryDirectory() as tmp:
             d=pathlib.Path(tmp);fault=d/'llm-fault.json'
             fault.write_text(json.dumps({'resident':'Mira','kind':'429','expires':1200}))
             m=mind.Mind.__new__(mind.Mind);m.r={'name':'Mira','char_id':2};m.d=d;m.c={'places':{},'residents':[],'llm':{}}
-            m.path=d/'model-intent.json';m.history=[];m.history_path=d/'goal-history.json';m.errors=0;m.next_call=0;m.persona='Житель.';m.key='fake-test-key';m.cfg={}
-            with patch.object(mind,'STATE',d),patch.object(mind.time,'time',return_value=1000) as clock,patch('packages.resident_world.memory.refresh'),patch.object(mind,'world_snapshot',side_effect=RuntimeError('NETWORK_BOUNDARY')) as provider:
+            m.path=d/'model-intent.json';m.history=[];m.history_path=d/'goal-history.json';m.persona='Житель.'
+            m.client=Mock();m.client.complete.side_effect=RuntimeError('NETWORK_BOUNDARY')
+            with patch.object(mind,'STATE',d),patch.object(mind.time,'time',return_value=1000) as clock,patch('packages.resident_world.memory.refresh'):
                 self.assertIsNone(m.choose({'telemetry':{}}))
                 pause=json.loads((d/'llm-pause.json').read_text());self.assertEqual(pause['status'],429);self.assertEqual(pause['until'],1030)
-                self.assertFalse(m.path.exists());provider.assert_not_called()
-                clock.return_value=1029;self.assertIsNone(m.choose({'telemetry':{}}));provider.assert_not_called()
+                self.assertFalse(m.path.exists());m.client.complete.assert_not_called()
+                self.assertFalse(m.waiting(1029))  # unavailable: native habits run meanwhile
+                clock.return_value=1029;self.assertIsNone(m.choose({'telemetry':{}}));m.client.complete.assert_not_called()
                 m.r['name']='Borin'
                 with self.assertRaisesRegex(RuntimeError,'NETWORK_BOUNDARY'):m._complete([])
                 m.r['name']='Mira';clock.return_value=1201
                 with self.assertRaisesRegex(RuntimeError,'NETWORK_BOUNDARY'):m._complete([])
-                self.assertEqual(provider.call_count,2)
+                self.assertEqual(m.client.complete.call_count,2)
 
     def test_model_json_must_be_one_safe_menu_goal_with_linked_promise(self):
         from packages.resident_world.mind import validate_decision
@@ -111,7 +113,10 @@ class WorldMindTests(unittest.TestCase):
         from packages.resident_world.mind import validate_decision
         c={'places':{},'residents':[]};d={'action':'hunt','args':{'map':'prt_fild08','minutes':5},'reason':'Охота'}
         with self.assertRaises(ValueError):validate_decision(d,c,{'telemetry':{'hp':30,'hp_max':100,'inventory':{'501':10}}})
-        with self.assertRaises(ValueError):validate_decision(d,c,{'telemetry':{'hp':100,'hp_max':100,'inventory':{}}})
+        with self.assertRaises(ValueError):validate_decision(d,c,{'telemetry':{'hp':100,'hp_max':100,'inventory':{},'zeny':100}})
+        with self.assertRaises(ValueError):validate_decision(d,c,{'telemetry':{'hp':100,'hp_max':100,'inventory':{'501':10},'weight':75,'weight_max':100}})
+        # Broke and nothing to sell: hunting is the only way to earn potions (fallback does the same).
+        self.assertEqual(validate_decision(d,c,{'telemetry':{'hp':100,'hp_max':100,'inventory':{},'zeny':0,'sellable':{}}}),d)
     def test_rest_rejects_regeneration_disabled_at_half_weight(self):
         from packages.resident_world.mind import validate_decision
         c={'places':{},'residents':[]};d={'action':'rest','args':{'until_hp':85},'reason':'Восстановить здоровье'}

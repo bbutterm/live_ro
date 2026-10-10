@@ -131,6 +131,20 @@ class BehaviorGatewayTest(unittest.TestCase):
         self.e.evaluate()
         self.assertEqual(self.j.action(a['action_id'])['state'], 'confirmed')
 
+    def test_legacy_sale_also_requires_junk_reported_sellable_by_type(self):
+        # E05: weapons/etc outside the fixed list are sold too, and must be proven too.
+        self.telemetry(behavior_v1=False, inventory={'909': 3, '1201': 2, '501': 9}, sellable={'909': 3, '1201': 1})
+        a = self.e.run('sell_loot', {}, 60)
+        self.done(a)
+        self.telemetry(behavior_v1=False, inventory={'1201': 2, '501': 9}, sellable={'1201': 1})
+        self.trade(909, -3)
+        self.e.evaluate()
+        self.assertEqual(self.j.action(a['action_id'])['state'], 'verifying')
+        self.trade(1201, -1, 2)
+        self.telemetry(behavior_v1=False, inventory={'1201': 1, '501': 9}, sellable={})
+        self.e.evaluate()
+        self.assertEqual(self.j.action(a['action_id'])['state'], 'confirmed')
+
     def test_sale_requires_body_inventory_reduction_for_every_item(self):
         a = self.e.run('sell_loot', {'items': {'909': 3, '713': 2}}, 60)
         self.done(a)

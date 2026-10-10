@@ -8,6 +8,21 @@ def iso(ts):
     return datetime.fromtimestamp(ts, timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
+def monsters_v1(near):
+    """Native frames carry {id: hex GID, nameID: class, x, y}; v1 wants exactly
+    {id, x, y} with id = monster class ('1002' is Poring). The extra nameID key
+    was the ContractError('invalid_keys') of E01, the GID the hunt veto of R02."""
+    if not isinstance(near, list):
+        return near
+    out = []
+    for m in near:
+        if not isinstance(m, dict):
+            out.append(m); continue
+        kind = m.get('nameID', m.get('id'))
+        out.append({'id': None if kind is None else str(kind), 'x': m.get('x'), 'y': m.get('y')})
+    return out
+
+
 def snapshot_from_status(status, resident_id, seq, *, current_action=None, agreements=None):
     t = status.get('telemetry') or {}
     pos = t.get('pos') or {}
@@ -26,7 +41,7 @@ def snapshot_from_status(status, resident_id, seq, *, current_action=None, agree
     if snapshot['near_players'] is None and isinstance(t.get('nearby_players'), list):
         snapshot['near_players'] = [{'name': p['name'], 'x': p['pos']['x'], 'y': p['pos']['y']}
                                     for p in t['nearby_players']]
-    snapshot['near_monsters'] = t.get('near_monsters')
+    snapshot['near_monsters'] = monsters_v1(t.get('near_monsters'))
     snapshot['current_action'] = current_action
     snapshot['agreements'] = agreements if agreements is not None else []
     return snapshot

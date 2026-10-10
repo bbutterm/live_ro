@@ -7,6 +7,15 @@ from packages.resident_demo.life_cycle import LOOT
 MENU={'say':{'text'},'whisper':{'to','text'},'walk_to':{'place'},'hunt':{'map','minutes'},'rest':{'until_hp'},'town_service':set(),'follow':{'player','minutes'},'meet':{'resident','place'},'idle':{'minutes'}}
 REVERSIBLE={'walk_to','hunt','rest','follow','say','whisper','idle','meet'}
 
+def has_sellable(t):
+    # The plugin reports junk it can sell by item type; older bodies only the fixed list.
+    sellable=t.get('sellable')
+    if isinstance(sellable,dict):return any(type(n) is int and n>0 for n in sellable.values())
+    return any(t.get('inventory',{}).get(k,0)>0 for k in LOOT)
+
+def place_phrase(c,place):
+    return c.get('place_labels',{}).get(place) or {'fountain':'у фонтана','field':'на поле'}.get(place) or 'у места '+str(place)
+
 def number(value,low,high):
     if type(value) is not int or not low<=value<=high:raise ValueError('ARGUMENT_RANGE')
     return value
@@ -131,7 +140,7 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         result=run_native(sock,native_plan(action,args,c),key+'-route',task,d)
         if result!='done':return result
         t=request(sock,{'op':'status'}).get('telemetry') or {}
-        if any(t.get('inventory',{}).get(k,0)>0 for k in LOOT):
+        if has_sellable(t):
             result=run_native(sock,{'skill':'sell_loot','params':{},'timeout':40},key+'-sell',task,d)
             if result!='done':return result
         t=request(sock,{'op':'status'}).get('telemetry') or {};stock=t.get('inventory',{}).get('501',0)

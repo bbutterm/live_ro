@@ -33,7 +33,7 @@ def execute(args,c,sock,key,task,d):
     if target['name']==task['resident']:return 'failed(SELF_MEETING)'
     task['meeting_chat_dirs']=[str(d),str(other_d)]
     def busy():return (d/'CHAT_PENDING').exists() or (other_d/'CHAT_PENDING').exists() or (other_d/'chat-goal.json').exists()
-    def label(place):return 'у фонтана' if place=='fountain' else 'на поле'
+    def label(place):return skills.place_phrase(c,place)
     def speak(sock,path,owner,text,suffix,to):
         owner.setdefault('protocol_speech',[]).append(text)
         atomic(path/'manual_task.json',owner)

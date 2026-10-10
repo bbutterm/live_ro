@@ -72,6 +72,7 @@ class Executor:
    if not isinstance(bag,dict) or any(type(bag.get(k)) is not int or n>bag[k] for k,n in items.items()):raise ValueError('INVALID_ITEMS')
    params={**params,'items':dict(items)}
   if skill in ('buy_potions','sell_loot'):params={**params,'_inventory_before':dict((self.telemetry or {}).get('inventory',{})),'_picklog_baseline':self.j.cursor('picklog')}
+  if skill=='sell_loot' and 'items' not in params and isinstance((self.telemetry or {}).get('sellable'),dict):params['_sellable_before']=dict(self.telemetry['sellable'])
   now=time.time();a=self.j.plan(self.resident,skill,params,key,now+deadline,self.epoch,self.j.cursor('witness'));aid=a['action_id']
   if not self.telemetry or now-self.telemetry['ts']>3 or now-self.received>3:reason='STALE_TELEMETRY'
   elif self.telemetry.get('dead') and skill!='respawn':reason='DIED'
@@ -110,7 +111,12 @@ class Executor:
       hits=[r for r in trades if r['amount']<0]
       ok=self.epoch==a['epoch']==t.get('body_epoch') and bool(expected) and all(r['item_id'] in expected for r in hits) and all(sum(-r['amount'] for r in hits if r['item_id']==iid)==n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in expected.items())
      else:
-      ids={909,914,705,935,919,908,916};expected={int(k):v for k,v in before.items() if int(k) in ids and v>0};hits=[r for r in trades if r['item_id'] in expected and r['amount']<0];ok=bool(expected) and all(sum(-r['amount'] for r in hits if r['item_id']==iid)>=n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in expected.items())
+      # Legacy whole-stack sale: the fixed list plus the junk the body reported
+      # sellable by item type when the action was planned; all of it must be sold.
+      ids={909,914,705,935,919,908,916};expected={int(k):v for k,v in before.items() if int(k) in ids and v>0}
+      junk=p.get('_sellable_before')
+      if isinstance(junk,dict):expected.update({int(k):v for k,v in junk.items() if type(v) is int and v>0})
+      hits=[r for r in trades if r['item_id'] in expected and r['amount']<0];ok=bool(expected) and all(sum(-r['amount'] for r in hits if r['item_id']==iid)>=n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in expected.items())
      if ok:self.j.transition(aid,'confirmed','BOUGHT' if a['skill']=='buy_potions' else 'SOLD',{'server_picklog':hits,'body':t});continue
     elif a['skill'] in ('rest','respawn'):
      hit=next((r for r in reversed(rows) if r['kind'] in ('pos','loadmap','login') and r['map']==t['map']),None)
