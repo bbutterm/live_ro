@@ -9,7 +9,8 @@ class Journal:
 CREATE TABLE IF NOT EXISTS actions(action_id TEXT PRIMARY KEY,resident TEXT,skill TEXT,params TEXT,idem_key TEXT,deadline REAL,epoch TEXT,baseline INTEGER,state TEXT,code TEXT,created REAL,updated REAL,UNIQUE(resident,idem_key));
 CREATE TABLE IF NOT EXISTS action_transitions(id INTEGER PRIMARY KEY,action_id TEXT,ts REAL,state TEXT,code TEXT,evidence TEXT);
 CREATE TABLE IF NOT EXISTS operator_log(id INTEGER PRIMARY KEY,ts REAL,op TEXT,payload TEXT);
-CREATE TABLE IF NOT EXISTS cursors(source TEXT PRIMARY KEY,value INTEGER);''')
+CREATE TABLE IF NOT EXISTS cursors(source TEXT PRIMARY KEY,value INTEGER);
+CREATE INDEX IF NOT EXISTS events_source_ts ON events(source,ts);''')
  def plan(self,resident,skill,params,idem,deadline,epoch,baseline):
   row=self.db.execute('SELECT * FROM actions WHERE resident=? AND idem_key=?',(resident,idem)).fetchone()
   if row:return dict(row)
