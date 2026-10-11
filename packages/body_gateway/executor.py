@@ -71,18 +71,26 @@ class Executor:
   if skill in ('say','whisper') and (not isinstance(params,dict) or not isinstance(params.get('text'),str) or not 0<len(params['text'])<=120 or (skill=='say' and params['text'].lstrip().startswith(('@','#','/'))) or any(ord(c)<32 or ord(c)==127 for c in params['text']) or ';;' in params['text'] or '\\' in params['text']):raise ValueError('INVALID_TEXT')
   key=idem or str(uuid.uuid4());old=[a for a in self.j.actions() if a['resident']==self.resident and a['idem_key']==key]
   if old:return old[0]
+  if skill=='sell_loot' and isinstance(params,dict) and 'category' in params:
+   if params['category'] not in ('loot','equipment') or 'items' in params:raise ValueError('INVALID_SALE_CATEGORY')
+   category=((self.telemetry or {}).get('sellable_by_category') or {}).get(params['category'])
+   if not isinstance(category,dict) or not category:raise ValueError('NO_CATEGORY_TELEMETRY')
+   params={**params,'_sellable_before':dict(category)}
   if skill=='sell_loot' and (isinstance(params,dict) and 'items' in params or (self.telemetry or {}).get('behavior_v1') is True):
    items=params.get('items') if isinstance(params,dict) else None
    bag=(self.telemetry or {}).get('inventory')
    if not isinstance(items,dict) or not items or any(k not in ('909','713','938') or type(n) is not int or not 1<=n<=1000 for k,n in items.items()):raise ValueError('INVALID_ITEMS')
    if not isinstance(bag,dict) or any(type(bag.get(k)) is not int or n>bag[k] for k,n in items.items()):raise ValueError('INVALID_ITEMS')
    params={**params,'items':dict(items)}
+  if skill=='hunt' and params.get('party_target'):
+   party=(self.telemetry or {}).get('party') or {}
+   if party.get('source')!='native_client' or party.get('share')!=1 or not any(u.get('name')==params['party_target'] and u.get('online') is True for u in party.get('members',[])):raise ValueError('INVALID_PARTY')
   if skill=='hunt' and params.get('support_target'):
    t=self.telemetry or {};party=t.get('party') or {}
    if params['support_target'] not in {u.get('name') for u in party.get('members',[])} or party.get('share')!=1 or type(t.get('job_level')) is not int:raise ValueError('INVALID_SUPPORT_PARTY')
    params={**params,'_job_level_before':t['job_level']}
   if skill in ('buy_potions','sell_loot'):params={**params,'_inventory_before':dict((self.telemetry or {}).get('inventory',{})),'_picklog_baseline':self.j.cursor('picklog')}
-  if skill=='sell_loot' and 'items' not in params and isinstance((self.telemetry or {}).get('sellable'),dict):params['_sellable_before']=dict(self.telemetry['sellable'])
+  if skill=='sell_loot' and 'items' not in params and 'category' not in params and isinstance((self.telemetry or {}).get('sellable'),dict):params['_sellable_before']=dict(self.telemetry['sellable'])
   now=time.time();a=self.j.plan(self.resident,skill,params,key,now+deadline,self.epoch,self.j.cursor('witness'));aid=a['action_id']
   if not self.telemetry or now-self.telemetry['ts']>3 or now-self.received>3:reason='STALE_TELEMETRY'
   elif self.telemetry.get('dead') and skill!='respawn':reason='DIED'
@@ -123,13 +131,16 @@ class Executor:
      else:
       # Legacy whole-stack sale: the fixed list plus the junk the body reported
       # sellable by item type when the action was planned; all of it must be sold.
-      ids={909,914,705,935,919,908,916};required={int(k):v for k,v in before.items() if int(k) in ids and v>0}
+      ids=set() if 'category' in p else {909,914,705,935,919,908,916}
       junk=p.get('_sellable_before') if isinstance(p.get('_sellable_before'),dict) else {}
+      required={int(k):v for k,v in (junk if '_sellable_before' in p else before).items() if int(k) in ids and v>0}
       # The dealer may refuse some junk (NoSell, bound): it needs proof only where it was sold.
       optional={int(k):v for k,v in junk.items() if type(v) is int and v>0 and int(k) not in required}
       hits=[r for r in trades if (r['item_id'] in required or r['item_id'] in optional) and r['amount']<0];sold={}
       for r in hits:sold[r['item_id']]=sold.get(r['item_id'],0)-r['amount']
       ok=bool(hits) and all(sold.get(iid,0)>=n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in required.items()) and all(bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in sold.items() if iid in optional)
+     if a['skill']=='sell_loot' and 'category' in p:
+      ok=ok and self.epoch==a['epoch']==t.get('body_epoch') and all(r['item_id'] in optional for r in trades if r['amount']<0)
      if ok:self.j.transition(aid,'confirmed','BOUGHT' if a['skill']=='buy_potions' else 'SOLD',{'server_picklog':hits,'body':t});continue
     elif a['skill'] in ('rest','respawn'):
      hit=next((r for r in reversed(rows) if r['kind'] in ('pos','loadmap','login') and r['map']==t['map']),None)
@@ -147,7 +158,7 @@ class Executor:
        if ' '.join(' '.join(r['text'].split()) for r in fragment)==wanted:hit=fragment;break
       if hit:break
      if spoken and hit:self.j.transition(aid,'confirmed','SPOKEN',{'server_parts':hit});continue
-    elif a['skill']=='hunt':
+    elif a['skill']=='hunt' and (not p.get('party_target') or (t.get('party') or {}).get('source')=='native_client' and (t.get('party') or {}).get('share')==1 and any(u.get('name')==p['party_target'] and u.get('online') is True for u in (t.get('party') or {}).get('members',[]))):
      if p.get('support_target'):
       seen=self.support_seen.get(aid);party=t.get('party') or {}
       progress=[r for r in rows if r['kind']=='job_level' and r['map']==p['map'] and r.get('a1',0)>p['_job_level_before'] and t.get('job_level',0)>=r['a1']]

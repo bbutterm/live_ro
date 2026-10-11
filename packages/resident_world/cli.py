@@ -14,8 +14,29 @@ def status_intent(memory,manual_task,manual_live):
         return manual_task['action'],memory.get('reason','Выбираю занятие') if manual_task.get('origin')=='brain' else 'Ручная проверка навыка'
     return memory.get('activity',''),memory.get('reason','')
 
+def action_cli(argv):
+    """Machine JSON interface. Invocation is synchronous and always bounded."""
+    from .skills import discover,execute,action_status,cancel_action
+    if not argv:raise SystemExit('actions discover [житель] | invoke житель action JSON [task_id] | status/cancel житель task_id')
+    try:
+        op=argv[0]
+        if op=='discover' and len(argv) in (1,2):
+            c=config();s={}
+            if len(argv)==2:
+                r=next((r for r in c['residents'] if argv[1] in (r['name'],r['resident_id'])),None)
+                if r is None:raise ValueError('UNKNOWN_RESIDENT')
+                s=request(str(STATE/r['resident_id']/'actions.sock.control'),{'op':'status'})
+                s={**s,'_resident_id':r['resident_id'],'_me':r['name']}
+            result=discover(c,s)
+        elif op=='invoke' and len(argv) in (4,5):result=execute(argv[1],argv[2],json.loads(argv[3]),task_id=argv[4] if len(argv)==5 else None)
+        elif op in ('status','cancel') and len(argv)==3:result=(action_status if op=='status' else cancel_action)(argv[1],argv[2])
+        else:raise ValueError('INVALID_ACTION_CLI')
+    except (ValueError,RuntimeError,OSError) as error:raise SystemExit('Действие отклонено: '+str(error))
+    print(json.dumps(result,ensure_ascii=False))
+
 def main():
     op=sys.argv[1] if len(sys.argv)>1 else 'status'
+    if op=='actions':return action_cli(sys.argv[2:])
     if op=='stop':
         (STATE/'STOP').touch(mode=0o600)
         subprocess.run(['systemctl','stop','ro-world.service'],check=True)

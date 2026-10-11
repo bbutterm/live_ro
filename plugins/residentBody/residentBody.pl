@@ -24,8 +24,10 @@ sub guardBehaviorConfig{
  Plugins::callHook('configModify',{key=>'skillsAddAuto',val=>0})if Plugins->can('callHook');
 }
 # Explicit support profile; no GM or arbitrary console capability is exposed.
+sub nativePartyTarget{my$target=shift;return 0 unless defined$target&&$target=~/^[\p{L}\p{N}_ -]{1,24}$/&&$char->{party}{joined}&&($char->{party}{share}//-1)==1;return scalar grep{($_->{name}//'')eq$target&&$_->{online}}values%{$char->{party}{users}//{}}}
+sub explicitSupportValid{my$p=shift;return 1 unless exists$p->{support_target};return 0 if behaviorV1()||$p->{solo};return nativePartyTarget($p->{support_target})&&($config{residentSupportTarget}//'')eq$p->{support_target}&&($config{followTarget}//'')eq$p->{support_target}&&($char->{skills}{AL_HEAL}{lv}//0)>0}
 sub cooperativeSupport{
- return 0 if behaviorV1()||$mode ne'HUNT';
+ return 0 if behaviorV1()||$mode ne'HUNT'||($active&&$active->{params}{solo});
  my$target=$config{residentSupportTarget}//'';
  return 0 unless$target=~/^[\p{L}\p{N}_ -]{1,24}$/&&($config{followTarget}//'')eq$target&&$char->{party}{joined};
  return scalar grep{($_->{name}//'')eq$target}values%{$char->{party}{users}//{}};
@@ -51,15 +53,23 @@ sub validSaleParams{
 # (sent as type 4 without an equip location: selling one deletes the pet).
 my%keepItems=map{$_=>1}(501,502,503,504,505,506,601,602,715,716,717,1065);
 my%sellTypes=map{$_=>1}(0,3,4,5);
+sub protectedItem{
+ my$i=shift;return 1 if!$i||$i->{equipped}||$i->{unsellable}||$keepItems{$i->{nameID}};
+ my%keep=map{$_=>1}grep{/^\d+$/}split(/[\s,]+/,$config{residentKeepItems}//'');return 1 if$keep{$i->{nameID}};
+ if(($i->{type}//-1)==4||($i->{type}//-1)==5){return 1 if$i->{upgrade}||defined$i->{identified}&&!$i->{identified}||($i->{cards}//'')=~/[^\x00]/||($i->{options}//'')=~/[^\x00]/}
+ return 0;
+}
 sub sellableItem{
- my$i=shift;return 0 unless$i&&$i->{nameID}&&($i->{amount}//0)>0&&!$i->{equipped}&&!$i->{unsellable}&&!$keepItems{$i->{nameID}};
+ my$i=shift;return 0 unless$i&&$i->{nameID}&&($i->{amount}//0)>0&&!protectedItem($i);
  my$t=$i->{type}//-1;return 0 if($t==4||$t==5)&&!$i->{type_equip};
  return$sellTypes{$t}?1:0;
 }
 sub sellableFrame{my%bag;for my$i(@{bagItems()}){$bag{$i->{nameID}}+=0+$i->{amount}if sellableItem($i)}return\%bag}
+sub saleCategory{my$i=shift;return(($i->{type}//-1)==4||($i->{type}//-1)==5)?'equipment':'loot'}
+sub sellableCategories{my%bag=(loot=>{},equipment=>{});for my$i(@{bagItems()}){$bag{saleCategory($i)}{$i->{nameID}}+=0+$i->{amount}if sellableItem($i)}return\%bag}
 sub salePlan{
  my($p,$bag)=@_;return(undef,undef)unless validSaleParams($p);my%remaining=%{$p->{items}};my@order;my%expected;
- for my$i(@$bag){my$id=$i->{nameID};next unless defined$id&&($remaining{$id}//0)>0&&($i->{amount}//0)>0&&!$i->{equipped}&&!$i->{unsellable};my$n=$i->{amount}<$remaining{$id}?$i->{amount}:$remaining{$id};push@order,{ID=>$i->{ID},amount=>$n};$expected{$id}+=$n;$remaining{$id}-=$n}
+ for my$i(@$bag){my$id=$i->{nameID};next unless defined$id&&($remaining{$id}//0)>0&&($i->{amount}//0)>0&&!protectedItem($i);my$n=$i->{amount}<$remaining{$id}?$i->{amount}:$remaining{$id};push@order,{ID=>$i->{ID},amount=>$n};$expected{$id}+=$n;$remaining{$id}-=$n}
  return(undef,undef)if grep{$_>0}values%remaining;return(\@order,\%expected);
 }
 sub pollShop{
@@ -82,7 +92,7 @@ sub pollShop{
    if(behaviorV1()){
     my($planned,$delta)=salePlan($active->{params},bagItems());if(!$planned){finish('error','NO_LOOT','explicit sale quantities unavailable');return}@order=@$planned;%expected=%$delta;
    }else{my%allow=map{$_=>1}(909,914,705,935,919,908,916);
-    for my$i(@{bagItems()}){next unless($allow{$i->{nameID}}||sellableItem($i))&&$i->{amount}>0&&!$i->{equipped}&&!$i->{unsellable};push@order,{ID=>$i->{ID},amount=>$i->{amount}};$expected{$i->{nameID}}+=$i->{amount}}
+    for my$i(@{bagItems()}){next unless($allow{$i->{nameID}}||sellableItem($i))&&$i->{amount}>0&&!protectedItem($i);next if defined$active->{params}{category}&&(!sellableItem($i)||saleCategory($i)ne$active->{params}{category});push@order,{ID=>$i->{ID},amount=>$i->{amount}};$expected{$i->{nameID}}+=$i->{amount}}
    }
    if(!@order){finish('error','NO_LOOT','no sellable whitelisted loot');return}
    $active->{expected}=\%expected;require Misc;Misc::completeNpcSell(\@order);
@@ -132,7 +142,7 @@ sub partyFrame{
 }
 sub telemetryFrame{
  my$p=calcPosition($char);
- return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),class_id=>defined$char->{jobID}?0+$char->{jobID}:undef,party=>partyFrame(),cooperative_support=>cooperativeSupport()?JSON::PP::true:JSON::PP::false,duo_speech=>parallelSpeech()?JSON::PP::true:JSON::PP::false,sellable=>sellableFrame(),nearby_players=>nearbyFrame(),near_players=>[map{{name=>$_->{name},x=>$_->{pos}{x},y=>$_->{pos}{y}}}@{nearbyFrame()}],near_monsters=>monstersFrame(),job_level=>defined$char->{lv_job}?0+$char->{lv_job}:undef,free_skill_points=>defined$char->{points_skill}?0+$char->{points_skill}:undef,learned_skills=>learnedFrame(),online_minutes=>defined$onlineSince?int((time()-$onlineSince)/60):undef,behavior_v1=>behaviorV1()?JSON::PP::true:JSON::PP::false,base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
+ return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),class_id=>defined$char->{jobID}?0+$char->{jobID}:undef,party=>partyFrame(),cooperative_support=>cooperativeSupport()?JSON::PP::true:JSON::PP::false,duo_speech=>parallelSpeech()?JSON::PP::true:JSON::PP::false,sellable=>sellableFrame(),sellable_by_category=>sellableCategories(),nearby_players=>nearbyFrame(),near_players=>[map{{name=>$_->{name},x=>$_->{pos}{x},y=>$_->{pos}{y}}}@{nearbyFrame()}],near_monsters=>monstersFrame(),job_level=>defined$char->{lv_job}?0+$char->{lv_job}:undef,free_skill_points=>defined$char->{points_skill}?0+$char->{points_skill}:undef,learned_skills=>learnedFrame(),online_minutes=>defined$onlineSince?int((time()-$onlineSince)/60):undef,behavior_v1=>behaviorV1()?JSON::PP::true:JSON::PP::false,base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
 }
 sub sendFrame{
  return 0 unless$connection;my$bytes=encode_json($_[0])."\n";my$n=send($connection,$bytes,MSG_NOSIGNAL|MSG_DONTWAIT);
@@ -209,6 +219,7 @@ sub command{
  if(($m->{skill}//'')eq'buy_potions'||($m->{skill}//'')eq'sell_loot'){
   my$sk=$m->{skill};my$p=$m->{params};return reject($a,'INVALID','invalid shop params')unless ref$p eq'HASH';
   if($sk eq'buy_potions'){my$stockLimit=behaviorV1()?8:20;my$budgetLimit=behaviorV1()?400:300;return reject($a,'INVALID','501 only, bounded stock and budget')unless($p->{item_id}//0)==501&&($p->{stock_goal}//0)=~/^\d+$/&&$p->{stock_goal}>0&&$p->{stock_goal}<=$stockLimit&&($p->{max_zeny}//0)>0&&$p->{max_zeny}<=$budgetLimit&&(!behaviorV1()||(!ref$p->{max_zeny}&&$p->{max_zeny}=~/^\d+$/))}
+  if($sk eq'sell_loot'&&exists$p->{category}){return reject($a,'INVALID','sale category only loot/equipment; no explicit quantities')if($p->{category}//'')!~/^(?:loot|equipment)$/||exists$p->{items}}
   if(behaviorV1()&&$sk eq'sell_loot'){return reject($a,'INVALID','explicit bounded sale plan required')unless validSaleParams($p)}
   return reject($a,'WRONG_MAP','verified tool dealer only')unless$field->{baseName}eq'prt_in';
   my$pos=calcPosition($char);my$list=eval{$Globals::npcsList->getItems()}//[];my($npc)=grep{($_->{name}//'')=~/^Tool Dealer#/&&abs($_->{pos}{x}-126)<=2&&abs($_->{pos}{y}-76)<=2}@$list;
@@ -226,6 +237,8 @@ sub command{
  }
  if(($m->{skill}//'')eq'hunt'){
   my$p=$m->{params};return reject($a,'INVALID','hunt only on verified low-level field')unless ref$p eq'HASH'&&($p->{map}//'')eq'prt_fild08'&&$p->{map}eq$field->{baseName}&&($p->{duration}//0)=~/^\d+$/&&$p->{duration}>0&&$p->{duration}<=3600;
+  return reject($a,'INVALID_SUPPORT_PARTY','native party and configured learned support required')unless explicitSupportValid($p);
+  return reject($a,'INVALID_PARTY','native shared party member required')if exists$p->{party_target}&&!nativePartyTarget($p->{party_target});
   if(behaviorV1()){my$unsafe=huntUnsafe();return reject($a,$unsafe,'behavior v1 safety veto')if$unsafe}
   $ledger{$k}={action_id=>$a,idem_key=>$k,result=>{outcome=>'unknown',code=>'IN_PROGRESS'}};push@order,$k;saveLedger();$active={%$m,started=>time(),last_attack=>0,hunt_observation=>{samples=>0,eligible_seen=>0,attack_attempts=>0,attack_errors=>0,attack_rejections=>0}};$mode='HUNT';applyMode();emit('skill_accepted',{action_id=>$a,code=>'ACCEPTED'});emit('skill_progress',{action_id=>$a,phase=>'running',detail=>'bounded native hunt; server kills required'});return;
  }
@@ -271,6 +284,8 @@ sub pollSkill{
   if(!behaviorV1()&&($char->{hp_max}//0)&&$char->{hp}*100/$char->{hp_max}<55&&time()-($active->{last_potion}//0)>=2){my($pot)=grep{$_->{nameID}==501&&$_->{amount}>0}@{bagItems()};if($pot){my$used=eval{$pot->use()};if($used){$active->{last_potion}=time();return}}}
   return if time()-($active->{last_potion}//0)<1;
   if(($char->{hp_max}//0)&&$char->{hp}*100/$char->{hp_max}<30){stopMotion();finish('error','NEEDS_REST','HP safety threshold reached');return}
+  if(!explicitSupportValid($active->{params})){stopMotion();finish('error','INVALID_SUPPORT_PARTY','support party lost');return}
+  if(exists$active->{params}{party_target}&&!nativePartyTarget($active->{params}{party_target})){stopMotion();finish('error','INVALID_PARTY','party lost');return}
   return if cooperativeSupport(); # OpenKore follow + native partySkill own support; never fake a kill.
   require AI;
   if(time()-$active->{last_attack}>=2&&!AI::inQueue('attack')&&(AI::action()//'')ne'items_take'){
