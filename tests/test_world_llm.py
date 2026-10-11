@@ -197,6 +197,36 @@ class ClientTests(unittest.TestCase):
         c=self.client();c.urlopen=slow;c.clock=_t.time;started=_t.monotonic()
         with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'}],timeout=8,shared_pause=False,deadline=_t.time()+.5)
         self.assertEqual(err.exception.reason,'TIMEOUT');self.assertLess(_t.monotonic()-started,1.5)
+    def test_provider_specific_key_never_goes_to_another_provider(self):
+        # An OPENAI_API_KEY left in the shell must not be sent to OpenRouter (default base URL).
+        from packages.resident_world.llm import load_settings,LLMUnavailable
+        (self.dir/'.env').write_text('')
+        with patch.dict(os.environ,{'OPENAI_API_KEY':'sk-openai-secret-1'}):
+            with self.assertRaises(LLMUnavailable) as err:load_settings(self.dir)
+            self.assertEqual(err.exception.reason,'NO_TOKEN')
+            with patch.dict(os.environ,{'RO_WORLD_LLM_BASE_URL':'https://api.openai.com/v1'}):
+                s=load_settings(self.dir);self.assertEqual(s.key,'sk-openai-secret-1');self.assertIn('OPENAI_API_KEY',s.source)
+        (self.dir/'.env').write_text('DEEPSEEK_API_KEY=sk-deep-0001\nRO_WORLD_LLM_API_KEY=sk-or-v1-own\n')
+        with patch.dict(os.environ,{'RO_WORLD_LLM_API_KEY':''}):
+            s=load_settings(self.dir);self.assertEqual(s.key,'sk-or-v1-own');self.assertEqual(s.source,'.env (RO_WORLD_LLM_API_KEY)')
+    def test_windows_encoded_env_files(self):
+        # Notepad saves UTF-16 with BOM or cp1251; a Russian comment must not hide the key.
+        from packages.resident_world.llm import load_settings
+        text='# мой ключ от OpenRouter\nRO_WORLD_LLM_API_KEY=sk-or-v1-win  # не показывать\n'
+        for encoding in ('cp1251','utf-16','utf-8-sig'):
+            with self.subTest(encoding=encoding):
+                (self.dir/'.env').write_bytes(text.encode(encoding));self.assertEqual(load_settings(self.dir).key,'sk-or-v1-win')
+        (self.dir/'.env').write_text('RO_WORLD_LLM_API_KEY="sk-or-v1-unbalanced\n')
+        self.assertEqual(load_settings(self.dir).key,'sk-or-v1-unbalanced')
+    def test_in_flight_burst_of_429_does_not_escalate(self):
+        # Three residents hit the same 429 at once: one pause, not three escalation steps.
+        from packages.resident_world.llm import Gate
+        g=Gate(self.dir/'burst.json',rng=lambda:0)
+        first=g.close('RATE_LIMIT',1000,429,retry_after=30,since=999)
+        for now in (1000.2,1000.5):self.assertEqual(g.close('RATE_LIMIT',now,429,retry_after=30,since=999),first)
+        self.assertEqual(g.state()['failures'],1);self.assertEqual(first,1030)
+        later=g.close('RATE_LIMIT',1031,429,retry_after=30,since=1030.5)  # a fresh request after the pause
+        self.assertEqual(g.state()['failures'],2);self.assertGreaterEqual(later-1031,40)
     def test_lenient_json_extraction(self):
         from packages.resident_world.llm import parse_json_object,BadModelOutput
         self.assertEqual(parse_json_object('```json\n{"a": 1}\n```'),{'a':1})
@@ -207,7 +237,7 @@ class ClientTests(unittest.TestCase):
 
 class DoctorTests(unittest.TestCase):
     """`ro doctor`: one cheap real call with a plain Russian verdict."""
-    def run_doctor(self,env_text,script):
+    def run_doctor(self,env_text,script,environ=None):
         import contextlib,io
         from packages.resident_world import cli,llm
         server=FakeProvider();self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
@@ -216,7 +246,7 @@ class DoctorTests(unittest.TestCase):
             root=pathlib.Path(tmp);(root/'.env').write_text(env_text.replace('{URL}',server.url))
             out=io.StringIO()
             with patch.object(cli,'ROOT',root),patch.object(cli,'STATE',root/'state'),patch.object(cli,'config',return_value={'daily_llm_usd':2}),\
-                 patch.dict(os.environ,{**{k:'' for k in llm.KEY_NAMES},'RO_WORLD_LLM_BASE_URL':'','RO_WORLD_LLM_MODEL':'','RO_WORLD_LLM_DAILY_USD':''}),contextlib.redirect_stdout(out):
+                 patch.dict(os.environ,{**{k:'' for k in llm.KEY_NAMES},'RO_WORLD_LLM_BASE_URL':'','RO_WORLD_LLM_MODEL':'','RO_WORLD_LLM_DAILY_USD':'',**(environ or {})}),contextlib.redirect_stdout(out):
                 code=cli.doctor()
         return code,out.getvalue(),server
     def test_ok(self):
@@ -229,5 +259,10 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(code,2);self.assertIn('не принял токен',out)
         code,out,_=self.run_doctor('RO_WORLD_LLM_API_KEY=sk-poor-00000000\nRO_WORLD_LLM_BASE_URL={URL}\n',[(402,{'error':{'message':'no credits'}})])
         self.assertIn('нет денег',out)
+    def test_key_only_in_the_shell_is_flagged_for_systemd(self):
+        code,out,server=self.run_doctor('RO_WORLD_LLM_BASE_URL={URL}\n',['{"ok": true, "say": "Привет"}'],environ={'RO_WORLD_LLM_API_KEY':'sk-shell-0000000'})
+        self.assertEqual(code,0,out);self.assertIn('окружения этой оболочки',out);self.assertNotIn('sk-shell-0000000',out)
+        code,out,_=self.run_doctor('RO_WORLD_LLM_API_KEY=sk-file-00000000\nRO_WORLD_LLM_BASE_URL={URL}\n',['{"ok": true, "say": "Привет"}'])
+        self.assertIn('из .env (RO_WORLD_LLM_API_KEY)',out);self.assertNotIn('окружения этой оболочки',out)
 
 if __name__=='__main__':unittest.main()

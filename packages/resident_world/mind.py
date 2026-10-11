@@ -123,7 +123,7 @@ def _match(value,options):
     return None
 
 
-def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None,known=()):
+def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None,known=(),me=None):
     """Turn a model answer into one validated menu goal; ValueError explains why not."""
     if not isinstance(obj,dict):raise BadModelOutput('JSON_NOT_OBJECT')
     raw=obj.get('action')
@@ -141,7 +141,7 @@ def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None,known=()):
         args['text']=clean_text(given.get('text') or obj.get('say') or '',80)
         if action=='whisper':
             to=given.get('to') or given.get('player') or (event or {}).get('name')
-            allowed=nearby+[r['name'] for r in c['residents'] if r.get('enabled',True)]+list(known)+([event['name']] if event else [])
+            allowed=[n for n in nearby+[r['name'] for r in c['residents'] if r.get('enabled',True)]+list(known)+([event['name']] if event else []) if n!=me]
             args['to']=_match(to,allowed)
             # Not a tool to message arbitrary players across the world: only who is near or talked to us.
             if not args['to']:raise ValueError('WHISPER_TARGET')
@@ -344,8 +344,10 @@ class Mind:
             try:e=json.loads(payload);res=json.loads(result) if result else {}
             except ValueError:continue
             said=(res.get('decision') or {}).get('args',{}).get('text') or (res.get('decision') or {}).get('say')
+            # Only what the player really heard counts as an answer (honesty about promises).
+            reply={'я ответил':said} if said and res.get('outcome')=='done' else {'не смог ответить':outcome_ru(res.get('outcome'))} if res.get('outcome') else {}
             out.append({'кто':e.get('name'),'как':'шёпотом' if e.get('type')=='W' else 'вслух','сказал':str(e.get('text',''))[:120],
-                        'когда':ago(time.time()-float(e.get('ts',0) or 0)),**({'я ответил':said} if said else {})})
+                        'когда':ago(time.time()-float(e.get('ts',0) or 0)),**reply})
         return out
     def where(self,map_name,pos):
         labels=self.c.get('place_labels',{})
@@ -435,13 +437,13 @@ class Mind:
         try:
             raw=self._complete(messages,timeout=float(self.llm.get('timeout_seconds',25)),schema=DECISION_SCHEMA,purpose='decide',max_tokens=600)
             known=self.known()
-            try:decision,notes=normalize_decision(parse_json_object(raw),self.c,s,known=known)
+            try:decision,notes=normalize_decision(parse_json_object(raw),self.c,s,known=known,me=self.r['name'])
             except (BadModelOutput,ValueError) as error:
                 record('MODEL_REPAIR',resident=self.r['name'],error=str(error),raw=raw[:600])
                 if raw.strip():messages.append({'role':'assistant','content':raw[:2000]})
                 messages.append({'role':'user','content':'Так нельзя: '+explain(error)+'. Ответь заново одним JSON-объектом, выбери действие из can_now с пометкой «да».'})
                 raw=self._complete(messages,timeout=float(self.llm.get('timeout_seconds',25)),schema=DECISION_SCHEMA,purpose='decide',max_tokens=600)
-                decision,notes=normalize_decision(parse_json_object(raw),self.c,s,known=known)
+                decision,notes=normalize_decision(parse_json_object(raw),self.c,s,known=known,me=self.r['name'])
         except LLMUnavailable as error:
             self.next_call=self.unavailable_until=self._unavailable(error,'decide');return None
         except (BadModelOutput,ValueError,KeyError,TypeError) as error:
@@ -495,7 +497,7 @@ class Mind:
                 'Места: '+', '.join(f'{k} ({place_phrase(self.c,k)})' for k in self.c['places'])+'. Неиспользуемые поля — null. Ответ — один JSON-объект.')
         try:
             raw=self._complete([{'role':'system','content':prompt},{'role':'user','content':json.dumps(context,ensure_ascii=False)}],timeout=min(8.0,remaining),schema=CHAT_SCHEMA,purpose='chat',max_tokens=200,shared_pause=False,deadline=float(event.get('ts',now))+6.5)
-            decision,_=normalize_decision(parse_json_object(raw),self.c,s,allowed=CHAT_ACTIONS,event=event)
+            decision,_=normalize_decision(parse_json_object(raw),self.c,s,allowed=CHAT_ACTIONS,event=event,me=self.r['name'])
             if decision['action'] not in ('say','whisper') and not decision.get('say'):decision['say']=clean_text(default.get('say') or default.get('args',{}).get('text') or 'Хорошо.',80)
             return validate_reply(decision,event,self.c,s)
         except LLMUnavailable as error:

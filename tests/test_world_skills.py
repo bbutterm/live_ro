@@ -94,18 +94,26 @@ class WorldSkillsTests(unittest.TestCase):
 
     def test_meeting_with_a_peer_busy_past_our_window_fails_before_any_vote(self):
         # A 15-minute model hunt holds the peer's writer longer than a 5-minute meet window.
-        import tempfile,pathlib,json
+        import tempfile,pathlib,json,fcntl
         from unittest.mock import patch
         from packages.resident_world import skills,meeting
         c={'residents':[{'name':'Mira','resident_id':'b'}],'places':{'field':{'map':'prt_fild08','x':170,'y':240}}}
         with tempfile.TemporaryDirectory() as tmp:
             root=pathlib.Path(tmp);d=root/'a';d.mkdir();peer=root/'b';peer.mkdir()
-            (peer/'manual_task.json').write_text(json.dumps({'id':'hunt','resident':'Mira','action':'hunt','started':990,'expires':1890}))
+            (peer/'manual_task.json').write_text(json.dumps({'id':'hunt','resident':'Mira','action':'hunt','args':{'minutes':15},'started':990,'expires':1890}))
             s={'actions':[],'age':1,'projection':{}}
             task={'id':'key','resident':'ResidentA','action':'meet','expires':1300}
-            with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native') as native,patch.object(meeting,'decide') as model:
-                self.assertEqual(meeting.execute({'resident':'Mira','place':'field'},c,'sock','key',task,d),'failed(TARGET_BUSY)')
-            model.assert_not_called();native.assert_not_called()
+            with (peer/'manual.lock').open('a') as held:
+                fcntl.flock(held,fcntl.LOCK_EX)  # the peer's brain is inside its hunt
+                with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native') as native,patch.object(meeting,'decide') as model:
+                    self.assertEqual(meeting.execute({'resident':'Mira','place':'field'},c,'sock','key',task,d),'failed(TARGET_BUSY)')
+                model.assert_not_called();native.assert_not_called()
+                # A short goal that ends inside our window is worth waiting for.
+                (peer/'manual_task.json').write_text(json.dumps({'id':'hunt','resident':'Mira','action':'hunt','args':{'minutes':5},'started':990,'expires':1290}))
+                self.assertFalse(meeting.peer_long_goal(peer,1300))
+            # A task file left by a crashed brain (nobody holds the writer) never blocks a meeting.
+            (peer/'manual_task.json').write_text(json.dumps({'id':'hunt','resident':'Mira','action':'hunt','args':{'minutes':15},'started':990,'expires':1890}))
+            self.assertFalse(meeting.peer_long_goal(peer,1300))
 
     def test_meeting_waits_for_peer_writer_without_repeating_vote(self):
         import tempfile,pathlib

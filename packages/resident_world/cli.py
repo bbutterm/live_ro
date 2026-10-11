@@ -56,7 +56,7 @@ REASONS={'NO_TOKEN':'нет токена: впиши RO_WORLD_LLM_API_KEY=... в
          'NO_CREDITS':'на счёте провайдера нет денег (402): пополни баланс, мозг сам продолжит в течение 10 минут',
          'RATE_LIMIT':'лимит запросов провайдера (429): мозг ждёт и продолжит сам',
          'DAILY_LIMIT':'дневной лимит daily_llm_usd исчерпан: продолжит после полуночи UTC',
-         'OUTAGE':'провайдер недоступен или не ответил вовремя: повтор автоматически',
+         'OUTAGE':'провайдер недоступен или не ответил вовремя (проверь сеть, DNS, прокси, сертификаты): повтор автоматически',
          'BAD_REQUEST':'провайдер отклонил запрос (модель?): проверь RO_WORLD_LLM_MODEL'}
 
 def brain_line():
@@ -75,8 +75,9 @@ def doctor():
     from .llm import Client,LLMUnavailable,load_settings,parse_json_object
     c=config()
     try:s=load_settings(ROOT,c)
-    except LLMUnavailable:print('НЕТ: '+REASONS['NO_TOKEN']);return 1
-    print(f'Токен {s.masked()}; провайдер {s.base_url}; модель {s.model}; лимит ${s.daily_usd}/сутки')
+    except LLMUnavailable as e:print('НЕТ: '+REASONS['NO_TOKEN']+(' ('+e.detail+')' if e.detail else ''));return 1
+    print(f'Токен {s.masked()} из {s.source}; провайдер {s.base_url}; модель {s.model}; лимит ${s.daily_usd}/сутки')
+    if s.source.startswith('окружение'):print('Внимание: ключ взят из окружения этой оболочки — службы systemd его не видят, им нужен ключ в .env.')
     client=Client(ROOT,STATE,c);gate=client.gate.state()
     if gate.get('until',0)>time.time():
         if gate.get('reason') in ('RATE_LIMIT','DAILY_LIMIT'):
@@ -88,7 +89,7 @@ def doctor():
                                {'role':'user','content':'Проверка связи.'}],schema=schema,schema_name='doctor',max_tokens=40,timeout=30)
         answer=parse_json_object(reply.content)
     except LLMUnavailable as e:
-        print('НЕТ: '+REASONS.get(e.reason,e.reason)+(f' [{e.status}] {e.detail[:160]}' if e.status or e.detail else ''));return 2
+        print('НЕТ: '+REASONS.get(e.reason,e.reason)+(f' [{e.status}]' if e.status else '')+(f' {e.detail[:200]}' if e.detail else ''));return 2
     except ValueError as e:
         print('ОТВЕТ НЕ JSON: модель ответила не по формату ('+str(e)+'). Мозг справится, но лучше выбрать другую модель.');return 3
     print(f"OK: ответ {json.dumps(answer,ensure_ascii=False)[:120]}; режим {reply.mode}; {reply.seconds:.1f} с; ${reply.cost}")

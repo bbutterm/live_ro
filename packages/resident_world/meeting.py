@@ -14,6 +14,24 @@ def validate_vote(v,c,place,allow_counter):
     return v
 
 
+def peer_long_goal(other_d,window_end):
+    """The peer's own minutes-long goal (hunt/idle/follow) still runs past our meet window:
+    no proposal, no vote, no false accept. Short or interruptible goals and stale task files
+    (writer lock free) do not count; a reciprocal meet is left to the collision rule."""
+    import fcntl
+    try:t=json.loads((other_d/'manual_task.json').read_text())
+    except (OSError,ValueError):return False
+    if t.get('ended') or t.get('action') not in ('hunt','idle','follow'):return False
+    minutes=(t.get('args') or {}).get('minutes')
+    if type(minutes) is not int or t.get('started',0)+minutes*60<=window_end-5:return False
+    try:
+        with (other_d/'manual.lock').open('a') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);fcntl.flock(lock,fcntl.LOCK_UN)
+        return False  # nobody holds the writer: the task file is stale
+    except BlockingIOError:return True
+    except OSError:return False
+
+
 def decide(r,d,c,offer,s,allow_counter):
     from .mind import Mind
     if not c.get('llm',{}).get('enabled'):return None
@@ -54,11 +72,7 @@ def execute(args,c,sock,key,task,d):
     if not target.get('enabled',True):return 'failed(TARGET_UNAVAILABLE)'
     try:s=skills.request(other_sock,{'op':'status'})
     except (OSError,RuntimeError,ValueError):return 'failed(TARGET_UNAVAILABLE)'
-    try:peer_task=json.loads((other_d/'manual_task.json').read_text())
-    except (OSError,ValueError):peer_task={}
-    # The peer's own goal (e.g. a 15-minute hunt) holds its writer past our window: no vote, no false accept.
-    # (A reciprocal meet is resolved by the collision rule below, not here.)
-    if peer_task and peer_task.get('action')!='meet' and not peer_task.get('ended') and peer_task.get('expires',0)>task.get('expires',float('inf'))-5:return 'failed(TARGET_BUSY)'
+    if peer_long_goal(other_d,task.get('expires',float('inf'))):return 'failed(TARGET_BUSY)'
     if s.get('age') is None or s['age']>4 or (s.get('telemetry') or {}).get('dead'):return 'failed(TARGET_UNAVAILABLE)'
     if any(a['skill'] in ('buy_potions','sell_loot') for a in s['actions']):return 'failed(TARGET_BUSY)'
     result=speak(sock,d,task,'Предлагаю встречу '+label(args['place'])+'.','proposal',target['name'])

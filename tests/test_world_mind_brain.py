@@ -70,6 +70,11 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(d['say'],'Ура /o/ к рядам;вперёд')
         from packages.resident_world.mind import validate_decision
         with self.assertRaisesRegex(ValueError,'INVALID_SAY'):validate_decision({'action':'walk_to','args':{'place':'market'},'say':'Ура;;да','reason':'x'},C,HEALTHY)
+    def test_never_whisper_to_self(self):
+        from packages.resident_world.mind import availability
+        with self.assertRaisesRegex(ValueError,'WHISPER_TARGET'):norm({'action':'whisper','to':'Mira','text':'Привет!','reason':'x'},me='Mira')
+        self.assertNotIn('Mira',availability(C,dict(HEALTHY,_me='Mira'),())['whisper'])
+        self.assertIn('ResidentA',availability(C,dict(HEALTHY,_me='Mira'),())['whisper'])
     def test_whisper_repair_hint_names_the_rule(self):
         from packages.resident_world.mind import explain
         self.assertIn('can_now.whisper',explain(ValueError('WHISPER_TARGET')))
@@ -198,6 +203,17 @@ class ChooseTests(unittest.TestCase):
         (self.d/'model-intent.json').write_text('{broken')
         self.reply({'action':'idle','minutes':2,'reason':'Осмотреться'})
         with patch.object(self.mind_module.time,'time',return_value=1000):self.assertEqual(self.m.choose(HEALTHY)['decision']['action'],'idle')
+    def test_only_delivered_replies_count_as_answered(self):
+        # A failed reply must not let the model believe it already answered (or promised).
+        import sqlite3,contextlib,time
+        with contextlib.closing(sqlite3.connect(self.state/'chat.sqlite')) as db:
+            db.execute('CREATE TABLE inbox(id INTEGER PRIMARY KEY,payload TEXT,resident TEXT,status TEXT,claimed REAL,result TEXT)')
+            for text,outcome in (('привет','done'),('пойдём к фонтану?','failed(BODY_OFFLINE)')):
+                db.execute('INSERT INTO inbox(payload,resident,status,result) VALUES(?,?,?,?)',(json.dumps({'name':'Tester','type':'C','text':text,'ts':time.time()}),'Mira','done',
+                           json.dumps({'outcome':outcome,'decision':{'action':'say','args':{'text':'Привет, '+text}}})))
+            db.commit()
+        done,failed=self.m.heard()
+        self.assertEqual(done['я ответил'],'Привет, привет');self.assertNotIn('я ответил',failed);self.assertIn('не смог ответить',failed)
     def test_budget_is_paced_over_the_day(self):
         self.client.budget.return_value=(1,2,100)  # half the money spent by 03:00 UTC
         self.assertGreater(self.m.gap(3*3600,{'action':'hunt'}),20*3)

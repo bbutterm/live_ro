@@ -79,11 +79,24 @@ def brain(r):
             if chat_goal.exists():
                 from packages.resident_world.skills import execute
                 from packages.resident_world.mind import record
-                proposal=json.loads(chat_goal.read_text());goal=proposal['decision']
-                result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'])
-                record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal['event_id'],task=result)
-                if mind is not None:mind.note(goal['action'],result['outcome'],'договорились в разговоре',proposal['id'])
-                clear_chat_goal(d,proposal['id']);pending=None;retry=time.time()+settle_seconds;continue
+                try:
+                    proposal=json.loads(chat_goal.read_text());goal=proposal['decision'];proposal['id']
+                    if not (isinstance(goal,dict) and isinstance(goal.get('action'),str) and isinstance(goal.get('args'),dict)):raise TypeError
+                except (OSError,ValueError,KeyError,TypeError):chat_goal.unlink(missing_ok=True);continue
+                try:
+                    # Own task id: the spoken reply already used proposal['id'] in manual_task.json
+                    # (a meet under the same id raised MEETING_ID_CONFLICT forever).
+                    result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id']+'-goal')
+                except BlockingIOError:raise
+                except Exception as error:result={'id':proposal['id'],'action':goal.get('action'),'outcome':'failed('+(str(error) or type(error).__name__)[:40]+')'}
+                finally:
+                    if not isinstance(sys.exc_info()[1],BlockingIOError):clear_chat_goal(d,proposal['id'])
+                record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal.get('event_id'),task=result)
+                if mind is not None:
+                    mind.note(goal['action'],result['outcome'],'договорились в разговоре',proposal['id'])
+                    # What was agreed changes the situation: think again instead of the pre-chat intent.
+                    mind.path.unlink(missing_ok=True);mind.next_call=0
+                pending=None;retry=time.time()+settle_seconds;continue
             hold=d/'BRAIN_HOLD'
             if hold.exists() and json.loads(hold.read_text()).get('expires',0)>time.time():time.sleep(.2);continue
             lease=d/'MANUAL'
@@ -104,8 +117,9 @@ def brain(r):
             if s['actions']:
                 pending=s['actions'][0]['action_id'];continue
             if mind is not None and not t.get('dead') and online(s,time.time()):
-                # Between two thoughts a healthy mind just lets the body be.
-                if mind.waiting():time.sleep(.5);continue
+                # Between two thoughts a healthy mind just lets the body be; a saved intent
+                # (interrupted by a conversation) is re-checked and carried out right away.
+                if mind.waiting() and not mind.path.exists():time.sleep(.5);continue
                 try:proposal=mind.choose(s)
                 except Exception as error:  # a brain bug or odd network error must not kill the process
                     logging.getLogger('world').warning('mind.choose %s: %s',r['name'],type(error).__name__)
@@ -211,6 +225,9 @@ def main():
             r=next(r for r in config()['residents'] if r['resident_id']==a.brain)
             return run(r,STATE/a.brain)
         interpreter=config().get('brain_python',sys.executable)
+        if not os.access(interpreter,os.X_OK):
+            # The new brain needs only the standard library: run here instead of crash-looping.
+            logging.getLogger('world').warning('brain_python %s missing; using %s',interpreter,sys.executable);interpreter=sys.executable
         if pathlib.Path(interpreter).resolve()!=pathlib.Path(sys.executable).resolve():
             return os.execv(interpreter,[interpreter,'-m','packages.resident_world.supervisor','--brain',a.brain])
         r=next(r for r in config()['residents'] if r['resident_id']==a.brain);brain(r)

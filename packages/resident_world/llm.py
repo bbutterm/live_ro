@@ -40,6 +40,7 @@ class Settings:
     daily_usd:Decimal=Decimal(2)
     price_in:Decimal=Decimal(DEFAULT_PRICE_IN)
     price_out:Decimal=Decimal(DEFAULT_PRICE_OUT)
+    source:str='.env'
     @property
     def openrouter(self):return 'openrouter.ai' in self.base_url
     def masked(self):return (self.key[:6]+'…'+self.key[-4:]) if len(self.key)>12 else '***'
@@ -47,15 +48,17 @@ class Settings:
 
 def read_env(path):
     values={}
-    try:lines=pathlib.Path(path).read_text(encoding='utf-8-sig').splitlines()
+    try:raw=pathlib.Path(path).read_bytes()
     except OSError:return values
+    # Windows editors save UTF-16 or cp1251: the key is ASCII, broken comments are harmless.
+    lines=(raw.decode('utf-16','replace') if raw[:2] in (b'\xff\xfe',b'\xfe\xff') else raw.decode('utf-8-sig','replace')).splitlines()
     for line in lines:
         line=line.strip()
         if not line or line.startswith('#') or '=' not in line:continue
         k,v=line.split('=',1);k=k.strip();v=v.strip()
         if k.startswith('export '):k=k[7:].strip()
         if v[:1] in ('"',"'") and v[0] in v[1:]:v=v[1:v.index(v[0],1)]  # "value"  # comment
-        else:v=re.split(r'\s+#',v,maxsplit=1)[0].strip()
+        else:v=re.split(r'\s+#',v,maxsplit=1)[0].strip().strip('"\'')
         values[k]=v
     return values
 
@@ -78,13 +81,18 @@ def load_settings(root,config=None):
         v=re.sub('[\u200b-\u200f\u2060\ufeff\xa0]','',v or '').strip()
         v=v.split()[0] if v.split() else ''
         return '' if v.startswith('#') else v
-    key=next((clean(get(n)) for n in KEY_NAMES if clean(get(n))),'')
+    base_url=get('RO_WORLD_LLM_BASE_URL',DEFAULT_BASE_URL).rstrip('/')
+    # A provider-specific name is only used for that provider: never send an OpenAI key to OpenRouter.
+    owners={'OPENROUTER_API_KEY':'openrouter.ai','OPENAI_API_KEY':'api.openai.com','DEEPSEEK_API_KEY':'api.deepseek.com'}
+    names=[n for n in KEY_NAMES if n not in owners or owners[n] in base_url]
+    name=next((n for n in names if clean(get(n))),None);key=clean(get(name)) if name else ''
+    source='окружение процесса' if name and clean(os.environ.get(name)) else '.env'
     if not key or key.lower() in ('changeme','your-token-here','вставь-токен-сюда'):
         raise LLMUnavailable('NO_TOKEN',time.time()+WAITS['NO_TOKEN'],detail='в .env нет RO_WORLD_LLM_API_KEY')
     if not (key.isascii() and key.isprintable()) or any(ch in key for ch in '"\'#'):
         raise LLMUnavailable('NO_TOKEN',time.time()+WAITS['NO_TOKEN'],detail='в токене лишние символы — вставь только сам ключ')
     daily=get('RO_WORLD_LLM_DAILY_USD',(config or {}).get('daily_llm_usd',2))
-    return Settings(key=key,base_url=get('RO_WORLD_LLM_BASE_URL',DEFAULT_BASE_URL).rstrip('/'),model=get('RO_WORLD_LLM_MODEL',DEFAULT_MODEL),
+    return Settings(key=key,base_url=base_url,model=get('RO_WORLD_LLM_MODEL',DEFAULT_MODEL),source=source+' ('+name+')',
                     daily_usd=_decimal(daily,2),price_in=_decimal(get('RO_WORLD_LLM_PRICE_IN',DEFAULT_PRICE_IN),DEFAULT_PRICE_IN),
                     price_out=_decimal(get('RO_WORLD_LLM_PRICE_OUT',DEFAULT_PRICE_OUT),DEFAULT_PRICE_OUT))
 
@@ -141,9 +149,14 @@ class Gate:
     def check(self,now):
         s=self.state()
         if s.get('until',0)>now:raise LLMUnavailable(s.get('reason','PAUSED'),s['until'],s.get('status'),s.get('detail',''))
-    def close(self,reason,now,status=None,retry_after=None,detail=''):
+    def close(self,reason,now,status=None,retry_after=None,detail='',since=None):
+        """since: when the failed request started. Requests already in flight when the gate
+        closed belong to the same burst and do not count as a repetition."""
         with _Locked(self.path,{}) as s:
-            failures=int(s.data.get('failures',0))+1 if s.data.get('reason')==reason else 1
+            same=s.data.get('reason')==reason
+            burst=same and since is not None and s.data.get('at',0)>=since
+            failures=int(s.data.get('failures',0))+(0 if burst else 1) if same else 1
+            if burst:return max(s.data.get('until',0),now)
             if s.data.get('until',0)>now and reason=='OUTAGE' and s.data.get('reason')!='OUTAGE':
                 return s.data['until']  # an outage never overrides a provider-imposed pause
             if reason=='DAILY_LIMIT':until=next_utc_midnight(now)+30
@@ -241,7 +254,7 @@ class Client:
         while index<len(self.MODES):
             mode=self.MODES[index]
             try:
-                reply=self._post(s,messages,mode,schema,schema_name,max_tokens,timeout,temperature,shared_pause)
+                reply=self._post(s,messages,mode,schema,schema_name,max_tokens,timeout,temperature,shared_pause,now)
                 if schema and index!=start:self.mode_floor[s.model]=index
                 self.gate.open(since=now);return reply
             except _Rejected as e:
@@ -252,7 +265,7 @@ class Client:
                 index+=1
         until=self.gate.close('BAD_REQUEST',self.clock(),last.status if last else None,detail=last.detail if last else '')
         raise LLMUnavailable('BAD_REQUEST',until,last.status if last else None,last.detail if last else '')
-    def _post(self,s,messages,mode,schema,schema_name,max_tokens,timeout,temperature,shared_pause=True):
+    def _post(self,s,messages,mode,schema,schema_name,max_tokens,timeout,temperature,shared_pause=True,since=None):
         body={'model':s.model,'messages':messages,'max_tokens':max_tokens,'temperature':temperature}
         if mode=='json_schema':body['response_format']={'type':'json_schema','json_schema':{'name':schema_name,'strict':True,'schema':schema}}
         elif mode=='json_object':body['response_format']={'type':'json_object'}
@@ -267,7 +280,7 @@ class Client:
         except urllib.error.HTTPError as e:
             try:detail=e.read(2000).decode('utf-8','replace')
             except Exception:detail=''
-            self._http_failure(e.code,detail,_retry_after(e.headers,self.clock()),mode)
+            self._http_failure(e.code,detail,_retry_after(e.headers,self.clock()),mode,since)
         except UnicodeEncodeError:
             raise LLMUnavailable('AUTH',self.clock()+WAITS['AUTH'],detail='токен содержит не-ASCII символы') from None
         except (urllib.error.URLError,TimeoutError,OSError,http.client.HTTPException) as e:
@@ -277,8 +290,9 @@ class Client:
                 # The provider may still bill an abandoned request: count its prompt conservatively.
                 self.ledger.add(Decimal(len(req.data)//3)*s.price_in/Decimal(1_000_000),self.clock(),len(req.data)//3,0)
             if timed_out and not shared_pause:raise LLMUnavailable('TIMEOUT',self.clock()+5,detail='не дождались ответа за '+str(round(timeout,1))+' с') from None
-            until=self.gate.close('OUTAGE',self.clock(),detail=type(e).__name__+': '+str(e)[:200])
-            raise LLMUnavailable('OUTAGE',until,detail=type(e).__name__) from None
+            why=type(e).__name__+': '+str(getattr(e,'reason',None) or e)[:200]
+            until=self.gate.close('OUTAGE',self.clock(),detail=why,since=since)
+            raise LLMUnavailable('OUTAGE',until,detail=why) from None
         try:payload=json.loads(raw)
         except ValueError:payload=None
         if not isinstance(payload,dict):
@@ -287,7 +301,7 @@ class Client:
         if payload.get('error') and not payload.get('choices'):
             err=payload['error'] if isinstance(payload['error'],dict) else {'message':str(payload['error'])}
             code=err.get('code');code=int(code) if isinstance(code,int) or (isinstance(code,str) and code.isdigit()) else 502
-            self._http_failure(code,json.dumps(err,ensure_ascii=False)[:2000],None,mode)
+            self._http_failure(code,json.dumps(err,ensure_ascii=False)[:2000],None,mode,since)
         usage=payload.get('usage') if isinstance(payload.get('usage'),dict) else {}
         tin,tout=int(usage.get('prompt_tokens') or 0),int(usage.get('completion_tokens') or 0)
         cost=usage.get('cost')
@@ -297,7 +311,7 @@ class Client:
         except (KeyError,IndexError,TypeError,AttributeError):content=''
         if isinstance(content,list):content=''.join(part.get('text','') for part in content if isinstance(part,dict))
         return Reply(content=content,cost=cost,tokens_in=tin,tokens_out=tout,mode=mode,seconds=time.monotonic()-started)
-    def _http_failure(self,status,detail,retry_after,mode):
+    def _http_failure(self,status,detail,retry_after,mode,since=None):
         now=self.clock()
         if status==429:reason='RATE_LIMIT'
         elif status==402:reason='NO_CREDITS'
@@ -305,7 +319,7 @@ class Client:
         elif status in (400,404,405,415,422) and mode!='plain':raise _Rejected(status,detail)
         elif status in (400,404,405,415,422):reason='BAD_REQUEST'
         else:reason='OUTAGE'
-        until=self.gate.close(reason,now,status,retry_after,detail)
+        until=self.gate.close(reason,now,status,retry_after,detail,since=since)
         raise LLMUnavailable(reason,until,status,detail[:300])
 
 

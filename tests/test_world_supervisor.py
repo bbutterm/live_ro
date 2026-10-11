@@ -8,10 +8,20 @@ class WorldSupervisorTests(unittest.TestCase):
         c={'brain_python':'/opt/test/python','residents':[{'resident_id':'resident_a'}]}
         import tempfile
         from pathlib import Path
-        with tempfile.TemporaryDirectory() as tmp,patch.object(supervisor,'STATE',Path(tmp)),patch.object(supervisor,'config',return_value=c),patch('sys.argv',['world','--brain','resident_a']),patch('sys.executable','/usr/bin/python3'),patch.object(supervisor.os,'execv') as execute,patch.object(supervisor,'brain') as brain:
+        with tempfile.TemporaryDirectory() as tmp,patch.object(supervisor,'STATE',Path(tmp)),patch.object(supervisor,'config',return_value=c),patch('sys.argv',['world','--brain','resident_a']),patch('sys.executable','/usr/bin/python3'),patch.object(supervisor.os,'execv') as execute,patch.object(supervisor,'brain') as brain,patch.object(supervisor.os,'access',return_value=True):
             supervisor.main()
         execute.assert_called_once_with('/opt/test/python',['/opt/test/python','-m','packages.resident_world.supervisor','--brain','resident_a'])
         brain.assert_not_called()
+
+    def test_missing_brain_interpreter_runs_the_brain_here_instead_of_crash_looping(self):
+        from unittest.mock import patch
+        from packages.resident_world import supervisor
+        import sys,tempfile
+        from pathlib import Path
+        c={'brain_python':'/nonexistent/venv/bin/python','residents':[{'resident_id':'resident_a'}]}
+        with tempfile.TemporaryDirectory() as tmp,patch.object(supervisor,'STATE',Path(tmp)),patch.object(supervisor,'config',return_value=c),patch('sys.argv',['world','--brain','resident_a']),patch.object(supervisor.os,'execv') as execute,patch.object(supervisor,'brain') as brain,self.assertLogs('world','WARNING'):
+            supervisor.main()
+        execute.assert_not_called();brain.assert_called_once_with({'resident_id':'resident_a'})
 
     def test_one_body_failure_does_not_change_other_restart_clocks(self):
         a,b=RestartPolicy(),RestartPolicy()
