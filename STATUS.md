@@ -1,14 +1,11 @@
 # STATUS
-Цель: жители живут сами, LLM — их мозг. Как включить: docs/LLM_BRAIN.md. В игре ещё не принято.
-Мозг resident_world: осмотреться → спросить LLM «что дальше» → одно действие меню → свидетель.
-Токен: RO_WORLD_LLM_API_KEY в .env; проверка `tools/ro doctor`; смена токена без перезапуска.
-Деньги по факту ответа (llm-spend.json), лимит daily_llm_usd, без резервов: E04 и ночь «без API» устранены.
-429/402/401/сбой/дневной лимит: общая пауза llm-gate.json, привычки, затем LLM снова сама.
-E05 перевес: тело продаёт добычу по типу предмета; SOLD подтверждается picklog сервера.
-V1: причина E01 (лишний nameID в кадре монстра) и E06 (cooldown на interrupted) исправлены.
-V1 остаётся экспериментальным путём под lease; основной путь — resident_world.
-make check: 507 тестов, 5 раундов ревью; 3 старых падают и на main вне VPS (пути /root/ragnarok, OpenKore).
-Сквозной тест: настоящий brain + gateway, тело по протоколу плагина, 429 посередине — OK.
-Правка плагина проверена на заглушках OpenKore; на VPS её проверит test_perl_compile_against_actual_openkore.
-Не проверено вживую: первый запуск — шаги 1–3 в docs/LLM_BRAIN.md, затем `tools/ro status`.
-Прошлый checkpoint V1: docs/RESULT_BEHAVIOR_V1.md, ошибки и причины: docs/ERRORS_BEHAVIOR_V1.md.
+Ночная ветка action-interface: staged, в live не установлена.
+Каталог: 21 контракт; heal и party_invite явно unavailable.
+Новый допуск: status.age должен быть числом 0–4 с; иначе STALE_BODY до native dispatch.
+RED: night-age-red.log воспроизвёл принятие неизвестного возраста; полный прогон прерван по 180 с.
+GREEN: env -u PYTHONHOME -u PYTHONPATH PATH=/usr/bin:/bin make check.
+Итог: 565 тестов, 4 FAIL и 1 ERROR — прежний набор; новая проверка возраста проходит.
+Компиляция с настоящим OpenKore проходит без skip.
+Не подтверждены: live gameplay, отдельный Heal, native invite/accept, ordinary-player follow witness.
+Службы, бюджеты, SQL/GM, runtime и live checkout не менялись; push не выполнялся.
+Следующее: проверить whisper/free-control targeting и strict schema; пять baseline failures остаются.

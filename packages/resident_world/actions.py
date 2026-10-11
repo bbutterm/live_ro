@@ -87,7 +87,8 @@ def unavailable(action,args,c,s):
     if action in UNSUPPORTED:return UNSUPPORTED[action]
     t=s.get('telemetry') or {}
     if not t:return 'NO_TELEMETRY'
-    if s.get('age') is not None and s['age']>4:return 'STALE_BODY'
+    age=s.get('age')
+    if type(age) not in (int,float) or not 0<=age<=4:return 'STALE_BODY'
     if action=='native_control':
         if not args:return 'DEAD' if t.get('dead') else None
         skill=args.get('skill','');params=args.get('params',{})

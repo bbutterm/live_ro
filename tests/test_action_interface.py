@@ -3,7 +3,10 @@ import pathlib,tempfile,unittest
 from unittest.mock import patch
 from packages.resident_world import skills,mind
 from tests import test_behavior_native as native_fixture
-from tests.test_world_mind_brain import C,HEALTHY
+from tests.test_world_mind_brain import C,HEALTHY as BASE_HEALTHY
+
+# Successful action fixtures model the gateway's explicitly fresh status.
+HEALTHY={**BASE_HEALTHY,'age':0}
 
 class ActionInterfaceTests(unittest.TestCase):
     def test_solo_is_discoverable_validated_model_callable_and_native(self):
@@ -17,10 +20,25 @@ class ActionInterfaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d=pathlib.Path(tmp)/'resident_b'
             c={**C,'residents':[{'resident_id':d.name,'support_target':'Borin'}]}
-            with patch.object(skills,'request',return_value={'telemetry':{'map':'prt_fild08'}}),patch.object(skills,'run_native',return_value='done') as run:
+            with patch.object(skills,'request',return_value={'age':0,'telemetry':{'map':'prt_fild08'}}),patch.object(skills,'run_native',return_value='done') as run:
                 self.assertEqual(skills.execute_native_menu('hunt_solo',args,c,'sock','key',{},d),'done')
                 self.assertEqual(run.call_args.args[1]['params']['solo'],True)
                 self.assertNotIn('support_target',run.call_args.args[1]['params'])
+
+    def test_new_actions_reject_unknown_or_invalid_body_age_before_dispatch(self):
+        from packages.resident_world import actions
+        args={'skill':'travel_to','params':{'map':'prontera','x':156,'y':191,'r':3}}
+        for age in (None,True,'0',-1,float('nan'),float('inf'),4.01):
+            with self.subTest(age=age):
+                state={**HEALTHY,'age':age}
+                self.assertEqual(actions.unavailable('native_control',args,C,state),'STALE_BODY')
+                self.assertFalse(actions.discover(C,state)['actions']['travel_to']['available'])
+                with tempfile.TemporaryDirectory() as tmp:
+                    with patch.object(skills,'request',return_value=state),patch.object(skills,'run_native') as run:
+                        self.assertEqual(skills.execute_native_menu('native_control',args,C,'sock','key',{},pathlib.Path(tmp)),'failed(STALE_BODY)')
+                        run.assert_not_called()
+        for age in (0,0.5,4):
+            self.assertIsNone(actions.unavailable('native_control',args,C,{**HEALTHY,'age':age}))
 
     def test_catalog_support_guard_and_explicit_unavailable_heal(self):
         self.assertTrue(hasattr(skills,'discover'),'catalog missing')
@@ -58,7 +76,7 @@ class ActionInterfaceTests(unittest.TestCase):
                 with patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',return_value='done') as run:
                     self.assertEqual(skills.execute_native_menu(action,{},C,'sock','key',{},d),'done')
                     self.assertEqual(run.call_args.args[1]['params'],{'category':category})
-        s={'telemetry':{'inventory':{},'sellable_by_category':{'equipment':{}}}}
+        s={'age':0,'telemetry':{'inventory':{},'sellable_by_category':{'equipment':{}}}}
         self.assertEqual(actions.unavailable('sell_equipment',{},C,s),'NO_SELLABLE_ITEMS')
 
     def test_free_native_control_has_schema_allowlist_and_no_console(self):
@@ -88,7 +106,7 @@ class ActionInterfaceTests(unittest.TestCase):
         args={'map':'prontera','x':156,'y':191,'r':3}
         self.assertEqual(skills.validate('travel_to',args,C),args)
         from packages.resident_world import actions
-        dead={'telemetry':{'dead':True,'behavior_v1':False}}
+        dead={'age':0,'telemetry':{'dead':True,'behavior_v1':False}}
         self.assertIsNone(actions.unavailable('respawn',{},C,dead))
         self.assertEqual(actions.unavailable('respawn',{},C,HEALTHY),'NOT_DEAD')
         with tempfile.TemporaryDirectory() as tmp:
@@ -160,13 +178,13 @@ class ActionInterfaceTests(unittest.TestCase):
 
     def test_new_model_arguments_and_availability_share_runtime_guards(self):
         from packages.resident_world import actions
-        heavy={'telemetry':{**HEALTHY['telemetry'],'weight':800,'weight_max':1000}}
+        heavy={'age':0,'telemetry':{**HEALTHY['telemetry'],'weight':800,'weight_max':1000}}
         self.assertTrue(mind.availability(C,heavy)['hunt_solo'].startswith('нельзя'))
         args={'skill':'rest','params':{'hp_pct':90}}
         self.assertEqual(actions.unavailable('native_control',args,C,heavy),'OVERWEIGHT')
         with self.assertRaises(ValueError):skills.validate('hunt_solo',{'map':'prt_fild08','minutes':16},C)
         args={'skill':'sell_loot','params':{'category':'equipment'}}
-        s={'telemetry':{'sellable_by_category':{'loot':{},'equipment':{'2301':1}}}}
+        s={'age':0,'telemetry':{'sellable_by_category':{'loot':{},'equipment':{'2301':1}}}}
         self.assertIsNone(actions.unavailable('native_control',args,C,s))
         c={**C,'residents':[{'name':'Mira','resident_id':'resident_b','support_target':'Borin'}]}
         s={**HEALTHY,'age':0,'telemetry':{**HEALTHY['telemetry'],'job_level':10,'learned_skills':{'AL_HEAL':3},'party':{'source':'native_client','share':1,'members':[{'name':'Borin','online':True}]}}}
@@ -245,7 +263,7 @@ class ActionInterfaceTests(unittest.TestCase):
         from packages.resident_world import actions
         c={**C,'residents':[{'resident_id':'resident_b','name':'Mira','support_target':'Borin'}]}
         args={'player':'Other','map':'prt_fild08','minutes':5}
-        s={'_resident_id':'resident_b','telemetry':{**HEALTHY['telemetry'],'party':{'source':'native_client','share':1,'members':[{'name':'Other','online':True}]}}}
+        s={'age':0,'_resident_id':'resident_b','telemetry':{**HEALTHY['telemetry'],'party':{'source':'native_client','share':1,'members':[{'name':'Other','online':True}]}}}
         self.assertEqual(actions.unavailable('hunt_party',args,c,s),'SUPPORT_PROFILE_REQUIRED')
 
     def test_unsupported_invocation_never_takes_over_a_body(self):
