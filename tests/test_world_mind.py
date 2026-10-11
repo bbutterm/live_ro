@@ -69,9 +69,12 @@ class WorldMindTests(unittest.TestCase):
             with patch.object(mind,'record'):
                 self.assertEqual(m.negotiate(offer,{},False)['choice'],'accept')
                 self.assertEqual(m._complete.call_args.kwargs['timeout'],20)
+                # The brain runs the agreed meet under its own goal task id: still ours to vote on.
+                offer['meeting_id']='own-meeting-goal'
+                self.assertEqual(m.negotiate(offer,{},False)['choice'],'accept')
                 offer['meeting_id']='another-meeting'
                 self.assertIsNone(m.negotiate(offer,{},False))
-                self.assertEqual(m._complete.call_count,1)
+                self.assertEqual(m._complete.call_count,2)
 
     def test_scoped_expiring_429_enters_persisted_pause_without_provider_call(self):
         from packages.resident_world import mind

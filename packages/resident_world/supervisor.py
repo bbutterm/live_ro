@@ -77,7 +77,7 @@ def brain(r):
                     logging.getLogger('world').warning('LLM mind unavailable for %s: %s',r['name'],type(error).__name__)
             chat_goal=d/'chat-goal.json'
             if chat_goal.exists():
-                from packages.resident_world.skills import execute
+                from packages.resident_world.skills import execute,chat_goal_task
                 from packages.resident_world.mind import record
                 try:
                     proposal=json.loads(chat_goal.read_text());goal=proposal['decision'];proposal['id']
@@ -86,7 +86,7 @@ def brain(r):
                 try:
                     # Own task id: the spoken reply already used proposal['id'] in manual_task.json
                     # (a meet under the same id raised MEETING_ID_CONFLICT forever).
-                    result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id']+'-goal')
+                    result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=chat_goal_task(proposal['id']))
                 except BlockingIOError:raise
                 except Exception as error:result={'id':proposal['id'],'action':goal.get('action'),'outcome':'failed('+(str(error) or type(error).__name__)[:40]+')'}
                 finally:
@@ -94,8 +94,9 @@ def brain(r):
                 record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal.get('event_id'),task=result)
                 if mind is not None:
                     mind.note(goal['action'],result['outcome'],'договорились в разговоре',proposal['id'])
-                    # What was agreed changes the situation: think again instead of the pre-chat intent.
-                    mind.path.unlink(missing_ok=True);mind.next_call=0
+                    # What was agreed changes the situation: think again instead of the pre-chat intent
+                    # (after the usual gap: a chatty player must not buy extra paid decisions).
+                    mind.path.unlink(missing_ok=True)
                 pending=None;retry=time.time()+settle_seconds;continue
             hold=d/'BRAIN_HOLD'
             if hold.exists() and json.loads(hold.read_text()).get('expires',0)>time.time():time.sleep(.2);continue

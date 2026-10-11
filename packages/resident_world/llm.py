@@ -70,11 +70,12 @@ def _decimal(value,default):
     except (InvalidOperation,ValueError,TypeError):return Decimal(default)
 
 
-def load_settings(root,config=None):
-    """Process environment wins over .env; only the key is mandatory."""
-    env=read_env(pathlib.Path(root)/'.env')
+def load_settings(root,config=None,environ=None):
+    """Process environment wins over .env; only the key is mandatory.
+    environ={} gives what a systemd service without those variables sees: only .env."""
+    env=read_env(pathlib.Path(root)/'.env');environ=os.environ if environ is None else environ
     def get(name,default=None):
-        v=os.environ.get(name)
+        v=environ.get(name)
         return v if v not in (None,'') else env.get(name) or default
     def clean(v):
         # Pasted from a browser/messenger: drop invisible characters and a trailing "# comment".
@@ -86,7 +87,7 @@ def load_settings(root,config=None):
     owners={'OPENROUTER_API_KEY':'openrouter.ai','OPENAI_API_KEY':'api.openai.com','DEEPSEEK_API_KEY':'api.deepseek.com'}
     names=[n for n in KEY_NAMES if n not in owners or owners[n] in base_url]
     name=next((n for n in names if clean(get(n))),None);key=clean(get(name)) if name else ''
-    source='окружение процесса' if name and clean(os.environ.get(name)) else '.env'
+    source='окружение процесса' if name and clean(environ.get(name)) else '.env'
     if not key or key.lower() in ('changeme','your-token-here','вставь-токен-сюда'):
         raise LLMUnavailable('NO_TOKEN',time.time()+WAITS['NO_TOKEN'],detail='в .env нет RO_WORLD_LLM_API_KEY')
     if not (key.isascii() and key.isprintable()) or any(ch in key for ch in '"\'#'):
@@ -155,8 +156,8 @@ class Gate:
         with _Locked(self.path,{}) as s:
             same=s.data.get('reason')==reason
             burst=same and since is not None and s.data.get('at',0)>=since
+            # A burst keeps its failure count (no escalation) but its own Retry-After still counts.
             failures=int(s.data.get('failures',0))+(0 if burst else 1) if same else 1
-            if burst:return max(s.data.get('until',0),now)
             if s.data.get('until',0)>now and reason=='OUTAGE' and s.data.get('reason')!='OUTAGE':
                 return s.data['until']  # an outage never overrides a provider-imposed pause
             if reason=='DAILY_LIMIT':until=next_utc_midnight(now)+30

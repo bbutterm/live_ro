@@ -77,8 +77,14 @@ def doctor():
     try:s=load_settings(ROOT,c)
     except LLMUnavailable as e:print('НЕТ: '+REASONS['NO_TOKEN']+(' ('+e.detail+')' if e.detail else ''));return 1
     print(f'Токен {s.masked()} из {s.source}; провайдер {s.base_url}; модель {s.model}; лимит ${s.daily_usd}/сутки')
-    if s.source.startswith('окружение'):print('Внимание: ключ взят из окружения этой оболочки — службы systemd его не видят, им нужен ключ в .env.')
-    client=Client(ROOT,STATE,c);gate=client.gate.state()
+    if s.source.startswith('окружение'):
+        # Services do not see this shell: what matters is the key in .env.
+        try:f=load_settings(ROOT,c,environ={})
+        except LLMUnavailable:f=None
+        if f is None:print('Внимание: ключ взят из окружения этой оболочки — службы systemd его не видят, впиши ключ в .env.')
+        elif (f.key,f.base_url,f.model)!=(s.key,s.base_url,s.model):
+            print(f'Внимание: в .env другой ключ или провайдер ({f.masked()}, {f.base_url}, {f.model}) — службы используют его. Проверяю ключ из .env.');s=f
+    client=Client(ROOT,STATE,c,settings=s);gate=client.gate.state()
     if gate.get('until',0)>time.time():
         if gate.get('reason') in ('RATE_LIMIT','DAILY_LIMIT'):
             print('ЖДЁМ: '+REASONS[gate['reason']]+' (до '+time.strftime('%H:%M',time.localtime(gate['until']))+')');return 2

@@ -137,7 +137,7 @@ class ChatTests(unittest.TestCase):
 
 class ChatGoalLoopTests(unittest.TestCase):
     """The brain carries out what was agreed in a conversation exactly once."""
-    def run_brain(self,goal_text,execute=None):
+    def run_brain(self,goal_text,execute=None,mind_object=None):
         import tempfile,pathlib
         from unittest.mock import patch
         from packages.resident_world import supervisor,skills,mind
@@ -149,11 +149,21 @@ class ChatGoalLoopTests(unittest.TestCase):
             if execute:return execute()
             return {'id':kw['task_id'],'action':action,'outcome':'done'}
         def offline(*a,**kw):(state/'STOP').touch();raise OSError('no gateway in this test')
-        cfg={'llm':{'enabled':False},'chat_service':'standalone','brain_settle_seconds':0}
+        cfg={'llm':{'enabled':mind_object is not None},'chat_service':'standalone','brain_settle_seconds':0}
+        if mind_object is not None:mind_object.path=d/'intent.json';mind_object.path.write_text('{}')
         with patch.object(supervisor,'STATE',state),patch.object(mind,'STATE',state),patch.object(supervisor,'config',return_value=cfg),\
-             patch.object(supervisor,'request',side_effect=offline),patch.object(skills,'execute',side_effect=run),patch.object(supervisor.time,'sleep'):
+             patch.object(supervisor,'request',side_effect=offline),patch.object(skills,'execute',side_effect=run),patch.object(supervisor.time,'sleep'),\
+             patch.object(mind,'Mind',return_value=mind_object):
             supervisor.brain({'name':'Mira','resident_id':'resident_b','char_id':2})
         return d,calls
+    def test_agreed_goal_drops_the_old_intent_but_keeps_the_paid_pacing(self):
+        # A chatty player must not turn every agreement into an immediate paid decision.
+        import json
+        from unittest.mock import Mock
+        m=Mock();m.next_call=12345.0
+        d,calls=self.run_brain(json.dumps({'id':'chat-9','decision':{'action':'walk_to','args':{'place':'fountain'}}}),mind_object=m)
+        self.assertEqual(len(calls),1);self.assertFalse((d/'intent.json').exists());self.assertEqual(m.next_call,12345.0)
+        m.note.assert_called_once_with('walk_to','done','договорились в разговоре','chat-9')
     def test_agreed_meeting_runs_once_under_its_own_task_id(self):
         import json
         goal={'id':'chat-7','event_id':5,'decision':{'action':'meet','args':{'resident':'ResidentA','place':'fountain'}}}

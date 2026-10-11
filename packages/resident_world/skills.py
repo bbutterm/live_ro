@@ -61,6 +61,10 @@ def witness_at(status,point,now,radius=5):
 
 def follow_verified(samples):return bool(samples) and sum(bool(p.get('near')) for p in samples)*100>=len(samples)*70
 
+def chat_goal_task(goal_id):
+    """Task id of a goal agreed in conversation: the spoken reply already used goal_id."""
+    return str(goal_id)+'-goal'
+
 def execution_deadline(action,started):return started+(60 if action=='walk_to' else 300 if action=='meet' else 1200)
 
 def retry_allowed(action,attempt,result):return action in REVERSIBLE and action!='meet' and attempt<3 and result not in ('done','failed(CHAT_INTERRUPT)','failed(CANCELLED)')

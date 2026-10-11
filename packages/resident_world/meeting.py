@@ -14,16 +14,32 @@ def validate_vote(v,c,place,allow_counter):
     return v
 
 
+MEET_MARGIN=60  # after the peer is free: whisper the answer and still walk to the place
+
+
+def goal_end(t):
+    """When the peer's writer is free again. A goal's own lease (`expires`) already includes
+    the route to the field and retries; speech is seconds; idle/follow end with their minutes."""
+    started=t.get('started',0) if isinstance(t.get('started'),(int,float)) else 0
+    expires=t.get('expires') if isinstance(t.get('expires'),(int,float)) else None
+    minutes=(t.get('args') or {}).get('minutes') if isinstance(t.get('args'),dict) else None
+    if t.get('action') in ('say','whisper'):return started+30
+    if t.get('action') in ('idle','follow') and type(minutes) is int:
+        return min(started+minutes*60+30,expires) if expires is not None else started+minutes*60+30
+    if expires is not None:return expires
+    return started+minutes*60+300 if type(minutes) is int else started+1200
+
+
 def peer_long_goal(other_d,window_end):
-    """The peer's own minutes-long goal (hunt/idle/follow) still runs past our meet window:
-    no proposal, no vote, no false accept. Short or interruptible goals and stale task files
-    (writer lock free) do not count; a reciprocal meet is left to the collision rule."""
+    """The peer's own goal still holds its writer past our meet window (minus the time to
+    answer and walk): no proposal, no vote, no false accept. A meeting cannot interrupt it.
+    A stale task file (writer lock free) never blocks; a reciprocal meet is left to the
+    collision rule."""
     import fcntl
     try:t=json.loads((other_d/'manual_task.json').read_text())
     except (OSError,ValueError):return False
-    if t.get('ended') or t.get('action') not in ('hunt','idle','follow'):return False
-    minutes=(t.get('args') or {}).get('minutes')
-    if type(minutes) is not int or t.get('started',0)+minutes*60<=window_end-5:return False
+    if not isinstance(t,dict) or t.get('ended') or t.get('action')=='meet':return False
+    if goal_end(t)<=window_end-MEET_MARGIN:return False
     try:
         with (other_d/'manual.lock').open('a') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);fcntl.flock(lock,fcntl.LOCK_UN)

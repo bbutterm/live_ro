@@ -223,10 +223,21 @@ class ClientTests(unittest.TestCase):
         from packages.resident_world.llm import Gate
         g=Gate(self.dir/'burst.json',rng=lambda:0)
         first=g.close('RATE_LIMIT',1000,429,retry_after=30,since=999)
-        for now in (1000.2,1000.5):self.assertEqual(g.close('RATE_LIMIT',now,429,retry_after=30,since=999),first)
+        for now in (1000.2,1000.5):self.assertLess(g.close('RATE_LIMIT',now,429,retry_after=30,since=999),first+1)
         self.assertEqual(g.state()['failures'],1);self.assertEqual(first,1030)
         later=g.close('RATE_LIMIT',1031,429,retry_after=30,since=1030.5)  # a fresh request after the pause
         self.assertEqual(g.state()['failures'],2);self.assertGreaterEqual(later-1031,40)
+    def test_in_flight_429_still_honours_its_own_signal(self):
+        from packages.resident_world.llm import Gate,LLMUnavailable
+        g=Gate(self.dir/'burst2.json',rng=lambda:0)
+        self.assertEqual(g.close('RATE_LIMIT',101,429,retry_after=5,since=100),106)
+        # Same burst, but the provider now asks for a minute: the pause grows, no escalation step.
+        self.assertEqual(g.close('RATE_LIMIT',101.3,429,retry_after=60,since=100.5),161.3);self.assertEqual(g.state()['failures'],1)
+        # A slow request from before the pause gets its 429 after the pause ended: the gate closes again.
+        g2=Gate(self.dir/'burst3.json',rng=lambda:0);g2.close('RATE_LIMIT',101,429,retry_after=5,since=100)
+        self.assertGreater(g2.close('RATE_LIMIT',110,429,since=99),110)
+        with self.assertRaises(LLMUnavailable):g2.check(110.01)
+        self.assertEqual(g2.state()['failures'],1)
     def test_lenient_json_extraction(self):
         from packages.resident_world.llm import parse_json_object,BadModelOutput
         self.assertEqual(parse_json_object('```json\n{"a": 1}\n```'),{'a':1})
@@ -264,5 +275,10 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(code,0,out);self.assertIn('окружения этой оболочки',out);self.assertNotIn('sk-shell-0000000',out)
         code,out,_=self.run_doctor('RO_WORLD_LLM_API_KEY=sk-file-00000000\nRO_WORLD_LLM_BASE_URL={URL}\n',['{"ok": true, "say": "Привет"}'])
         self.assertIn('из .env (RO_WORLD_LLM_API_KEY)',out);self.assertNotIn('окружения этой оболочки',out)
+    def test_shell_key_differing_from_env_file_checks_the_one_services_use(self):
+        code,out,server=self.run_doctor('RO_WORLD_LLM_API_KEY=sk-file-00000000\nRO_WORLD_LLM_BASE_URL={URL}\n',['{"ok": true, "say": "Привет"}'],environ={'RO_WORLD_LLM_API_KEY':'sk-shell-1111111'})
+        self.assertEqual(code,0,out);self.assertIn('в .env другой ключ',out)
+        self.assertEqual([r['auth'] for r in server.requests],['Bearer sk-file-00000000'])
+        self.assertNotIn('sk-file-00000000',out);self.assertNotIn('sk-shell-1111111',out)
 
 if __name__=='__main__':unittest.main()

@@ -108,9 +108,14 @@ class WorldSkillsTests(unittest.TestCase):
                 with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native') as native,patch.object(meeting,'decide') as model:
                     self.assertEqual(meeting.execute({'resident':'Mira','place':'field'},c,'sock','key',task,d),'failed(TARGET_BUSY)')
                 model.assert_not_called();native.assert_not_called()
-                # A short goal that ends inside our window is worth waiting for.
-                (peer/'manual_task.json').write_text(json.dumps({'id':'hunt','resident':'Mira','action':'hunt','args':{'minutes':5},'started':990,'expires':1290}))
-                self.assertFalse(meeting.peer_long_goal(peer,1300))
+                # A short goal that leaves time to answer and walk is worth waiting for;
+                # a brain hunt's own lease includes its route to the field, rest/town_service retries.
+                for goal,busy in (({'action':'idle','args':{'minutes':3},'expires':2190},False),({'action':'say','args':{'text':'Привет'},'expires':2190},False),
+                                  ({'action':'hunt','args':{'minutes':5},'expires':1290},True),({'action':'rest','args':{},'expires':2190},True),
+                                  ({'action':'walk_to','args':{'place':'field'},'expires':1050},False),({'action':'town_service','args':{},'expires':2190},True)):
+                    with self.subTest(goal=goal):
+                        (peer/'manual_task.json').write_text(json.dumps({'id':'g','resident':'Mira','started':990,**goal}))
+                        self.assertEqual(meeting.peer_long_goal(peer,1300),busy)
             # A task file left by a crashed brain (nobody holds the writer) never blocks a meeting.
             (peer/'manual_task.json').write_text(json.dumps({'id':'hunt','resident':'Mira','action':'hunt','args':{'minutes':15},'started':990,'expires':1890}))
             self.assertFalse(meeting.peer_long_goal(peer,1300))

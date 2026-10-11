@@ -510,7 +510,12 @@ class Mind:
         if time.time()<max(self.next_call,self.unavailable_until):return None
         if (self.d/'CHAT_PENDING').exists():return None
         chat_goal=self.d/'chat-goal.json'
-        if chat_goal.exists() and json.loads(chat_goal.read_text()).get('id')!=offer.get('meeting_id'):return None
+        if chat_goal.exists():
+            from .skills import chat_goal_task
+            try:own=json.loads(chat_goal.read_text()).get('id')
+            except (OSError,ValueError,AttributeError):own=None
+            # Our own agreed meeting (its reply id or its goal task id) may still be voted on.
+            if own is None or offer.get('meeting_id') not in (own,chat_goal_task(own)):return None
         from .memory import read_memory,summarize
         cached=read_memory(self.d)
         context=compact_state(self.r,s,self.d,self.history,memory=summarize(cached) if cached.get('at') else '',activity=meeting_activity(self.d,cached))
