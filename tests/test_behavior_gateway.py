@@ -131,19 +131,37 @@ class BehaviorGatewayTest(unittest.TestCase):
         self.e.evaluate()
         self.assertEqual(self.j.action(a['action_id'])['state'], 'confirmed')
 
-    def test_legacy_sale_also_requires_junk_reported_sellable_by_type(self):
-        # E05: weapons/etc outside the fixed list are sold too, and must be proven too.
+    def test_legacy_sale_proves_fixed_list_and_whatever_junk_was_sold(self):
+        # E05: junk outside the fixed list is sold by type; what the dealer refused does not block.
         self.telemetry(behavior_v1=False, inventory={'909': 3, '1201': 2, '501': 9}, sellable={'909': 3, '1201': 1})
         a = self.e.run('sell_loot', {}, 60)
         self.done(a)
-        self.telemetry(behavior_v1=False, inventory={'1201': 2, '501': 9}, sellable={'1201': 1})
-        self.trade(909, -3)
+        self.telemetry(behavior_v1=False, inventory={'909': 3, '1201': 2, '501': 9}, sellable={'909': 3, '1201': 1})
+        self.trade(1201, -1)
         self.e.evaluate()
-        self.assertEqual(self.j.action(a['action_id'])['state'], 'verifying')
-        self.trade(1201, -1, 2)
+        self.assertEqual(self.j.action(a['action_id'])['state'], 'verifying')  # fixed-list Jellopy not proven, bag not reduced
+        self.trade(909, -3, 2)
         self.telemetry(behavior_v1=False, inventory={'1201': 1, '501': 9}, sellable={})
         self.e.evaluate()
         self.assertEqual(self.j.action(a['action_id'])['state'], 'confirmed')
+
+    def test_junk_the_dealer_refused_does_not_block_confirmation(self):
+        self.telemetry(behavior_v1=False, inventory={'1201': 1, '2301': 1}, sellable={'1201': 1, '2301': 1})
+        a = self.e.run('sell_loot', {}, 60)
+        self.done(a)
+        self.trade(1201, -1)
+        self.telemetry(behavior_v1=False, inventory={'1201': 1, '2301': 1}, sellable={'2301': 1})
+        self.e.evaluate()
+        self.assertEqual(self.j.action(a['action_id'])['state'], 'verifying')  # picklog says sold, bag disagrees
+        self.telemetry(behavior_v1=False, inventory={'2301': 1}, sellable={'2301': 1})
+        self.e.evaluate()
+        self.assertEqual(self.j.action(a['action_id'])['state'], 'confirmed')
+
+    def test_speech_with_console_separators_is_refused_before_dispatch(self):
+        for skill, params in (('say', {'text': 'hi;;quit'}), ('whisper', {'to_name': 'Tester', 'text': 'psst;;storage'}), ('whisper', {'to_name': 'Tester', 'text': 'a\\nb'})):
+            with self.subTest(skill=skill), self.assertRaisesRegex(ValueError, 'INVALID_TEXT'):
+                self.e.run(skill, params, 10)
+        self.assertEqual(self.sent, [])
 
     def test_sale_requires_body_inventory_reduction_for_every_item(self):
         a = self.e.run('sell_loot', {'items': {'909': 3, '713': 2}}, 60)

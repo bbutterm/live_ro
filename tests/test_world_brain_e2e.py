@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 R={'resident_id':'resident_a','name':'ResidentA','char_id':150001,'profile':'/nonexistent','enabled':True,'persona':'Мечник. Прямой, смелый, любит охоту.'}
-C={'daily_llm_usd':2,'llm':{'enabled':True,'max_hunt_minutes':15,'min_decision_seconds':0,'min_speech_seconds':0,'timeout_seconds':10},
+# short_pause_seconds=2: the ~5 s 429 pause below counts as long, so native habits must take over.
+C={'daily_llm_usd':2,'llm':{'enabled':True,'max_hunt_minutes':15,'min_decision_seconds':0,'min_speech_seconds':0,'timeout_seconds':10,'short_pause_seconds':2},
    'brain_settle_seconds':.5,'chat_service':'standalone','residents':[R],
    # No 'fountain': the city-walk fallback (5 min idle) would make this test slow.
    'places':{'market':{'map':'prontera','x':156,'y':180},'gate':{'map':'prontera','x':150,'y':40},'field':{'map':'prt_fild08','x':170,'y':240}},

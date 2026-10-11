@@ -48,6 +48,23 @@ class NormalizeTests(unittest.TestCase):
         for bad in ({'action':'teleport','reason':'x'},{'action':'walk_to','place':'луна','reason':'x'},{'action':'say','text':'Hello','reason':'x'},
                     {'action':'meet','resident':'Гость','place':'fountain','reason':'x'},{'action':'say','text':'Иду к фонтану','reason':'x'}):
             with self.subTest(bad=bad),self.assertRaises(ValueError):norm(bad)
+    def test_whisper_only_to_people_near_known_or_neighbours(self):
+        with self.assertRaisesRegex(ValueError,'TARGET_NOT_VISIBLE'):norm({'action':'whisper','to':'RandomStranger','text':'Привет!','reason':'x'})
+        self.assertEqual(norm({'action':'whisper','to':'mira','text':'Привет!','reason':'x'})[0]['args']['to'],'Mira')
+        self.assertEqual(norm({'action':'whisper','to':'Guest','text':'Спасибо!','reason':'x'},known={'Guest'})[0]['args']['to'],'Guest')
+    def test_honesty_promises_and_console_separators(self):
+        from packages.resident_world.skills import speech
+        for promise in ('Пойду к фонтану','Скоро буду у фонтана','Подойду к тебе','Приду через минуту','Уже бегу к тебе!','Следую за тобой','Иду!'):
+            with self.subTest(promise=promise),self.assertRaisesRegex(ValueError,'PROMISE'):speech(promise)
+        for fine in ('Приятно познакомиться','В следующий раз поболтаем','Буду рад помочь','Люди идут на рынок','Не держи обиду'):
+            with self.subTest(fine=fine):self.assertEqual(speech(fine),fine)
+        for bad in ('Привет;;quit','Привет\\nquit'):
+            with self.subTest(bad=bad),self.assertRaisesRegex(ValueError,'INVALID_TEXT'):speech(bad)
+        self.assertNotIn('say',norm({'action':'idle','minutes':2,'say':'Подойду позже','reason':'x'})[0])
+        self.assertEqual(norm({'action':'rest','until_hp':90,'say':'Приятно отдохнуть','reason':'x'})[0]['say'],'Приятно отдохнуть')
+    def test_absurd_numbers_do_not_crash(self):
+        self.assertEqual(norm({'action':'hunt','minutes':float('inf'),'reason':'x'})[0]['args']['minutes'],10)
+        self.assertEqual(norm({'action':'idle','minutes':'9'*500,'reason':'x'})[0]['args']['minutes'],10)
     def test_overweight_blocks_hunt_and_rest_but_offers_selling(self):
         from packages.resident_world.mind import availability
         heavy={'telemetry':dict(HEALTHY['telemetry'],weight=850,weight_max=1000,hp=40,sellable={'909':40})}
@@ -99,18 +116,54 @@ class ChooseTests(unittest.TestCase):
     def test_garbage_twice_pauses_briefly_then_lets_native_habits_work(self):
         self.reply('не знаю','тоже не знаю')
         with patch.object(self.mind_module.time,'time',return_value=1000):self.assertIsNone(self.m.choose(HEALTHY))
-        self.assertFalse(self.m.waiting(1001));self.assertEqual(self.m.next_call,1030)
+        self.assertTrue(self.m.waiting(1001));self.assertEqual(self.m.next_call,1030)  # short: wait
+        self.m.errors=3;self.reply('мимо','мимо')
+        with patch.object(self.mind_module.time,'time',return_value=1031):self.assertIsNone(self.m.choose(HEALTHY))
+        self.assertFalse(self.m.waiting(1032))  # repeated garbage: native habits keep the body busy
     def test_rate_limit_pauses_until_gate_reopens(self):
         from packages.resident_world.llm import LLMUnavailable
         self.reply(LLMUnavailable('RATE_LIMIT',1600,429,'slow down'))
         with patch.object(self.mind_module.time,'time',return_value=1000):self.assertIsNone(self.m.choose(HEALTHY))
-        self.assertEqual(json.loads((self.d/'llm-pause.json').read_text())['until'],1600)
+        self.assertTrue(1600<=json.loads((self.d/'llm-pause.json').read_text())['until']<=1630)  # jittered per caller
         self.assertFalse(self.m.waiting(1100))
         with patch.object(self.mind_module.time,'time',return_value=1100):self.assertIsNone(self.m.choose(HEALTHY))
         self.assertEqual(self.client.complete.call_count,1)
         self.reply({'action':'idle','minutes':2,'reason':'Отдышаться'})
-        with patch.object(self.mind_module.time,'time',return_value=1601):self.assertEqual(self.m.choose(HEALTHY)['decision']['action'],'idle')
+        with patch.object(self.mind_module.time,'time',return_value=1631):self.assertEqual(self.m.choose(HEALTHY)['decision']['action'],'idle')
         self.assertFalse((self.d/'llm-pause.json').exists())
+    def test_old_pause_file_from_previous_code_does_not_mute_the_brain(self):
+        from packages.resident_world import mind
+        (self.d/'llm-pause.json').write_text(json.dumps({'until':10**10,'error':'BudgetStop'}))
+        m=mind.Mind({'name':'Mira','char_id':2,'resident_id':'resident_b','persona':'x'},self.d,C,client=self.client)
+        self.reply({'action':'idle','minutes':2,'reason':'Осмотреться'})
+        with patch.object(self.mind_module.time,'time',return_value=1000):self.assertEqual(m.choose(HEALTHY)['decision']['action'],'idle')
+    def test_daily_limit_is_rechecked_every_few_minutes_not_slept_until_midnight(self):
+        from packages.resident_world.llm import LLMUnavailable
+        self.reply(LLMUnavailable('DAILY_LIMIT',86400+30,detail='лимит'))
+        with patch.object(self.mind_module.time,'time',return_value=1000):self.assertIsNone(self.m.choose(HEALTHY))
+        self.assertTrue(1300<=self.m.unavailable_until<=1330)
+    def test_stale_intent_is_dropped_and_a_fresh_one_asked(self):
+        (self.d/'model-intent.json').write_text(json.dumps({'id':'old','at':100,'decision':{'action':'say','args':{'text':'Доброе утро!'},'reason':'x'}}))
+        self.reply({'action':'idle','minutes':2,'reason':'Сейчас вечер'})
+        with patch.object(self.mind_module.time,'time',return_value=1000):p=self.m.choose(HEALTHY)
+        self.assertEqual(p['decision']['action'],'idle')
+    def test_chat_is_paced_per_player_and_late_messages_get_the_quick_default(self):
+        self.reply(*[{'action':'say','text':'Привет!','reason':'Ответ'} for _ in range(5)])
+        default={'action':'say','args':{'text':'Слышу тебя.'},'reason':'Ответ'}
+        s=dict(HEALTHY)
+        with patch.object(self.mind_module.time,'time',return_value=1000):
+            late=self.m.respond({'name':'Tester','type':'O','text':'эй','ts':994},s,default)
+            self.assertIs(late,default);self.client.complete.assert_not_called()
+            answers=[self.m.respond({'name':'Tester','type':'O','text':'привет','ts':1000},s,default) for _ in range(5)]
+        self.assertEqual(self.client.complete.call_count,3)  # a chatty player gets the quick default afterwards
+        self.assertIs(answers[-1],default)
+        with patch.object(self.mind_module.time,'time',return_value=1000):self.m.respond({'name':'Other','type':'O','text':'привет','ts':1000},s,default)
+        self.assertEqual(self.client.complete.call_count,4)
+    def test_vote_place_is_the_offered_key(self):
+        self.reply({'choice':'accept','place':'у фонтана','reason':'Давно не виделись'},{'choice':'counter','place':'Market','reason':'Там удобнее'})
+        with patch.object(self.mind_module.time,'time',return_value=1000):
+            self.assertEqual(self.m.negotiate({'resident':'ResidentA','place':'fountain','meeting_id':'m1'},HEALTHY,True)['place'],'fountain')
+            self.assertEqual(self.m.negotiate({'resident':'ResidentA','place':'fountain','meeting_id':'m2'},HEALTHY,True)['place'],'market')
     def test_budget_is_paced_over_the_day(self):
         self.client.budget.return_value=(1,2,100)  # half the money spent by 03:00 UTC
         self.assertGreater(self.m.gap(3*3600,{'action':'hunt'}),20*3)

@@ -37,13 +37,16 @@ sub validSaleParams{
  my$p=shift;return 0 unless ref$p eq'HASH'&&ref$p->{items}eq'HASH'&&keys%{$p->{items}}&&keys%{$p->{items}}<=3;
  for my$id(keys%{$p->{items}}){my$n=$p->{items}{$id};return 0 unless$id=~/^(?:909|713|938)$/&&defined$n&&!ref$n&&$n=~/^\d+$/&&$n>0&&$n<=1000}return 1;
 }
-# Junk a human would sell at the tool dealer: etc/armor/weapon/headgear by OpenKore
-# client item type, never equipped, consumables, cards, ammo or the keep list.
-my%keepItems=map{$_=>1}(501,502,503,504,505,506,507,508,509,510,601,602,715,716,717,1065);
-my%sellTypes=map{$_=>1}(3,4,5,9,11,13,14);
+# Loot a human would sell at the tool dealer. Types are what rAthena clif itemtype() sends:
+# 0 healing loot (apples, herbs), 3 etc, 4 armor/headgear, 5 weapon. Never: equipped items,
+# potions/wings/gems (keep list), usable/delay-consume (2, 11), cards (6), ammo, and pet eggs
+# (sent as type 4 without an equip location: selling one deletes the pet).
+my%keepItems=map{$_=>1}(501,502,503,504,505,506,601,602,715,716,717,1065);
+my%sellTypes=map{$_=>1}(0,3,4,5);
 sub sellableItem{
  my$i=shift;return 0 unless$i&&$i->{nameID}&&($i->{amount}//0)>0&&!$i->{equipped}&&!$i->{unsellable}&&!$keepItems{$i->{nameID}};
- return$sellTypes{$i->{type}//-1}?1:0;
+ my$t=$i->{type}//-1;return 0 if($t==4||$t==5)&&!$i->{type_equip};
+ return$sellTypes{$t}?1:0;
 }
 sub sellableFrame{my%bag;for my$i(@{bagItems()}){$bag{$i->{nameID}}+=0+$i->{amount}if sellableItem($i)}return\%bag}
 sub salePlan{
@@ -142,13 +145,17 @@ sub finishSpeech{
  my($outcome,$code,$detail)=@_;return unless$speech;my$a=$speech;undef$speech;
  my$r={action_id=>$a->{action_id},outcome=>$outcome,code=>$code,detail=>$detail};$ledger{$a->{idem_key}}{result}=$r;saveLedger();emit('skill_result',$r);
 }
+# Speech goes straight into the chat packet, never through the console parser:
+# Commands::run splits on ';;', so model or player text must not become commands.
+sub speak{my($to,$text)=@_;require Misc;Misc::sendMessage($Globals::messageSender,defined$to?'pm':'c',$text,$to)}
+sub plainSpeech{my$t=shift;return defined$t&&!ref$t&&length$t>0&&length$t<=120&&$t!~/[\x00-\x1f\x7f]/&&$t!~/;;|\\/}
 sub startSpeech{
  my$m=shift;my$a=$m->{action_id};my$k=$m->{idem_key};my$p=$m->{params};my$public=$m->{skill}eq'say';
- return reject($a,'INVALID','invalid speech')unless ref$p eq'HASH'&&defined$p->{text}&&!ref$p->{text}&&length$p->{text}>0&&length$p->{text}<=120&&$p->{text}!~/[\x00-\x1f\x7f]/&&($public?$p->{text}!~/^\s*[\@#\/]/:($p->{to_name}//'')=~/^[\p{L}\p{N}_ -]{1,24}$/);
+ return reject($a,'INVALID','invalid speech')unless ref$p eq'HASH'&&plainSpeech($p->{text})&&($public?$p->{text}!~/^\s*[\@#\/]/:($p->{to_name}//'')=~/^[\p{L}\p{N}_ -]{1,24}$/);
  # Speech owns only its ledger entry and slot, never motor mode or tasks.
  $ledger{$k}={action_id=>$a,idem_key=>$k,result=>{outcome=>'unknown',code=>'IN_PROGRESS'}};push@order,$k;saveLedger();$speech={%$m};
- emit('skill_accepted',{action_id=>$a,code=>'ACCEPTED'});emit('skill_progress',{action_id=>$a,phase=>'running',detail=>$public?'native public chat; server proof required':'awaiting server PM result'});require Commands;
- my$ok=eval{Commands::run($public?'c '.$p->{text}:'pm "'.$p->{to_name}.'" '.$p->{text});1};
+ emit('skill_accepted',{action_id=>$a,code=>'ACCEPTED'});emit('skill_progress',{action_id=>$a,phase=>'running',detail=>$public?'native public chat; server proof required':'awaiting server PM result'});
+ my$ok=eval{speak($public?undef:$p->{to_name},$p->{text});1};
  if(!$ok){finishSpeech('error','SEND_ERROR','speech command failed')}elsif($public){finishSpeech('done','SPOKEN','public chat dispatched; server proof required')}
 }
 sub stopMotion{
@@ -174,16 +181,16 @@ sub command{
  return reject($a,'UNSUPPORTED','respawn is v2 only')if behaviorV1()&&($m->{skill}//'')eq'respawn';
  return startSpeech($m)if behaviorV1()&&$isSpeech;
  if(($m->{skill}//'')eq'say'){
-  my$p=$m->{params};return reject($a,'INVALID','no commands or controls in public speech')unless ref$p eq'HASH'&&defined$p->{text}&&length$p->{text}>0&&length$p->{text}<=120&&$p->{text}!~/[\x00-\x1f\x7f]/&&$p->{text}!~/^\s*[\@#\/]/;
+  my$p=$m->{params};return reject($a,'INVALID','no commands or controls in public speech')unless ref$p eq'HASH'&&plainSpeech($p->{text})&&$p->{text}!~/^\s*[\@#\/]/;
   $ledger{$k}={action_id=>$a,idem_key=>$k,result=>{outcome=>'unknown',code=>'IN_PROGRESS'}};push@order,$k;saveLedger();$active={%$m};
-  emit('skill_accepted',{action_id=>$a,code=>'ACCEPTED'});emit('skill_progress',{action_id=>$a,phase=>'running',detail=>'native public chat; server chatlog confirmation required'});require Commands;
-  my$ok=eval{Commands::run('c '.$p->{text});1};finish($ok?'done':'error',$ok?'SPOKEN':'SEND_ERROR','public chat dispatched; server proof required');return;
+  emit('skill_accepted',{action_id=>$a,code=>'ACCEPTED'});emit('skill_progress',{action_id=>$a,phase=>'running',detail=>'native public chat; server chatlog confirmation required'});
+  my$ok=eval{speak(undef,$p->{text});1};finish($ok?'done':'error',$ok?'SPOKEN':'SEND_ERROR','public chat dispatched; server proof required');return;
  }
  if(($m->{skill}//'')eq'whisper'){
-  my$p=$m->{params};return reject($a,'INVALID','invalid whisper')unless ref$p eq'HASH'&&($p->{to_name}//'')=~/^[\p{L}\p{N}_ -]{1,24}$/&&defined$p->{text}&&length$p->{text}>0&&length$p->{text}<=120&&$p->{text}!~/[\x00-\x1f\x7f]/;
+  my$p=$m->{params};return reject($a,'INVALID','invalid whisper')unless ref$p eq'HASH'&&($p->{to_name}//'')=~/^[\p{L}\p{N}_ -]{1,24}$/&&plainSpeech($p->{text});
   $ledger{$k}={action_id=>$a,idem_key=>$k,result=>{outcome=>'unknown',code=>'IN_PROGRESS'}};push@order,$k;saveLedger();$active={%$m};
-  emit('skill_accepted',{action_id=>$a,code=>'ACCEPTED'});emit('skill_progress',{action_id=>$a,phase=>'running',detail=>'awaiting server PM result'});require Commands;
-  my$ok=eval{Commands::run('pm "'.$p->{to_name}.'" '.$p->{text});1};finish('error','SEND_ERROR','PM command failed')unless$ok;return;
+  emit('skill_accepted',{action_id=>$a,code=>'ACCEPTED'});emit('skill_progress',{action_id=>$a,phase=>'running',detail=>'awaiting server PM result'});
+  my$ok=eval{speak($p->{to_name},$p->{text});1};finish('error','SEND_ERROR','PM command failed')unless$ok;return;
  }
  if(($m->{skill}//'')eq'buy_potions'||($m->{skill}//'')eq'sell_loot'){
   my$sk=$m->{skill};my$p=$m->{params};return reject($a,'INVALID','invalid shop params')unless ref$p eq'HASH';

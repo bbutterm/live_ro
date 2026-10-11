@@ -62,7 +62,7 @@ class Executor:
  def run(self,skill,params,deadline,idem=None):
   if skill not in ('travel_to','whisper','say','hunt','rest','respawn','buy_potions','sell_loot'):raise ValueError('UNSUPPORTED')
   if not isinstance(deadline,(int,float)) or not math.isfinite(deadline) or not 0<deadline<=(3660 if skill=='hunt' else 600):raise ValueError('DEADLINE')
-  if skill=='say' and (not isinstance(params,dict) or not isinstance(params.get('text'),str) or not 0<len(params['text'])<=120 or params['text'].lstrip().startswith(('@','#','/')) or any(ord(c)<32 or ord(c)==127 for c in params['text'])):raise ValueError('INVALID_TEXT')
+  if skill in ('say','whisper') and (not isinstance(params,dict) or not isinstance(params.get('text'),str) or not 0<len(params['text'])<=120 or (skill=='say' and params['text'].lstrip().startswith(('@','#','/'))) or any(ord(c)<32 or ord(c)==127 for c in params['text']) or ';;' in params['text'] or '\\' in params['text']):raise ValueError('INVALID_TEXT')
   key=idem or str(uuid.uuid4());old=[a for a in self.j.actions() if a['resident']==self.resident and a['idem_key']==key]
   if old:return old[0]
   if skill=='sell_loot' and (isinstance(params,dict) and 'items' in params or (self.telemetry or {}).get('behavior_v1') is True):
@@ -113,10 +113,13 @@ class Executor:
      else:
       # Legacy whole-stack sale: the fixed list plus the junk the body reported
       # sellable by item type when the action was planned; all of it must be sold.
-      ids={909,914,705,935,919,908,916};expected={int(k):v for k,v in before.items() if int(k) in ids and v>0}
-      junk=p.get('_sellable_before')
-      if isinstance(junk,dict):expected.update({int(k):v for k,v in junk.items() if type(v) is int and v>0})
-      hits=[r for r in trades if r['item_id'] in expected and r['amount']<0];ok=bool(expected) and all(sum(-r['amount'] for r in hits if r['item_id']==iid)>=n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in expected.items())
+      ids={909,914,705,935,919,908,916};required={int(k):v for k,v in before.items() if int(k) in ids and v>0}
+      junk=p.get('_sellable_before') if isinstance(p.get('_sellable_before'),dict) else {}
+      # The dealer may refuse some junk (NoSell, bound): it needs proof only where it was sold.
+      optional={int(k):v for k,v in junk.items() if type(v) is int and v>0 and int(k) not in required}
+      hits=[r for r in trades if (r['item_id'] in required or r['item_id'] in optional) and r['amount']<0];sold={}
+      for r in hits:sold[r['item_id']]=sold.get(r['item_id'],0)-r['amount']
+      ok=bool(hits) and all(sold.get(iid,0)>=n and bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in required.items()) and all(bag.get(str(iid),0)<=before.get(str(iid),0)-n for iid,n in sold.items() if iid in optional)
      if ok:self.j.transition(aid,'confirmed','BOUGHT' if a['skill']=='buy_potions' else 'SOLD',{'server_picklog':hits,'body':t});continue
     elif a['skill'] in ('rest','respawn'):
      hit=next((r for r in reversed(rows) if r['kind'] in ('pos','loadmap','login') and r['map']==t['map']),None)

@@ -84,9 +84,9 @@ class WorldMindTests(unittest.TestCase):
             m.client=Mock();m.client.complete.side_effect=RuntimeError('NETWORK_BOUNDARY')
             with patch.object(mind,'STATE',d),patch.object(mind.time,'time',return_value=1000) as clock,patch('packages.resident_world.memory.refresh'):
                 self.assertIsNone(m.choose({'telemetry':{}}))
-                pause=json.loads((d/'llm-pause.json').read_text());self.assertEqual(pause['status'],429);self.assertEqual(pause['until'],1030)
+                pause=json.loads((d/'llm-pause.json').read_text());self.assertEqual(pause['status'],429);self.assertTrue(1030<=pause['until']<=1036)
                 self.assertFalse(m.path.exists());m.client.complete.assert_not_called()
-                self.assertFalse(m.waiting(1029))  # unavailable: native habits run meanwhile
+                self.assertTrue(m.waiting(1001))  # a short pause is waited out, not handed to a native habit
                 clock.return_value=1029;self.assertIsNone(m.choose({'telemetry':{}}));m.client.complete.assert_not_called()
                 m.r['name']='Borin'
                 with self.assertRaisesRegex(RuntimeError,'NETWORK_BOUNDARY'):m._complete([])

@@ -20,7 +20,7 @@ package AI; our @cleared; sub clear{push @cleared,@_} sub action{''} sub inQueue
 package List; sub getItems{$_[0]{items}} sub clear{}
 package Char; sub inventory{bless{items=>$_[0]{items}//[]},'List'} sub sendSit{$_[0]{sitting}=1} sub sendStand{die 'unexpected stand'} sub attack{die 'unexpected attack'}
 package Sender; sub sendMove{} sub sendTalk{} sub sendNPCBuySellList{} sub sendAddSkillPoint{die 'unexpected learning'} sub sendRestart{die 'unexpected revive'}
-package Misc; our @sold; our @bought; sub completeNpcSell{@sold=@{$_[0]}} sub completeNpcBuy{@bought=@{$_[0]}} $INC{'Misc.pm'}=1;
+package Misc; our @sold; our @bought; sub completeNpcSell{@sold=@{$_[0]}} sub completeNpcBuy{@bought=@{$_[0]}} sub sendMessage{my(undef,$t,$m,$u)=@_; push @Commands::sent,$t eq 'pm'?qq(pm "$u" $m):"c $m"} $INC{'Misc.pm'}=1;
 }
 require $ARGV[0]; $ENV{RESIDENT_RUN_DIR}=$ARGV[1]; $ENV{RESIDENT_ESTOP}="$ARGV[1]/ESTOP";
 $Globals::char=bless{hp=>90,hp_max=>100,sp=>10,sp_max=>20,lv=>20,lv_job=>10,points_skill=>4,zeny=>420,weight=>0,weight_max=>1000,pos=>{x=>1,y=>2},pos_to=>{x=>1,y=>2},skills=>{NV_BASIC=>{lv=>3},AL_HEAL=>{lv=>0}}},'Char';
@@ -118,13 +118,25 @@ sub start {my($skill,$params)=@_; residentBody::command({proto=>1,type=>'skill_s
 
     def test_legacy_sale_sells_junk_by_type_and_keeps_gear_potions_cards(self):
         # E05: the old fixed list could not sell what actually filled the bag.
-        bag = ("[{ID=>'a',nameID=>909,amount=>12,type=>3},{ID=>'b',nameID=>1201,amount=>1,type=>5},{ID=>'c',nameID=>2301,amount=>1,type=>4,equipped=>2},"
+        # Types as rAthena clif itemtype() sends them (11 = delay-consume, eggs = 4 without equip slot).
+        bag = ("[{ID=>'a',nameID=>909,amount=>12,type=>3},{ID=>'b',nameID=>1201,amount=>1,type=>5,type_equip=>2},{ID=>'c',nameID=>2301,amount=>1,type=>4,type_equip=>16,equipped=>16},"
                "{ID=>'d',nameID=>501,amount=>9,type=>0},{ID=>'e',nameID=>512,amount=>4,type=>0},{ID=>'f',nameID=>4001,amount=>1,type=>6},"
-               "{ID=>'g',nameID=>713,amount=>3,type=>3},{ID=>'h',nameID=>717,amount=>2,type=>3},{ID=>'i',nameID=>1750,amount=>50,type=>10}]")
+               "{ID=>'g',nameID=>713,amount=>3,type=>3},{ID=>'h',nameID=>717,amount=>2,type=>3},{ID=>'i',nameID=>1750,amount=>50,type=>10},"
+               "{ID=>'j',nameID=>611,amount=>5,type=>11},{ID=>'k',nameID=>12325,amount=>15,type=>11},{ID=>'l',nameID=>9001,amount=>1,type=>4,type_equip=>0},{ID=>'m',nameID=>602,amount=>2,type=>2}]")
         result = self.native("$Globals::field->{baseName}='prt_in'; $Globals::char->{pos_to}={x=>126,y=>76}; $Globals::char->{items}=" + bag + "; $Globals::npcsList=bless{items=>[{ID=>'npc',name=>'Tool Dealer#test',pos=>{x=>126,y=>76}}]},'List'; my $t=residentBody::telemetryFrame(); start('sell_loot',{}); $Globals::ai_v{npc_talk}{talk}='buy_or_sell'; residentBody::pollSkill(); $Globals::ai_v{npc_talk}{talk}='sell'; residentBody::pollSkill(); my %gone=map{$_->{ID}=>1}@Misc::sold; $Globals::char->{items}=[grep{!$gone{$_->{ID}}}@{$Globals::char->{items}}]; residentBody::pollSkill(); print JSON::PP::encode_json({sellable=>$t->{sellable},sold=>[sort map{$_->{ID}}@Misc::sold],frames=>\\@frames});", enabled=False)
-        self.assertEqual(result['sellable'], {'909':12,'1201':1,'713':3})
-        self.assertEqual(result['sold'], ['a','b','g'])
+        self.assertEqual(result['sellable'], {'909':12,'1201':1,'713':3,'512':4})
+        self.assertEqual(result['sold'], ['a','b','e','g'])
         self.assertEqual(result['frames'][-1][1]['code'], 'SOLD')
+
+    def test_speech_never_reaches_the_console_command_parser(self):
+        # Commands::run splits on ';;': a player could make the model say 'привет;;<command>'.
+        for enabled in (True, False):
+            with self.subTest(v1=enabled):
+                result = self.native("BEGIN {package Commands; our @ran; sub run {push @ran,$_[0]} $INC{'Commands.pm'}=1;} sub speech {my($id,$skill,$text)=@_; residentBody::command({proto=>1,type=>'skill_start',action_id=>$id,idem_key=>$id,expect_epoch=>$epoch,skill=>$skill,params=>{text=>$text,to_name=>'Tester'},deadline_ts=>residentBody::time()+100});} speech('ok','say','Hello all'); speech('inj','say','Hi;;quit'); speech('pm','whisper','Psst;;storage'); speech('bs','say','a\\\\nb'); print JSON::PP::encode_json({frames=>\\@frames,sent=>\\@Commands::sent,ran=>\\@Commands::ran});", enabled)
+                rejected = {f[1]['action_id'] for f in result['frames'] if f[0]=='skill_rejected'}
+                self.assertEqual(rejected, {'inj','pm','bs'})
+                self.assertEqual(result['sent'], ['c Hello all'])
+                self.assertEqual(result['ran'], [])
 
     def test_native_monster_frame_passes_v1_contract_through_bridge(self):
         # E01: the real frame carries {id: GID hex, nameID, x, y}; v1 accepts exactly {id, x, y}.

@@ -76,6 +76,10 @@ class ProviderBudget:
                     return False
                 self.shared.settle(common_id, cost, response_id)
                 self.quota.settle(identifier, cost)
+                # The same key also feeds the resident_world brain: one spend journal sees both.
+                from packages.resident_world.llm import SpendLedger
+                import time
+                SpendLedger(self.state_root/'llm-spend.json').add(cost, time.time())
                 return True
             except (BudgetStop, OSError, ValueError, KeyError, TypeError, ArithmeticError):
                 self.last_error = 'settlement_denied'

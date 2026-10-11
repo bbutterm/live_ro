@@ -8,6 +8,7 @@ package Plugins;sub register{}sub addHooks{}sub delHooks{};$INC{'Plugins.pm'}=1;
 package Utils;use Exporter 'import';our@EXPORT_OK=qw(calcPosition);sub calcPosition{{x=>20,y=>25}};$INC{'Utils.pm'}=1;
 package Network;sub IN_GAME(){5};$INC{'Network.pm'}=1;
 package Commands;our@sent;sub run{push@sent,$_[0]};$INC{'Commands.pm'}=1;
+package Misc;sub sendMessage{my(undef,$t,$m,$u)=@_;push@Commands::sent,$t eq'pm'?qq(pm "$u" $m):"c $m"};$INC{'Misc.pm'}=1;
 }
 require $ARGV[0];$ENV{RESIDENT_RUN_DIR}=$ARGV[1];$ENV{RESIDENT_ESTOP}=$ARGV[1].'/ESTOP';$Globals::char={hp=>40,pos_to=>{x=>20,y=>25}};$Globals::field={baseName=>'prontera'};my@events;{no warnings 'redefine';*residentBody::emit=sub{push@events,[@_]};}
 my$ep=residentBody::telemetryFrame()->{body_epoch};

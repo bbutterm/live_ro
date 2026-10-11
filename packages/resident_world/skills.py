@@ -20,9 +20,13 @@ def number(value,low,high):
     if type(value) is not int or not low<=value<=high:raise ValueError('ARGUMENT_RANGE')
     return value
 
+# A spoken promise to move must come with the movement (honesty rule); whole words only.
+PROMISE=re.compile(r'\b(?:иду|пойду|пойд[её]м|встретимся|следую|подойду|приду|прибегу|прибуду|бегу|догоню|скоро буду|буду (?:у|на|возле|через|рядом))\b',re.I)
+
 def speech(text):
-    if not isinstance(text,str) or not 0<len(text)<=80 or re.search(r'[\x00-\x1f\x7f]',text) or text.lstrip().startswith(('@','#','/')) or not re.search('[А-Яа-яЁё]',text):raise ValueError('INVALID_TEXT')
-    if re.search(r'\b(иду|пойд[её]м|встретимся)\b',text,re.I):raise ValueError('PROMISE_REQUIRES_ACTION')
+    # ';;' and '\\' are OpenKore console/message separators: never in speech.
+    if not isinstance(text,str) or not 0<len(text)<=80 or re.search(r'[\x00-\x1f\x7f]|;;|\\',text) or text.lstrip().startswith(('@','#','/')) or not re.search('[А-Яа-яЁё]',text):raise ValueError('INVALID_TEXT')
+    if PROMISE.search(text):raise ValueError('PROMISE_REQUIRES_ACTION')
     return text
 
 def validate(action,args,c):
@@ -140,11 +144,12 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         result=run_native(sock,native_plan(action,args,c),key+'-route',task,d)
         if result!='done':return result
         t=request(sock,{'op':'status'}).get('telemetry') or {}
+        sold='done'
         if has_sellable(t):
-            result=run_native(sock,{'skill':'sell_loot','params':{},'timeout':40},key+'-sell',task,d)
-            if result!='done':return result
+            # A refused or unproven sale must not leave the resident without potions.
+            sold=run_native(sock,{'skill':'sell_loot','params':{},'timeout':40},key+'-sell',task,d)
         t=request(sock,{'op':'status'}).get('telemetry') or {};stock=t.get('inventory',{}).get('501',0)
-        if stock>=17:return 'done'
+        if stock>=17:return sold
         goal=min(20,stock+int(t.get('zeny',0)//10))
         if goal<=stock:return 'failed(INSUFFICIENT_EARNED_ZENY)'
         return run_native(sock,{'skill':'buy_potions','params':{'item_id':501,'stock_goal':goal,'max_zeny':300},'timeout':40},key+'-buy',task,d)

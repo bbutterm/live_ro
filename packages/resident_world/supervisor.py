@@ -82,6 +82,7 @@ def brain(r):
                 proposal=json.loads(chat_goal.read_text());goal=proposal['decision']
                 result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'])
                 record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal['event_id'],task=result)
+                if mind is not None:mind.note(goal['action'],result['outcome'],'договорились в разговоре',proposal['id'])
                 clear_chat_goal(d,proposal['id']);pending=None;retry=time.time()+settle_seconds;continue
             hold=d/'BRAIN_HOLD'
             if hold.exists() and json.loads(hold.read_text()).get('expires',0)>time.time():time.sleep(.2);continue
@@ -105,8 +106,14 @@ def brain(r):
             if mind is not None and not t.get('dead') and online(s,time.time()):
                 # Between two thoughts a healthy mind just lets the body be.
                 if mind.waiting():time.sleep(.5);continue
-                proposal=mind.choose(s)
-                if (d/'CHAT_PENDING').exists() or (d/'chat-goal.json').exists():time.sleep(.1);continue
+                try:proposal=mind.choose(s)
+                except Exception as error:  # a brain bug or odd network error must not kill the process
+                    logging.getLogger('world').warning('mind.choose %s: %s',r['name'],type(error).__name__)
+                    mind.next_call=mind.unavailable_until=time.time()+30;proposal=None
+                if (d/'CHAT_PENDING').exists() or (d/'chat-goal.json').exists():
+                    # A conversation started meanwhile: decide again afterwards, with it in mind.
+                    if proposal:mind.path.unlink(missing_ok=True);mind.next_call=0
+                    time.sleep(.1);continue
                 if proposal:
                     from packages.resident_world.skills import execute
                     goal=proposal['decision']

@@ -119,6 +119,57 @@ class ClientTests(unittest.TestCase):
             s=load_settings(self.dir,{'daily_llm_usd':5})
         self.assertEqual(s.key,'sk-or-from-env-999');self.assertEqual(s.base_url,'https://openrouter.ai/api/v1')
         self.assertEqual(s.model,'deepseek/deepseek-v3.2');self.assertEqual(s.daily_usd,Decimal(5));self.assertNotIn('999',s.masked()[:6])
+    def test_slow_short_call_does_not_pause_everyone(self):
+        # A chat reply with a 2–8 s deadline timing out is not a provider outage.
+        from packages.resident_world.llm import LLMUnavailable
+        import socket
+        def slow(req,timeout):raise socket.timeout('timed out')
+        c=self.client();c.urlopen=slow
+        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'*300}],timeout=4)
+        self.assertEqual(err.exception.reason,'TIMEOUT');self.assertEqual(c.gate.state(),{})
+        self.assertGreater(c.ledger.today(self.now[0])[0],0)  # an abandoned prompt may still be billed
+        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'}],timeout=25)
+        self.assertEqual(err.exception.reason,'OUTAGE');self.assertEqual(c.gate.state()['reason'],'OUTAGE')
+    def test_gate_is_not_shortened_or_cleared_by_older_news(self):
+        from packages.resident_world.llm import Gate
+        g=Gate(self.dir/'gate.json',rng=lambda:0)
+        long=g.close('RATE_LIMIT',1000,429,retry_after=600)
+        self.assertEqual(g.close('OUTAGE',1001),long)  # a parallel timeout does not cut a 429 pause
+        g.open(since=999);self.assertEqual(g.state()['until'],long)  # success of a call started before the 429
+        g.open(since=1002);self.assertEqual(g.state(),{})
+        g.close('RATE_LIMIT',2000,429,retry_after=300);self.assertEqual(g.close('RATE_LIMIT',2010,429,retry_after=10),2300)
+    def test_retry_after_http_date(self):
+        from packages.resident_world.llm import _retry_after
+        import email.utils
+        self.assertAlmostEqual(_retry_after({'Retry-After':email.utils.formatdate(1000+90,usegmt=True)},1000),90,delta=1)
+        self.assertEqual(_retry_after({'Retry-After':'7'}),7);self.assertIsNone(_retry_after({'Retry-After':'soon'}))
+    def test_pasted_token_with_comment_or_invisible_chars(self):
+        from packages.resident_world.llm import load_settings,LLMUnavailable
+        for line,key in (('RO_WORLD_LLM_API_KEY=sk-or-v1-abc  # ключ владельца','sk-or-v1-abc'),('RO_WORLD_LLM_API_KEY=sk-or-v1-abc​','sk-or-v1-abc'),('﻿RO_WORLD_LLM_API_KEY="sk-or-v1-abc"','sk-or-v1-abc')):
+            with self.subTest(line=line):
+                (self.dir/'.env').write_text(line+'\n',encoding='utf-8');self.assertEqual(load_settings(self.dir).key,key)
+        (self.dir/'.env').write_text('RO_WORLD_LLM_API_KEY=ключ\n',encoding='utf-8')
+        with self.assertRaises(LLMUnavailable) as err:load_settings(self.dir)
+        self.assertIn('лишние символы',err.exception.detail)
+    def test_broken_bodies_are_outages_not_crashes(self):
+        from packages.resident_world.llm import LLMUnavailable
+        import http.client
+        for body in ([],None,'hi'):
+            with self.subTest(body=body):
+                c=self.client();self.server.reply(200,body)
+                with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'}])
+                self.assertEqual(err.exception.reason,'OUTAGE');c.gate.open()
+        def cut(req,timeout):raise http.client.IncompleteRead(b'{"cho')
+        c=self.client();c.urlopen=cut
+        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'}])
+        self.assertEqual(err.exception.reason,'OUTAGE')
+    def test_mandatory_reasoning_keeps_the_strict_schema(self):
+        from packages.resident_world.llm import Settings
+        c=self.client();c.fixed=Settings(key='sk-test-123456789',base_url=self.server.url.replace('127.0.0.1','127.0.0.1')+'?openrouter.ai')
+        self.server.reply(400,{'error':{'message':'Reasoning is mandatory for this endpoint and cannot be disabled.'}});self.server.ok('{}',cost=0.0001)
+        self.assertEqual(c.complete([{'role':'user','content':'x'}],schema={'type':'object'}).mode,'json_schema')
+        bodies=[r['body'] for r in self.server.requests]
+        self.assertIn('reasoning',bodies[0]);self.assertNotIn('reasoning',bodies[1]);self.assertEqual(bodies[1]['response_format']['type'],'json_schema')
     def test_lenient_json_extraction(self):
         from packages.resident_world.llm import parse_json_object,BadModelOutput
         self.assertEqual(parse_json_object('```json\n{"a": 1}\n```'),{'a':1})

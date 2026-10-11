@@ -1,7 +1,7 @@
 {
   "state_dir": "/var/lib/ro-world",
   "daily_llm_usd": 2,
-  "llm": {"enabled": true, "max_hunt_minutes": 15, "min_decision_seconds": 20, "min_speech_seconds": 45, "timeout_seconds": 25, "temperature": 0.8},
+  "llm": {"enabled": true, "max_hunt_minutes": 15, "min_decision_seconds": 20, "min_speech_seconds": 45, "short_pause_seconds": 60, "chat_calls_per_sender_2min": 3, "timeout_seconds": 25, "temperature": 0.8},
   "brain_python": "/opt/ro-residents/world-venv/bin/python",
   "llm_timeout_seconds": 20,
   "chat_radius": 14,

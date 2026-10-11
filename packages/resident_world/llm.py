@@ -8,7 +8,7 @@ the night "без API"). Every key-level problem (429, 402, 401/403, daily cap,
 outage) closes one shared gate with a resume time; brains fall back to native
 habits meanwhile and the gate reopens by itself, so the world keeps living.
 """
-import datetime,fcntl,json,os,pathlib,random,re,time,urllib.error,urllib.request
+import datetime,email.utils,fcntl,http.client,json,os,pathlib,random,re,socket,time,urllib.error,urllib.request
 from dataclasses import dataclass
 from decimal import Decimal,InvalidOperation
 
@@ -47,7 +47,7 @@ class Settings:
 
 def read_env(path):
     values={}
-    try:lines=pathlib.Path(path).read_text(encoding='utf-8').splitlines()
+    try:lines=pathlib.Path(path).read_text(encoding='utf-8-sig').splitlines()
     except OSError:return values
     for line in lines:
         line=line.strip()
@@ -72,8 +72,13 @@ def load_settings(root,config=None):
         v=os.environ.get(name)
         return v if v not in (None,'') else env.get(name) or default
     key=next((get(n) for n in KEY_NAMES if get(n)),'')
+    # Pasted from a browser/messenger: drop invisible characters and a trailing "# comment".
+    key=re.sub('[\u200b-\u200f\u2060\ufeff\xa0]','',key).strip()
+    key=key.split()[0] if key.split() else ''
     if not key or key.lower() in ('changeme','your-token-here','вставь-токен-сюда'):
         raise LLMUnavailable('NO_TOKEN',time.time()+WAITS['NO_TOKEN'],detail='в .env нет RO_WORLD_LLM_API_KEY')
+    if not (key.isascii() and key.isprintable()):
+        raise LLMUnavailable('NO_TOKEN',time.time()+WAITS['NO_TOKEN'],detail='в токене лишние символы — вставь только сам ключ')
     daily=get('RO_WORLD_LLM_DAILY_USD',(config or {}).get('daily_llm_usd',2))
     return Settings(key=key,base_url=get('RO_WORLD_LLM_BASE_URL',DEFAULT_BASE_URL).rstrip('/'),model=get('RO_WORLD_LLM_MODEL',DEFAULT_MODEL),
                     daily_usd=_decimal(daily,2),price_in=_decimal(get('RO_WORLD_LLM_PRICE_IN',DEFAULT_PRICE_IN),DEFAULT_PRICE_IN),
@@ -135,17 +140,21 @@ class Gate:
     def close(self,reason,now,status=None,retry_after=None,detail=''):
         with _Locked(self.path,{}) as s:
             failures=int(s.data.get('failures',0))+1 if s.data.get('reason')==reason else 1
+            if s.data.get('until',0)>now and reason=='OUTAGE' and s.data.get('reason')!='OUTAGE':
+                return s.data['until']  # an outage never overrides a provider-imposed pause
             if reason=='DAILY_LIMIT':until=next_utc_midnight(now)+30
             elif reason=='RATE_LIMIT':
                 wait=retry_after if retry_after is not None else min(900,20*2**min(failures-1,6))
                 until=now+max(5,min(3600,wait))*(1+.2*self.rng())
             elif reason=='OUTAGE':until=now+min(300,10*2**min(failures-1,5))*(1+.2*self.rng())
             else:until=now+WAITS.get(reason,60)
+            until=max(until,s.data.get('until',0)) if s.data.get('until',0)>now else until
             s.data={'reason':reason,'until':until,'status':status,'failures':failures,'detail':detail[:300],'at':now};s.save()
             return until
-    def open(self):
+    def open(self,since=None):
+        """A success clears only pauses set before that request started (not newer 429s)."""
         with _Locked(self.path,{}) as s:
-            if s.data:s.data={};s.save()
+            if s.data and (since is None or s.data.get('at',0)<=since):s.data={};s.save()
 
 
 @dataclass
@@ -174,11 +183,13 @@ def parse_json_object(text):
     return value
 
 
-def _retry_after(headers):
-    try:
-        v=headers.get('Retry-After') if headers else None
-        return float(v) if v is not None else None
-    except (TypeError,ValueError):return None
+def _retry_after(headers,now=None):
+    v=headers.get('Retry-After') if headers else None
+    if v is None:return None
+    try:return float(v)
+    except (TypeError,ValueError):pass
+    try:return max(0.0,email.utils.parsedate_to_datetime(v).timestamp()-(time.time() if now is None else now))
+    except (TypeError,ValueError,IndexError,OverflowError):return None
 
 
 class Client:
@@ -190,7 +201,7 @@ class Client:
         self.root=pathlib.Path(root);self.state_dir=pathlib.Path(state_dir);self.config=config or {}
         self.clock=clock or (lambda:time.time());self.urlopen=urlopen or (lambda *a,**k:urllib.request.urlopen(*a,**k))
         self.fixed=settings;self.ledger=SpendLedger(self.state_dir/'llm-spend.json');self.gate=Gate(self.state_dir/'llm-gate.json')
-        self.mode_floor={}
+        self.mode_floor={};self.no_reasoning={}
     def settings(self):
         # Re-read every call: inserting or replacing the token needs no restart.
         return self.fixed or load_settings(self.root,self.config)
@@ -208,16 +219,19 @@ class Client:
         self.gate.check(now)
         self.ledger.check(s.daily_usd,now)
         start=self.mode_floor.get(s.model,0) if schema else 1
-        last=None
-        for index in range(start,len(self.MODES)):
+        last=None;index=start
+        while index<len(self.MODES):
             mode=self.MODES[index]
             try:
                 reply=self._post(s,messages,mode,schema,schema_name,max_tokens,timeout,temperature)
                 if schema and index!=start:self.mode_floor[s.model]=index
-                self.gate.open();return reply
+                self.gate.open(since=now);return reply
             except _Rejected as e:
                 last=e
-                continue
+                # Models with mandatory reasoning refuse the toggle, not the format.
+                if s.openrouter and 'reasoning' in e.detail.lower() and not self.no_reasoning.get(s.model):
+                    self.no_reasoning[s.model]=True;continue
+                index+=1
         until=self.gate.close('BAD_REQUEST',self.clock(),last.status if last else None,detail=last.detail if last else '')
         raise LLMUnavailable('BAD_REQUEST',until,last.status if last else None,last.detail if last else '')
     def _post(self,s,messages,mode,schema,schema_name,max_tokens,timeout,temperature):
@@ -226,7 +240,7 @@ class Client:
         elif mode=='json_object':body['response_format']={'type':'json_object'}
         if s.openrouter:
             body['usage']={'include':True}
-            if mode!='plain':body['reasoning']={'enabled':False}
+            if mode!='plain' and not self.no_reasoning.get(s.model):body['reasoning']={'enabled':False}
         req=urllib.request.Request(s.base_url+'/chat/completions',data=json.dumps(body,ensure_ascii=False).encode('utf-8'),method='POST',
                                    headers={'Authorization':'Bearer '+s.key,'Content-Type':'application/json','X-Title':'RO residents','HTTP-Referer':'https://github.com/bbutterm/live_ro'})
         started=time.monotonic()
@@ -235,19 +249,27 @@ class Client:
         except urllib.error.HTTPError as e:
             try:detail=e.read(2000).decode('utf-8','replace')
             except Exception:detail=''
-            self._http_failure(e.code,detail,_retry_after(e.headers),mode)
-        except (urllib.error.URLError,TimeoutError,OSError) as e:
+            self._http_failure(e.code,detail,_retry_after(e.headers,self.clock()),mode)
+        except UnicodeEncodeError:
+            raise LLMUnavailable('AUTH',self.clock()+WAITS['AUTH'],detail='токен содержит не-ASCII символы') from None
+        except (urllib.error.URLError,TimeoutError,OSError,http.client.HTTPException) as e:
+            timed_out=isinstance(e,(TimeoutError,socket.timeout)) or isinstance(getattr(e,'reason',None),(TimeoutError,socket.timeout))
+            if timed_out:
+                # The provider may still bill an abandoned request: count its prompt conservatively.
+                self.ledger.add(Decimal(len(req.data)//3)*s.price_in/Decimal(1_000_000),self.clock(),len(req.data)//3,0)
+                if timeout<15:raise LLMUnavailable('TIMEOUT',self.clock()+5,detail='не дождались ответа за '+str(round(timeout,1))+' с') from None
             until=self.gate.close('OUTAGE',self.clock(),detail=type(e).__name__+': '+str(e)[:200])
             raise LLMUnavailable('OUTAGE',until,detail=type(e).__name__) from None
         try:payload=json.loads(raw)
-        except ValueError:
-            until=self.gate.close('OUTAGE',self.clock(),detail='non-JSON HTTP body')
-            raise LLMUnavailable('OUTAGE',until,detail='non-JSON HTTP body') from None
-        if isinstance(payload,dict) and payload.get('error') and not payload.get('choices'):
+        except ValueError:payload=None
+        if not isinstance(payload,dict):
+            until=self.gate.close('OUTAGE',self.clock(),detail='HTTP body is not a JSON object')
+            raise LLMUnavailable('OUTAGE',until,detail='HTTP body is not a JSON object') from None
+        if payload.get('error') and not payload.get('choices'):
             err=payload['error'] if isinstance(payload['error'],dict) else {'message':str(payload['error'])}
             code=err.get('code');code=int(code) if isinstance(code,int) or (isinstance(code,str) and code.isdigit()) else 502
             self._http_failure(code,json.dumps(err,ensure_ascii=False)[:2000],None,mode)
-        usage=payload.get('usage') or {}
+        usage=payload.get('usage') if isinstance(payload.get('usage'),dict) else {}
         tin,tout=int(usage.get('prompt_tokens') or 0),int(usage.get('completion_tokens') or 0)
         cost=usage.get('cost')
         cost=_decimal(cost,'0') if cost is not None else (tin*s.price_in+tout*s.price_out)/Decimal(1_000_000)

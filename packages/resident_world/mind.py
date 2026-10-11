@@ -6,13 +6,12 @@ numbers, stray keys, nested or flat args) and repaired once with the exact
 reason. Provider limits/outages only pause the brain until the shared gate
 reopens (packages.resident_world.llm); native habits keep the body alive meanwhile.
 """
-import contextlib,datetime,fcntl,json,logging,re,sqlite3,time,uuid
+import contextlib,datetime,fcntl,json,logging,math,random,re,sqlite3,time,uuid
 from logging.handlers import RotatingFileHandler
-from packages.resident_world.skills import validate,MENU,has_sellable,place_phrase
+from packages.resident_world.skills import validate,MENU,PROMISE,has_sellable,place_phrase
 from packages.resident_world.supervisor import ROOT,STATE,atomic,regeneration_blocked
 from packages.resident_world.llm import Client,LLMUnavailable,BadModelOutput,parse_json_object
 
-PROMISE=re.compile(r'иду|пойду|пойдём|пойдем|встретимся|следую',re.I)
 MOVING={'follow','walk_to','meet','hunt','town_service'}
 CHAT_ACTIONS=('say','whisper','follow','walk_to','meet')
 ALIASES={'walk':'walk_to','go':'walk_to','go_to':'walk_to','goto':'walk_to','move':'walk_to','travel':'walk_to','travel_to':'walk_to',
@@ -30,7 +29,10 @@ DECISION_SCHEMA={'type':'object','additionalProperties':False,
         'text':_nullable('string'),'to':_nullable('string'),'place':_nullable('string'),'map':_nullable('string'),
         'minutes':_nullable('integer'),'until_hp':_nullable('integer'),'player':_nullable('string'),'resident':_nullable('string'),
         'say':_nullable('string'),'remember':_nullable('string'),'plan':_nullable('string'),'reason':{'type':'string'}}}
-CHAT_SCHEMA={**DECISION_SCHEMA,'properties':{**DECISION_SCHEMA['properties'],'action':{'type':'string','enum':list(CHAT_ACTIONS)}}}
+CHAT_KEYS=('action','text','to','place','minutes','player','resident','say','reason')
+CHAT_SCHEMA={'type':'object','additionalProperties':False,'required':list(CHAT_KEYS),
+    'properties':{k:({'type':'string','enum':list(CHAT_ACTIONS)} if k=='action' else DECISION_SCHEMA['properties'][k]) for k in CHAT_KEYS}}
+INTENT_MAX_AGE=120
 VOTE_SCHEMA={'type':'object','additionalProperties':False,'required':['choice','place','reason'],
     'properties':{'choice':{'type':'string','enum':['accept','decline','counter']},'place':{'type':'string'},'reason':{'type':'string'}}}
 
@@ -70,7 +72,7 @@ def hunt_blocked(t):
     return None
 
 
-def availability(c,s):
+def availability(c,s,known=()):
     """What the body can really do now, with the reason in plain Russian."""
     t=s.get('telemetry') or {};can={}
     weight=_pct(t.get('weight',0),t.get('weight_max',0)) or 0;hp=_pct(t.get('hp',0),t.get('hp_max',0))
@@ -83,7 +85,8 @@ def availability(c,s):
     else:can['town_service']='бесполезно: продавать нечего и зелий хватает'
     visible=[p['name'] for p in t.get('nearby_players',[])][:8]
     can['follow']='да: '+', '.join(visible) if visible else 'нельзя: рядом никого'
-    can['whisper']='да: любому по имени'
+    names=sorted(set(visible+[r['name'] for r in c['residents']]+list(known)))
+    can['whisper']='да: '+', '.join(names[:10]) if names else 'нельзя: некому'
     can['say']='да' if visible else 'можно, но рядом никто не услышит'
     for a in ('walk_to','meet','idle'):can[a]='да'
     if t.get('dead'):can={a:'нельзя: ты погиб, тело воскрешается само' for a in MENU}
@@ -102,9 +105,10 @@ def clean_text(value,limit):
 
 def _as_int(value):
     if isinstance(value,bool):return None
+    if isinstance(value,float) and not math.isfinite(value):return None
     if isinstance(value,(int,float)):return int(round(value))
     if isinstance(value,str):
-        m=re.search(r'-?\d+(?:[.,]\d+)?',value)
+        m=re.search(r'-?\d{1,6}(?:[.,]\d+)?',value)
         if m:return int(round(float(m.group().replace(',','.'))))
     return None
 
@@ -117,7 +121,7 @@ def _match(value,options):
     return None
 
 
-def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None):
+def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None,known=()):
     """Turn a model answer into one validated menu goal; ValueError explains why not."""
     if not isinstance(obj,dict):raise BadModelOutput('JSON_NOT_OBJECT')
     raw=obj.get('action')
@@ -135,7 +139,10 @@ def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None):
         args['text']=clean_text(given.get('text') or obj.get('say') or '',80)
         if action=='whisper':
             to=given.get('to') or given.get('player') or (event or {}).get('name')
-            args['to']=_match(to,nearby+[r['name'] for r in c['residents']]+([event['name']] if event else [])) or clean_text(to,24)
+            allowed=nearby+[r['name'] for r in c['residents']]+list(known)+([event['name']] if event else [])
+            args['to']=_match(to,allowed)
+            # Not a tool to message arbitrary players across the world: only who is near or talked to us.
+            if not args['to']:raise ValueError('TARGET_NOT_VISIBLE')
     elif action=='walk_to':args['place']=_match(given.get('place'),c['places']) or given.get('place')
     elif action=='meet':
         args['resident']=_match(given.get('resident') or given.get('player'),[r['name'] for r in c['residents']]) or given.get('resident')
@@ -257,11 +264,9 @@ class Mind:
         except (OSError,ValueError):self.history=[]
         self.client=client or Client(ROOT,STATE,c)
         self.persona=r.get('persona') or self._persona()
-        self.errors=0;self.next_call=0;self.unavailable_until=0;self.chat_next=0
-        pause=d/'llm-pause.json'
-        if pause.exists():
-            try:self.next_call=self.unavailable_until=json.loads(pause.read_text()).get('until',0)
-            except (OSError,ValueError):pass
+        # llm-pause.json is diagnostics only: the shared gate and spend ledger are checked
+        # locally on every call (an old file must not mute the brain until UTC midnight).
+        self.errors=0;self.next_call=0;self.unavailable_until=0;self.chat_next=0;self.chat_calls={}
     def _persona(self):
         try:
             import yaml
@@ -281,14 +286,17 @@ class Mind:
         record('MODEL_CALL',resident=self.r['name'],purpose=purpose,mode=reply.mode,cost_usd=str(reply.cost),tokens_in=reply.tokens_in,tokens_out=reply.tokens_out,seconds=round(reply.seconds,2))
         return reply.content
     def _unavailable(self,error,purpose):
-        until=max(error.until,time.time()+5)
+        now=time.time();until=max(error.until,now+5)
+        if error.reason in ('DAILY_LIMIT','NO_TOKEN'):until=min(until,now+300)  # re-read .env/limit, no network
+        until+=random.uniform(0,min(30,.2*(until-now)))  # brains and chats do not retry in one volley
         atomic(self.d/'llm-pause.json',{'until':until,'error':error.reason,'status':error.status,'detail':error.detail[:200]})
         record('MODEL_UNAVAILABLE',resident=self.r['name'],purpose=purpose,reason=error.reason,status=error.status,detail=error.detail[:200],resume_at=until)
         return until
     def waiting(self,now=None):
-        """True while the brain is healthy but deliberately pausing between thoughts."""
+        """True between thoughts, and during a short provider pause (≤60 s): the brain waits
+        instead of handing the body to a minutes-long native habit."""
         now=time.time() if now is None else now
-        return now<self.next_call and now>=self.unavailable_until
+        return now<self.next_call and (now>=self.unavailable_until or self.unavailable_until-now<=float(self.llm.get('short_pause_seconds',60)))
     def gap(self,now,decision):
         base=float(self.llm.get('min_decision_seconds',20))
         if decision['action'] in ('say','whisper','idle'):base=max(base,float(self.llm.get('min_speech_seconds',45)))
@@ -312,6 +320,8 @@ class Mind:
             if not entries or entries[-1].get('text')!=notes['remember']:
                 entries=(entries+[{'at':now,'text':notes['remember']}])[-40:];atomic(self.d/'diary.json',entries)
         if notes.get('plan'):atomic(self.d/'plan.json',{'plan':notes['plan'],'at':now})
+    def known(self):
+        return {h['кто'] for h in self.heard() if isinstance(h.get('кто'),str)}
     def heard(self,limit=6):
         chat=STATE/'chat.sqlite'
         if not chat.exists():return []
@@ -365,7 +375,7 @@ class Mind:
                 'я':me,'рядом':around,'факты_с_сервера':facts,'сегодня':today,'услышал':self.heard(),
                 'мой_план':self.plan(),'мой_дневник':[x['text'] for x in self.diary()[-10:]],
                 'последние_дела':[{'дело':h['action'],'итог':outcome_ru(h['outcome']),'когда':ago(now-h.get('at',now)),**({'зачем':h['reason']} if h.get('reason') else {})} for h in self.history[-8:]],
-                'can_now':availability(self.c,s)}
+                'can_now':availability(self.c,s,self.known())}
     def system_prompt(self):
         places='; '.join(f'{k} — {place_phrase(self.c,k)}' for k in self.c['places'])
         others=', '.join(r['name'] for r in self.c['residents'] if r['name']!=self.r['name']) or 'нет'
@@ -396,6 +406,8 @@ class Mind:
             if task.get('id')==proposal['id']:
                 if not task.get('ended'):task.update(outcome='failed(INTERRUPTED)',ended=time.time())
                 self.finished(task)
+            elif time.time()-proposal.get('at',0)>INTENT_MAX_AGE:
+                self.path.unlink(missing_ok=True);record('STALE_MODEL_INTENT',resident=self.r['name'],reason='AGE')
             else:
                 try:return dict(proposal,decision=validate_decision(proposal['decision'],self.c,s))
                 except ValueError:self.path.unlink();record('STALE_MODEL_INTENT',resident=self.r['name'])
@@ -408,12 +420,14 @@ class Mind:
         raw=''
         try:
             raw=self._complete(messages,timeout=float(self.llm.get('timeout_seconds',25)),schema=DECISION_SCHEMA,purpose='decide',max_tokens=600)
-            try:decision,notes=normalize_decision(parse_json_object(raw),self.c,s)
+            known=self.known()
+            try:decision,notes=normalize_decision(parse_json_object(raw),self.c,s,known=known)
             except (BadModelOutput,ValueError) as error:
                 record('MODEL_REPAIR',resident=self.r['name'],error=str(error),raw=raw[:600])
-                messages+=[{'role':'assistant','content':raw[:2000]},{'role':'user','content':'Так нельзя: '+explain(error)+'. Ответь заново одним JSON-объектом, выбери действие из can_now с пометкой «да».'}]
+                if raw.strip():messages.append({'role':'assistant','content':raw[:2000]})
+                messages.append({'role':'user','content':'Так нельзя: '+explain(error)+'. Ответь заново одним JSON-объектом, выбери действие из can_now с пометкой «да».'})
                 raw=self._complete(messages,timeout=float(self.llm.get('timeout_seconds',25)),schema=DECISION_SCHEMA,purpose='decide',max_tokens=600)
-                decision,notes=normalize_decision(parse_json_object(raw),self.c,s)
+                decision,notes=normalize_decision(parse_json_object(raw),self.c,s,known=known)
         except LLMUnavailable as error:
             self.next_call=self.unavailable_until=self._unavailable(error,'decide');return None
         except (BadModelOutput,ValueError,KeyError,TypeError) as error:
@@ -426,6 +440,11 @@ class Mind:
         atomic(self.path,proposal)
         record('MODEL_DECISION',resident=self.r['name'],decision_id=proposal['id'],decision=decision,thought=notes.get('thought',''),plan=notes.get('plan',''),remember=notes.get('remember',''))
         return proposal
+    def note(self,action,outcome,reason,task_id=''):
+        """An outcome the brain did not choose itself (a goal agreed in conversation)."""
+        try:self.history=json.loads(self.history_path.read_text())
+        except (OSError,ValueError):pass
+        self.history=(self.history+[{'action':action,'outcome':outcome,'at':time.time(),'reason':reason,'task_id':task_id}])[-20:];atomic(self.history_path,self.history)
     def finished(self,task):
         try:proposal=json.loads(self.path.read_text()) if self.path.exists() else {}
         except (OSError,ValueError):proposal={}
@@ -437,7 +456,18 @@ class Mind:
     def respond(self,event,s,default):
         from .chat import validate_reply
         now=time.time()
-        if now<self.chat_next:return default
+        remaining=float(event.get('ts',now))+6.5-now
+        if now<self.chat_next or remaining<2:return default  # too late for a model: the quick default still makes it
+        sender=str(event.get('name',''))
+        calls=self.__dict__.setdefault('chat_calls',{});recent=[t for t in calls.get(sender,[]) if now-t<120]
+        if len(recent)>=int(self.llm.get('chat_calls_per_sender_2min',3)):return default  # one chatty player cannot burn the day
+        try:
+            spent,limit,_=self.client.budget(now)
+            if limit>0 and float(spent/limit)>max(.3,1.5*((now%86400)/86400)):return default  # keep money for living
+        except Exception:pass
+        calls[sender]=recent+[now]
+        try:self.history=json.loads(self.history_path.read_text())
+        except (OSError,ValueError,AttributeError):pass
         from .memory import read_memory,summarize
         cached=read_memory(self.d)
         context=json.loads(compact_state(self.r,s,self.d,self.history,memory=summarize(cached) if cached.get('at') else '',limit=3000))
@@ -448,9 +478,8 @@ class Mind:
                 'action: say(text) — ответить вслух; whisper(to,text) — ответить шёпотом (на шёпот отвечай шёпотом); follow(player,minutes) — пойти за собеседником, если он рядом и просит; '
                 'walk_to(place) — пойти в место; meet(resident,place) — встретиться с жителем. Для follow/walk_to/meet обязательно добавь say с ответом. '
                 'Места: '+', '.join(f'{k} ({place_phrase(self.c,k)})' for k in self.c['places'])+'. Неиспользуемые поля — null. Ответ — один JSON-объект.')
-        remaining=float(event.get('ts',now))+6.5-now
         try:
-            raw=self._complete([{'role':'system','content':prompt},{'role':'user','content':json.dumps(context,ensure_ascii=False)}],timeout=min(8.0,max(2.0,remaining)),schema=CHAT_SCHEMA,purpose='chat',max_tokens=300)
+            raw=self._complete([{'role':'system','content':prompt},{'role':'user','content':json.dumps(context,ensure_ascii=False)}],timeout=min(8.0,remaining),schema=CHAT_SCHEMA,purpose='chat',max_tokens=200)
             decision,_=normalize_decision(parse_json_object(raw),self.c,s,allowed=CHAT_ACTIONS,event=event)
             if decision['action'] not in ('say','whisper') and not decision.get('say'):decision['say']=clean_text(default.get('say') or default.get('args',{}).get('text') or 'Хорошо.',80)
             return validate_reply(decision,event,self.c,s)
@@ -460,11 +489,7 @@ class Mind:
             self.chat_next=now+5;record('CHAT_MODEL_FALLBACK',resident=self.r['name'],error=type(error).__name__+': '+str(error)[:200]);return default
     def negotiate(self,offer,s,allow_counter):
         from .meeting import validate_vote
-        pause=self.d/'llm-pause.json'
-        try:until=json.loads(pause.read_text()).get('until',0) if pause.exists() else 0
-        except (OSError,ValueError):until=0
-        # meeting.decide builds a fresh Mind per vote: next_call is the persisted pause there.
-        if time.time()<max(self.next_call,self.unavailable_until,until):return None
+        if time.time()<max(self.next_call,self.unavailable_until):return None
         if (self.d/'CHAT_PENDING').exists():return None
         chat_goal=self.d/'chat-goal.json'
         if chat_goal.exists() and json.loads(chat_goal.read_text()).get('id')!=offer.get('meeting_id'):return None
@@ -475,7 +500,8 @@ class Mind:
         try:
             vote=parse_json_object(self._complete([{'role':'system','content':prompt},{'role':'user','content':context}],timeout=20,schema=VOTE_SCHEMA,purpose='vote',max_tokens=200))
             if isinstance(vote.get('choice'),str):vote['choice']=vote['choice'].strip().lower()
-            if vote.get('choice') in ('accept','decline') and not vote.get('place'):vote['place']=offer['place']
+            if vote.get('choice') in ('accept','decline'):vote['place']=offer['place']
+            elif vote.get('choice')=='counter':vote['place']=_match(vote.get('place'),self.c['places']) or vote.get('place')
             vote={k:vote.get(k) for k in ('choice','place','reason')}
             if isinstance(vote['reason'],str):vote['reason']=clean_text(vote['reason'],200) or 'Решил сам'
             decision=validate_vote(vote,self.c,offer['place'],allow_counter)
