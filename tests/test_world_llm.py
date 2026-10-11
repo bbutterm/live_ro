@@ -238,6 +238,9 @@ class ClientTests(unittest.TestCase):
         self.assertGreater(g2.close('RATE_LIMIT',110,429,since=99),110)
         with self.assertRaises(LLMUnavailable):g2.check(110.01)
         self.assertEqual(g2.state()['failures'],1)
+        # That late duplicate does not move the burst start: a request sent after the pause escalates.
+        g3=Gate(self.dir/'burst4.json',rng=lambda:0);g3.close('RATE_LIMIT',1,429,since=0);g3.close('RATE_LIMIT',23.5,429,since=.5)
+        self.assertGreaterEqual(g3.close('RATE_LIMIT',24,429,since=22.5)-24,40);self.assertEqual(g3.state()['failures'],2)
     def test_lenient_json_extraction(self):
         from packages.resident_world.llm import parse_json_object,BadModelOutput
         self.assertEqual(parse_json_object('```json\n{"a": 1}\n```'),{'a':1})

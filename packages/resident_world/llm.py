@@ -155,7 +155,9 @@ class Gate:
         closed belong to the same burst and do not count as a repetition."""
         with _Locked(self.path,{}) as s:
             same=s.data.get('reason')==reason
-            burst=same and since is not None and s.data.get('at',0)>=since
+            # A burst is measured from when it began: a late duplicate must not move that mark.
+            anchor=s.data.get('burst_at',s.data.get('at',0))
+            burst=same and since is not None and anchor>=since
             # A burst keeps its failure count (no escalation) but its own Retry-After still counts.
             failures=int(s.data.get('failures',0))+(0 if burst else 1) if same else 1
             if s.data.get('until',0)>now and reason=='OUTAGE' and s.data.get('reason')!='OUTAGE':
@@ -168,7 +170,7 @@ class Gate:
             elif reason=='OUTAGE':until=now+min(300,10*2**min(failures-1,5))*(1+.2*self.rng())
             else:until=now+WAITS.get(reason,60)
             until=max(until,s.data.get('until',0)) if s.data.get('until',0)>now else until
-            s.data={'reason':reason,'until':until,'status':status,'failures':failures,'detail':detail[:300],'at':now};s.save()
+            s.data={'reason':reason,'until':until,'status':status,'failures':failures,'detail':detail[:300],'at':now,'burst_at':anchor if burst else now};s.save()
             return until
     def open(self,since=None):
         """A success clears only pauses set before that request started (not newer 429s)."""
