@@ -44,7 +44,7 @@ def validate_decision(d,c,s):
     phrase=d.get('say','')
     if not isinstance(phrase,str):raise ValueError('INVALID_SAY')
     if phrase:
-        if len(phrase)>80 or not re.search('[А-Яа-яЁё]',phrase) or phrase.lstrip().startswith(('@','/','#')) or re.search(r'[\x00-\x1f]',phrase):raise ValueError('INVALID_SAY')
+        if len(phrase)>80 or not re.search('[А-Яа-яЁё]',phrase) or phrase.lstrip().startswith(('@','/','#')) or re.search(r'[\x00-\x1f]|;;|\\',phrase):raise ValueError('INVALID_SAY')
         if PROMISE.search(phrase) and d['action'] not in MOVING:raise ValueError('PROMISE_WITHOUT_ACTION')
     t=s.get('telemetry') or {}
     if t.get('dead'):raise ValueError('DEAD')
@@ -85,7 +85,8 @@ def availability(c,s,known=()):
     else:can['town_service']='бесполезно: продавать нечего и зелий хватает'
     visible=[p['name'] for p in t.get('nearby_players',[])][:8]
     can['follow']='да: '+', '.join(visible) if visible else 'нельзя: рядом никого'
-    names=sorted(set(visible+[r['name'] for r in c['residents']]+list(known)))
+    me=s.get('_me')
+    names=sorted(set(visible+[r['name'] for r in c['residents'] if r.get('enabled',True)]+list(known))-{me})
     can['whisper']='да: '+', '.join(names[:10]) if names else 'нельзя: некому'
     can['say']='да' if visible else 'можно, но рядом никто не услышит'
     for a in ('walk_to','meet','idle'):can[a]='да'
@@ -97,6 +98,7 @@ def availability(c,s,known=()):
 def clean_text(value,limit):
     if not isinstance(value,str):return ''
     text=' '.join(re.sub(r'[\x00-\x1f\x7f]',' ',value).split()).strip('"«» ')
+    text=re.sub(r';{2,}',';',text.replace('\\','/'))  # never OpenKore message/console separators
     if len(text)>limit:
         cut=text[:limit+1].rsplit(' ',1)[0]
         text=(cut if len(cut)>=limit//2 else text[:limit]).rstrip(' ,;:-')
@@ -139,10 +141,10 @@ def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None,known=()):
         args['text']=clean_text(given.get('text') or obj.get('say') or '',80)
         if action=='whisper':
             to=given.get('to') or given.get('player') or (event or {}).get('name')
-            allowed=nearby+[r['name'] for r in c['residents']]+list(known)+([event['name']] if event else [])
+            allowed=nearby+[r['name'] for r in c['residents'] if r.get('enabled',True)]+list(known)+([event['name']] if event else [])
             args['to']=_match(to,allowed)
             # Not a tool to message arbitrary players across the world: only who is near or talked to us.
-            if not args['to']:raise ValueError('TARGET_NOT_VISIBLE')
+            if not args['to']:raise ValueError('WHISPER_TARGET')
     elif action=='walk_to':args['place']=_match(given.get('place'),c['places']) or given.get('place')
     elif action=='meet':
         args['resident']=_match(given.get('resident') or given.get('player'),[r['name'] for r in c['residents']]) or given.get('resident')
@@ -171,6 +173,7 @@ def explain(error):
     code=str(error)
     hints={'INVALID_TEXT':'text должен быть по-русски, 1–80 знаков, без команд','UNKNOWN_PLACE':'place только из списка мест',
            'INVALID_NAME':'имя игрока как в списке «рядом»','TARGET_NOT_VISIBLE':'follow только за тем, кто сейчас рядом',
+           'WHISPER_TARGET':'шептать можно только тем, кто перечислен в can_now.whisper',
            'INSUFFICIENT_HUNT_RESOURCES':'охота сейчас нельзя: смотри can_now','OVERWEIGHT_HUNT':'перевес: сначала town_service',
            'OVERWEIGHT':'отдых не восстановит HP при весе ≥50%','UNKNOWN_RESIDENT':'meet только с жителями из списка',
            'PROMISE_REQUIRES_ACTION':'не обещай идти в say — выбери движение','INVALID_ACTION_ARGS':'аргументы не подходят к действию'}
@@ -257,7 +260,9 @@ def ago(seconds):
 
 
 class Mind:
-    next_call=unavailable_until=chat_next=errors=0
+    next_call=unavailable_until=chat_next=errors=streak=pause_len=0
+    pause_reason=''
+    LONG_PAUSES=('NO_TOKEN','AUTH','NO_CREDITS','DAILY_LIMIT','BAD_REQUEST','ERROR')
     def __init__(self,r,d,c,client=None):
         self.r,self.d,self.c=r,d,c;self.path=d/'model-intent.json';self.history_path=d/'goal-history.json'
         try:self.history=json.loads(self.history_path.read_text())
@@ -275,20 +280,21 @@ class Mind:
         except Exception:return 'Житель мира Ragnarok.'
     @property
     def llm(self):return self.c.get('llm',{})
-    def _complete(self,messages,timeout=20,schema=None,purpose='decide',max_tokens=400):
+    def _complete(self,messages,timeout=20,schema=None,purpose='decide',max_tokens=400,shared_pause=True,deadline=None):
         fault=STATE/'llm-fault.json'
         if fault.exists():
             try:test=json.loads(fault.read_text())
             except (OSError,ValueError):test={}
             if test.get('resident')==self.r['name'] and test.get('expires',0)>time.time() and test.get('kind')=='429':
                 raise LLMUnavailable('RATE_LIMIT',time.time()+30,429,'scoped acceptance injection')
-        reply=self.client.complete(messages,schema=schema,schema_name=purpose,max_tokens=max_tokens,timeout=timeout,temperature=float(self.llm.get('temperature',.8)))
+        reply=self.client.complete(messages,schema=schema,schema_name=purpose,max_tokens=max_tokens,timeout=timeout,temperature=float(self.llm.get('temperature',.8)),shared_pause=shared_pause,deadline=deadline)
         record('MODEL_CALL',resident=self.r['name'],purpose=purpose,mode=reply.mode,cost_usd=str(reply.cost),tokens_in=reply.tokens_in,tokens_out=reply.tokens_out,seconds=round(reply.seconds,2))
         return reply.content
     def _unavailable(self,error,purpose):
         now=time.time();until=max(error.until,now+5)
         if error.reason in ('DAILY_LIMIT','NO_TOKEN'):until=min(until,now+300)  # re-read .env/limit, no network
         until+=random.uniform(0,min(30,.2*(until-now)))  # brains and chats do not retry in one volley
+        self.pause_reason,self.pause_len,self.streak=error.reason,until-now,self.streak+1
         atomic(self.d/'llm-pause.json',{'until':until,'error':error.reason,'status':error.status,'detail':error.detail[:200]})
         record('MODEL_UNAVAILABLE',resident=self.r['name'],purpose=purpose,reason=error.reason,status=error.status,detail=error.detail[:200],resume_at=until)
         return until
@@ -296,7 +302,11 @@ class Mind:
         """True between thoughts, and during a short provider pause (≤60 s): the brain waits
         instead of handing the body to a minutes-long native habit."""
         now=time.time() if now is None else now
-        return now<self.next_call and (now>=self.unavailable_until or self.unavailable_until-now<=float(self.llm.get('short_pause_seconds',60)))
+        if now>=self.next_call:return False
+        if now>=self.unavailable_until:return True
+        # Only a short, isolated provider hiccup is waited out; a missing token, no money,
+        # a daily limit or a repeating limit hand the body to native habits.
+        return self.pause_reason not in self.LONG_PAUSES and self.pause_len<=float(self.llm.get('short_pause_seconds',60)) and self.streak<=2
     def gap(self,now,decision):
         base=float(self.llm.get('min_decision_seconds',20))
         if decision['action'] in ('say','whisper','idle'):base=max(base,float(self.llm.get('min_speech_seconds',45)))
@@ -375,10 +385,10 @@ class Mind:
                 'я':me,'рядом':around,'факты_с_сервера':facts,'сегодня':today,'услышал':self.heard(),
                 'мой_план':self.plan(),'мой_дневник':[x['text'] for x in self.diary()[-10:]],
                 'последние_дела':[{'дело':h['action'],'итог':outcome_ru(h['outcome']),'когда':ago(now-h.get('at',now)),**({'зачем':h['reason']} if h.get('reason') else {})} for h in self.history[-8:]],
-                'can_now':availability(self.c,s,self.known())}
+                'can_now':availability(self.c,dict(s,_me=self.r['name']),self.known())}
     def system_prompt(self):
         places='; '.join(f'{k} — {place_phrase(self.c,k)}' for k in self.c['places'])
-        others=', '.join(r['name'] for r in self.c['residents'] if r['name']!=self.r['name']) or 'нет'
+        others=', '.join(r['name'] for r in self.c['residents'] if r['name']!=self.r['name'] and r.get('enabled',True)) or 'нет'
         cap=int(self.llm.get('max_hunt_minutes',30))
         return ('Ты — '+self.r['name']+', живой человек в мире Ragnarok Online. Это твоя жизнь, а не задание. '+self.persona+'\n'
             'Каждый ход ты сам думаешь, что делать дальше, как обычный игрок: охотишься, когда нужны опыт и деньги; продаёшь добычу и покупаешь зелья; '
@@ -402,7 +412,11 @@ class Mind:
     # ---- decisions -----------------------------------------------------------------
     def choose(self,s):
         if self.path.exists():
-            proposal=json.loads(self.path.read_text());current=self.d/'manual_task.json';task=json.loads(current.read_text()) if current.exists() else {}
+            try:
+                proposal=json.loads(self.path.read_text());current=self.d/'manual_task.json';task=json.loads(current.read_text()) if current.exists() else {}
+            except (OSError,ValueError):
+                self.path.unlink(missing_ok=True);record('STALE_MODEL_INTENT',resident=self.r['name'],reason='UNREADABLE');proposal=None;task={}
+        if self.path.exists() and proposal:
             if task.get('id')==proposal['id']:
                 if not task.get('ended'):task.update(outcome='failed(INTERRUPTED)',ended=time.time())
                 self.finished(task)
@@ -432,8 +446,9 @@ class Mind:
             self.next_call=self.unavailable_until=self._unavailable(error,'decide');return None
         except (BadModelOutput,ValueError,KeyError,TypeError) as error:
             self.errors+=1;wait=min(300,30*2**min(self.errors-1,3));self.next_call=self.unavailable_until=now+wait
+            self.pause_reason,self.pause_len,self.streak='INVALID',wait,self.streak+1
             record('MODEL_INVALID',resident=self.r['name'],error=str(error),raw=raw[:600],pause_seconds=wait);return None
-        self.errors=0;self.unavailable_until=0
+        self.errors=0;self.unavailable_until=0;self.streak=0;self.pause_reason=''
         (self.d/'llm-pause.json').unlink(missing_ok=True)
         self.remember(notes,now);self.next_call=now+self.gap(now,decision)
         proposal={'id':str(uuid.uuid4()),'at':now,'decision':decision,'thought':notes.get('thought',''),'plan':notes.get('plan','')}
@@ -479,12 +494,13 @@ class Mind:
                 'walk_to(place) — пойти в место; meet(resident,place) — встретиться с жителем. Для follow/walk_to/meet обязательно добавь say с ответом. '
                 'Места: '+', '.join(f'{k} ({place_phrase(self.c,k)})' for k in self.c['places'])+'. Неиспользуемые поля — null. Ответ — один JSON-объект.')
         try:
-            raw=self._complete([{'role':'system','content':prompt},{'role':'user','content':json.dumps(context,ensure_ascii=False)}],timeout=min(8.0,remaining),schema=CHAT_SCHEMA,purpose='chat',max_tokens=200)
+            raw=self._complete([{'role':'system','content':prompt},{'role':'user','content':json.dumps(context,ensure_ascii=False)}],timeout=min(8.0,remaining),schema=CHAT_SCHEMA,purpose='chat',max_tokens=200,shared_pause=False,deadline=float(event.get('ts',now))+6.5)
             decision,_=normalize_decision(parse_json_object(raw),self.c,s,allowed=CHAT_ACTIONS,event=event)
             if decision['action'] not in ('say','whisper') and not decision.get('say'):decision['say']=clean_text(default.get('say') or default.get('args',{}).get('text') or 'Хорошо.',80)
             return validate_reply(decision,event,self.c,s)
         except LLMUnavailable as error:
-            self.chat_next=error.until;record('CHAT_MODEL_UNAVAILABLE',resident=self.r['name'],reason=error.reason,status=error.status);return default
+            self.chat_next=min(error.until,now+300) if error.reason in ('DAILY_LIMIT','NO_TOKEN') else error.until
+            record('CHAT_MODEL_UNAVAILABLE',resident=self.r['name'],reason=error.reason,status=error.status);return default
         except Exception as error:
             self.chat_next=now+5;record('CHAT_MODEL_FALLBACK',resident=self.r['name'],error=type(error).__name__+': '+str(error)[:200]);return default
     def negotiate(self,offer,s,allow_counter):

@@ -49,7 +49,7 @@ class NormalizeTests(unittest.TestCase):
                     {'action':'meet','resident':'Гость','place':'fountain','reason':'x'},{'action':'say','text':'Иду к фонтану','reason':'x'}):
             with self.subTest(bad=bad),self.assertRaises(ValueError):norm(bad)
     def test_whisper_only_to_people_near_known_or_neighbours(self):
-        with self.assertRaisesRegex(ValueError,'TARGET_NOT_VISIBLE'):norm({'action':'whisper','to':'RandomStranger','text':'Привет!','reason':'x'})
+        with self.assertRaisesRegex(ValueError,'WHISPER_TARGET'):norm({'action':'whisper','to':'RandomStranger','text':'Привет!','reason':'x'})
         self.assertEqual(norm({'action':'whisper','to':'mira','text':'Привет!','reason':'x'})[0]['args']['to'],'Mira')
         self.assertEqual(norm({'action':'whisper','to':'Guest','text':'Спасибо!','reason':'x'},known={'Guest'})[0]['args']['to'],'Guest')
     def test_honesty_promises_and_console_separators(self):
@@ -62,6 +62,17 @@ class NormalizeTests(unittest.TestCase):
             with self.subTest(bad=bad),self.assertRaisesRegex(ValueError,'INVALID_TEXT'):speech(bad)
         self.assertNotIn('say',norm({'action':'idle','minutes':2,'say':'Подойду позже','reason':'x'})[0])
         self.assertEqual(norm({'action':'rest','until_hp':90,'say':'Приятно отдохнуть','reason':'x'})[0]['say'],'Приятно отдохнуть')
+    def test_more_promise_forms_and_sanitised_preludes(self):
+        from packages.resident_world.skills import speech
+        for promise in ('Пойдёмте к фонтану!','Идём к фонтану','Идёмте','Уже в пути','Выхожу к тебе'):
+            with self.subTest(promise=promise),self.assertRaisesRegex(ValueError,'PROMISE'):speech(promise)
+        d,_=norm({'action':'walk_to','place':'market','say':'Ура \\o/ к рядам;;вперёд','reason':'x'})
+        self.assertEqual(d['say'],'Ура /o/ к рядам;вперёд')
+        from packages.resident_world.mind import validate_decision
+        with self.assertRaisesRegex(ValueError,'INVALID_SAY'):validate_decision({'action':'walk_to','args':{'place':'market'},'say':'Ура;;да','reason':'x'},C,HEALTHY)
+    def test_whisper_repair_hint_names_the_rule(self):
+        from packages.resident_world.mind import explain
+        self.assertIn('can_now.whisper',explain(ValueError('WHISPER_TARGET')))
     def test_absurd_numbers_do_not_crash(self):
         self.assertEqual(norm({'action':'hunt','minutes':float('inf'),'reason':'x'})[0]['args']['minutes'],10)
         self.assertEqual(norm({'action':'idle','minutes':'9'*500,'reason':'x'})[0]['args']['minutes'],10)
@@ -164,6 +175,29 @@ class ChooseTests(unittest.TestCase):
         with patch.object(self.mind_module.time,'time',return_value=1000):
             self.assertEqual(self.m.negotiate({'resident':'ResidentA','place':'fountain','meeting_id':'m1'},HEALTHY,True)['place'],'fountain')
             self.assertEqual(self.m.negotiate({'resident':'ResidentA','place':'fountain','meeting_id':'m2'},HEALTHY,True)['place'],'market')
+    def test_long_or_repeating_pauses_hand_the_body_to_habits(self):
+        from packages.resident_world.llm import LLMUnavailable
+        for reason in ('NO_TOKEN','AUTH','NO_CREDITS','DAILY_LIMIT'):
+            with self.subTest(reason=reason):
+                self.m.next_call=self.m.unavailable_until=0;self.m.streak=0
+                self.reply(LLMUnavailable(reason,1030))
+                with patch.object(self.mind_module.time,'time',return_value=1000):self.assertIsNone(self.m.choose(HEALTHY))
+                self.assertFalse(self.m.waiting(1001))
+        self.m.next_call=self.m.unavailable_until=0;self.m.streak=0
+        for i in range(3):
+            self.reply(LLMUnavailable('RATE_LIMIT',2000+i*40+30,429))
+            with patch.object(self.mind_module.time,'time',return_value=2000+i*40):self.assertIsNone(self.m.choose(HEALTHY))
+            self.assertEqual(self.m.waiting(2001+i*40),i<2)  # the third 429 in a row: stop standing still
+    def test_chat_rechecks_a_raised_daily_limit_within_minutes(self):
+        from packages.resident_world.llm import LLMUnavailable
+        self.client.complete.side_effect=LLMUnavailable('DAILY_LIMIT',86400+30)
+        default={'action':'say','args':{'text':'Слышу.'},'reason':'x'}
+        with patch.object(self.mind_module.time,'time',return_value=1000):self.m.respond({'name':'Tester','type':'O','text':'эй','ts':1000},HEALTHY,default)
+        self.assertLessEqual(self.m.chat_next,1300)
+    def test_unreadable_intent_does_not_wedge_the_brain(self):
+        (self.d/'model-intent.json').write_text('{broken')
+        self.reply({'action':'idle','minutes':2,'reason':'Осмотреться'})
+        with patch.object(self.mind_module.time,'time',return_value=1000):self.assertEqual(self.m.choose(HEALTHY)['decision']['action'],'idle')
     def test_budget_is_paced_over_the_day(self):
         self.client.budget.return_value=(1,2,100)  # half the money spent by 03:00 UTC
         self.assertGreater(self.m.gap(3*3600,{'action':'hunt'}),20*3)

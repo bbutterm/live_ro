@@ -21,7 +21,7 @@ def number(value,low,high):
     return value
 
 # A spoken promise to move must come with the movement (honesty rule); whole words only.
-PROMISE=re.compile(r'\b(?:иду|пойду|пойд[её]м|встретимся|следую|подойду|приду|прибегу|прибуду|бегу|догоню|скоро буду|буду (?:у|на|возле|через|рядом))\b',re.I)
+PROMISE=re.compile(r'\b(?:иду|ид[её]м(?:те)?|пойду|пойд[её]м(?:те)?|встретимся|следую|подойду|приду|прибегу|прибуду|бегу|догоню|выхожу|направляюсь|скоро буду|уже в пути|буду (?:у|на|возле|через|рядом))\b',re.I)
 
 def speech(text):
     # ';;' and '\\' are OpenKore console/message separators: never in speech.

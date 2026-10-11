@@ -51,8 +51,15 @@ def execute(args,c,sock,key,task,d):
         atomic(d/'manual_task.json',task)
         return result
     if busy():return 'failed(CHAT_INTERRUPT)'
-    s=skills.request(other_sock,{'op':'status'})
-    if not target.get('enabled',True) or s.get('age') is None or s['age']>4 or (s.get('telemetry') or {}).get('dead'):return 'failed(TARGET_UNAVAILABLE)'
+    if not target.get('enabled',True):return 'failed(TARGET_UNAVAILABLE)'
+    try:s=skills.request(other_sock,{'op':'status'})
+    except (OSError,RuntimeError,ValueError):return 'failed(TARGET_UNAVAILABLE)'
+    try:peer_task=json.loads((other_d/'manual_task.json').read_text())
+    except (OSError,ValueError):peer_task={}
+    # The peer's own goal (e.g. a 15-minute hunt) holds its writer past our window: no vote, no false accept.
+    # (A reciprocal meet is resolved by the collision rule below, not here.)
+    if peer_task and peer_task.get('action')!='meet' and not peer_task.get('ended') and peer_task.get('expires',0)>task.get('expires',float('inf'))-5:return 'failed(TARGET_BUSY)'
+    if s.get('age') is None or s['age']>4 or (s.get('telemetry') or {}).get('dead'):return 'failed(TARGET_UNAVAILABLE)'
     if any(a['skill'] in ('buy_potions','sell_loot') for a in s['actions']):return 'failed(TARGET_BUSY)'
     result=speak(sock,d,task,'Предлагаю встречу '+label(args['place'])+'.','proposal',target['name'])
     if result!='done':return result

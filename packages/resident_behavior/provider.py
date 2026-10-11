@@ -89,14 +89,12 @@ class ProviderBudget:
 def from_environment(env_path, state_root='/var/lib/ro-world'):
     """Read credentials locally; never expose them in repr, logs or exceptions."""
     from .llm import openrouter_client
-    values = {}
-    for line in Path(env_path).read_text().splitlines():
-        if '=' in line and not line.lstrip().startswith('#'):
-            key, value = line.split('=', 1)
-            values[key.strip()] = value.strip().strip('\"\'')
-    if values.get('RO_WORLD_LLM_BASE_URL', '').rstrip('/') != BASE_URL or values.get('RO_WORLD_LLM_MODEL') != MODEL:
+    from packages.resident_world.llm import load_settings, LLMUnavailable
+    # Same parser and defaults as the resident_world brain: a token-only .env works for both.
+    try:
+        settings = load_settings(Path(env_path).parent)
+    except LLMUnavailable as error:
+        raise ValueError('missing provider credential') from error
+    if settings.base_url.rstrip('/') != BASE_URL or settings.model != MODEL:
         raise ValueError('unapproved provider/model')
-    key = values.get('RO_WORLD_LLM_API_KEY')
-    if not key:
-        raise ValueError('missing provider credential')
-    return openrouter_client(api_key=key, state_root=state_root)
+    return openrouter_client(api_key=settings.key, state_root=state_root)

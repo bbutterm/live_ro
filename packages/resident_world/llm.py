@@ -52,9 +52,11 @@ def read_env(path):
     for line in lines:
         line=line.strip()
         if not line or line.startswith('#') or '=' not in line:continue
-        k,v=line.split('=',1);k=k.strip()
+        k,v=line.split('=',1);k=k.strip();v=v.strip()
         if k.startswith('export '):k=k[7:].strip()
-        values[k]=v.strip().strip('"\'')
+        if v[:1] in ('"',"'") and v[0] in v[1:]:v=v[1:v.index(v[0],1)]  # "value"  # comment
+        else:v=re.split(r'\s+#',v,maxsplit=1)[0].strip()
+        values[k]=v
     return values
 
 
@@ -71,13 +73,15 @@ def load_settings(root,config=None):
     def get(name,default=None):
         v=os.environ.get(name)
         return v if v not in (None,'') else env.get(name) or default
-    key=next((get(n) for n in KEY_NAMES if get(n)),'')
-    # Pasted from a browser/messenger: drop invisible characters and a trailing "# comment".
-    key=re.sub('[\u200b-\u200f\u2060\ufeff\xa0]','',key).strip()
-    key=key.split()[0] if key.split() else ''
+    def clean(v):
+        # Pasted from a browser/messenger: drop invisible characters and a trailing "# comment".
+        v=re.sub('[\u200b-\u200f\u2060\ufeff\xa0]','',v or '').strip()
+        v=v.split()[0] if v.split() else ''
+        return '' if v.startswith('#') else v
+    key=next((clean(get(n)) for n in KEY_NAMES if clean(get(n))),'')
     if not key or key.lower() in ('changeme','your-token-here','вставь-токен-сюда'):
         raise LLMUnavailable('NO_TOKEN',time.time()+WAITS['NO_TOKEN'],detail='в .env нет RO_WORLD_LLM_API_KEY')
-    if not (key.isascii() and key.isprintable()):
+    if not (key.isascii() and key.isprintable()) or any(ch in key for ch in '"\'#'):
         raise LLMUnavailable('NO_TOKEN',time.time()+WAITS['NO_TOKEN'],detail='в токене лишние символы — вставь только сам ключ')
     daily=get('RO_WORLD_LLM_DAILY_USD',(config or {}).get('daily_llm_usd',2))
     return Settings(key=key,base_url=get('RO_WORLD_LLM_BASE_URL',DEFAULT_BASE_URL).rstrip('/'),model=get('RO_WORLD_LLM_MODEL',DEFAULT_MODEL),
@@ -144,7 +148,8 @@ class Gate:
                 return s.data['until']  # an outage never overrides a provider-imposed pause
             if reason=='DAILY_LIMIT':until=next_utc_midnight(now)+30
             elif reason=='RATE_LIMIT':
-                wait=retry_after if retry_after is not None else min(900,20*2**min(failures-1,6))
+                expo=min(900,20*2**min(failures-1,6))
+                wait=retry_after if retry_after is not None and failures<=1 else max(retry_after or 0,expo)
                 until=now+max(5,min(3600,wait))*(1+.2*self.rng())
             elif reason=='OUTAGE':until=now+min(300,10*2**min(failures-1,5))*(1+.2*self.rng())
             else:until=now+WAITS.get(reason,60)
@@ -210,7 +215,20 @@ class Client:
         try:s=self.settings();limit=s.daily_usd
         except LLMUnavailable:limit=_decimal(self.config.get('daily_llm_usd',2),2)
         spent,calls=self.ledger.today(now);return spent,limit,calls
-    def complete(self,messages,*,schema=None,schema_name='answer',max_tokens=400,timeout=20,temperature=.8):
+    def complete(self,messages,*,schema=None,schema_name='answer',max_tokens=400,timeout=20,temperature=.8,shared_pause=True,deadline=None):
+        """shared_pause=False: a slow answer only fails this caller (a chat reply), it does not
+        pause everybody. deadline (epoch s): give up waiting by then, the request may finish later."""
+        if deadline is None:return self._complete(messages,schema,schema_name,max_tokens,timeout,temperature,shared_pause)
+        import threading
+        box={}
+        def run():
+            try:box['reply']=self._complete(messages,schema,schema_name,max_tokens,timeout,temperature,shared_pause)
+            except BaseException as e:box['error']=e
+        worker=threading.Thread(target=run,daemon=True,name='llm-call');worker.start();worker.join(max(.1,deadline-self.clock()))
+        if worker.is_alive():raise LLMUnavailable('TIMEOUT',self.clock()+5,detail='не успели к сроку ответа')
+        if 'error' in box:raise box['error']
+        return box['reply']
+    def _complete(self,messages,schema,schema_name,max_tokens,timeout,temperature,shared_pause):
         now=self.clock()
         try:s=self.settings()
         except LLMUnavailable as e:
@@ -223,7 +241,7 @@ class Client:
         while index<len(self.MODES):
             mode=self.MODES[index]
             try:
-                reply=self._post(s,messages,mode,schema,schema_name,max_tokens,timeout,temperature)
+                reply=self._post(s,messages,mode,schema,schema_name,max_tokens,timeout,temperature,shared_pause)
                 if schema and index!=start:self.mode_floor[s.model]=index
                 self.gate.open(since=now);return reply
             except _Rejected as e:
@@ -234,7 +252,7 @@ class Client:
                 index+=1
         until=self.gate.close('BAD_REQUEST',self.clock(),last.status if last else None,detail=last.detail if last else '')
         raise LLMUnavailable('BAD_REQUEST',until,last.status if last else None,last.detail if last else '')
-    def _post(self,s,messages,mode,schema,schema_name,max_tokens,timeout,temperature):
+    def _post(self,s,messages,mode,schema,schema_name,max_tokens,timeout,temperature,shared_pause=True):
         body={'model':s.model,'messages':messages,'max_tokens':max_tokens,'temperature':temperature}
         if mode=='json_schema':body['response_format']={'type':'json_schema','json_schema':{'name':schema_name,'strict':True,'schema':schema}}
         elif mode=='json_object':body['response_format']={'type':'json_object'}
@@ -253,11 +271,12 @@ class Client:
         except UnicodeEncodeError:
             raise LLMUnavailable('AUTH',self.clock()+WAITS['AUTH'],detail='токен содержит не-ASCII символы') from None
         except (urllib.error.URLError,TimeoutError,OSError,http.client.HTTPException) as e:
-            timed_out=isinstance(e,(TimeoutError,socket.timeout)) or isinstance(getattr(e,'reason',None),(TimeoutError,socket.timeout))
-            if timed_out:
+            delivered=isinstance(e,(TimeoutError,socket.timeout))  # sent, then no answer in time
+            timed_out=delivered or isinstance(getattr(e,'reason',None),(TimeoutError,socket.timeout))
+            if delivered:
                 # The provider may still bill an abandoned request: count its prompt conservatively.
                 self.ledger.add(Decimal(len(req.data)//3)*s.price_in/Decimal(1_000_000),self.clock(),len(req.data)//3,0)
-                if timeout<15:raise LLMUnavailable('TIMEOUT',self.clock()+5,detail='не дождались ответа за '+str(round(timeout,1))+' с') from None
+            if timed_out and not shared_pause:raise LLMUnavailable('TIMEOUT',self.clock()+5,detail='не дождались ответа за '+str(round(timeout,1))+' с') from None
             until=self.gate.close('OUTAGE',self.clock(),detail=type(e).__name__+': '+str(e)[:200])
             raise LLMUnavailable('OUTAGE',until,detail=type(e).__name__) from None
         try:payload=json.loads(raw)

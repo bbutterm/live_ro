@@ -125,10 +125,10 @@ class ClientTests(unittest.TestCase):
         import socket
         def slow(req,timeout):raise socket.timeout('timed out')
         c=self.client();c.urlopen=slow
-        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'*300}],timeout=4)
+        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'*300}],timeout=4,shared_pause=False)
         self.assertEqual(err.exception.reason,'TIMEOUT');self.assertEqual(c.gate.state(),{})
         self.assertGreater(c.ledger.today(self.now[0])[0],0)  # an abandoned prompt may still be billed
-        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'}],timeout=25)
+        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'}],timeout=4)  # a brain's call
         self.assertEqual(err.exception.reason,'OUTAGE');self.assertEqual(c.gate.state()['reason'],'OUTAGE')
     def test_gate_is_not_shortened_or_cleared_by_older_news(self):
         from packages.resident_world.llm import Gate
@@ -170,6 +170,33 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(c.complete([{'role':'user','content':'x'}],schema={'type':'object'}).mode,'json_schema')
         bodies=[r['body'] for r in self.server.requests]
         self.assertIn('reasoning',bodies[0]);self.assertNotIn('reasoning',bodies[1]);self.assertEqual(bodies[1]['response_format']['type'],'json_schema')
+    def test_dotenv_quotes_comments_and_fallback_names(self):
+        from packages.resident_world.llm import load_settings
+        for line,key in (('RO_WORLD_LLM_API_KEY="sk-or-v1-abc123"  # мой ключ','sk-or-v1-abc123'),("RO_WORLD_LLM_API_KEY='sk-or-v1-abc123' # c",'sk-or-v1-abc123'),('export RO_WORLD_LLM_API_KEY=sk-or-v1-abc123','sk-or-v1-abc123')):
+            with self.subTest(line=line):
+                (self.dir/'.env').write_text(line+'\n');self.assertEqual(load_settings(self.dir).key,key)
+        (self.dir/'.env').write_text('RO_WORLD_LLM_API_KEY=   # вставлю позже\n')
+        with patch.dict(os.environ,{'OPENROUTER_API_KEY':'sk-or-v1-real'}):self.assertEqual(load_settings(self.dir).key,'sk-or-v1-real')
+    def test_repeating_rate_limit_escalates_even_with_retry_after(self):
+        from packages.resident_world.llm import Gate
+        g=Gate(self.dir/'g.json',rng=lambda:0);now=1000.0;waits=[]
+        for _ in range(4):
+            until=g.close('RATE_LIMIT',now,429,retry_after=30);waits.append(until-now);now=until+1
+        self.assertEqual(waits[0],30);self.assertGreater(waits[-1],60)  # a persistent limit is not a short hiccup
+    def test_unreached_provider_is_not_charged(self):
+        from packages.resident_world.llm import LLMUnavailable
+        import socket,urllib.error
+        def blackhole(req,timeout):raise urllib.error.URLError(socket.timeout('timed out'))
+        c=self.client();c.urlopen=blackhole
+        with self.assertRaises(LLMUnavailable):c.complete([{'role':'user','content':'x'*300}],timeout=4,shared_pause=False)
+        self.assertEqual(c.ledger.today(self.now[0])[0],0)
+    def test_overall_deadline_for_a_chat_reply(self):
+        from packages.resident_world.llm import LLMUnavailable
+        import time as _t
+        def slow(req,timeout):_t.sleep(2);raise OSError('late')
+        c=self.client();c.urlopen=slow;c.clock=_t.time;started=_t.monotonic()
+        with self.assertRaises(LLMUnavailable) as err:c.complete([{'role':'user','content':'x'}],timeout=8,shared_pause=False,deadline=_t.time()+.5)
+        self.assertEqual(err.exception.reason,'TIMEOUT');self.assertLess(_t.monotonic()-started,1.5)
     def test_lenient_json_extraction(self):
         from packages.resident_world.llm import parse_json_object,BadModelOutput
         self.assertEqual(parse_json_object('```json\n{"a": 1}\n```'),{'a':1})
@@ -182,14 +209,14 @@ class DoctorTests(unittest.TestCase):
     """`ro doctor`: one cheap real call with a plain Russian verdict."""
     def run_doctor(self,env_text,script):
         import contextlib,io
-        from packages.resident_world import cli
+        from packages.resident_world import cli,llm
         server=FakeProvider();self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
         for step in script:server.reply(*step) if isinstance(step,tuple) else server.ok(step,cost=0.00001)
         with tempfile.TemporaryDirectory() as tmp:
             root=pathlib.Path(tmp);(root/'.env').write_text(env_text.replace('{URL}',server.url))
             out=io.StringIO()
             with patch.object(cli,'ROOT',root),patch.object(cli,'STATE',root/'state'),patch.object(cli,'config',return_value={'daily_llm_usd':2}),\
-                 patch.dict(os.environ,{'RO_WORLD_LLM_API_KEY':'','RO_WORLD_LLM_BASE_URL':'','RO_WORLD_LLM_MODEL':''}),contextlib.redirect_stdout(out):
+                 patch.dict(os.environ,{**{k:'' for k in llm.KEY_NAMES},'RO_WORLD_LLM_BASE_URL':'','RO_WORLD_LLM_MODEL':'','RO_WORLD_LLM_DAILY_USD':''}),contextlib.redirect_stdout(out):
                 code=cli.doctor()
         return code,out.getvalue(),server
     def test_ok(self):

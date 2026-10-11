@@ -129,3 +129,20 @@ class LLMTests(unittest.TestCase):
         client = Client(transport=forbidden)
         self.assertEqual(client.complete('', {}, c, c[0], True, replay=True)['fallback_reason'], 'replay')
         self.assertEqual(client.complete('', {}, c, c[0], True)['fallback_reason'], 'prompt_overflow')
+
+
+class TokenOnlyEnvTests(unittest.TestCase):
+    def test_v1_accepts_the_token_only_env_of_the_new_brain(self):
+        import os,pathlib,tempfile
+        from unittest.mock import patch
+        from packages.resident_behavior import provider
+        blank={k:'' for k in ('RO_WORLD_LLM_API_KEY','LLM_API_KEY','OPENROUTER_API_KEY','OPENAI_API_KEY','DEEPSEEK_API_KEY','RO_WORLD_LLM_BASE_URL','RO_WORLD_LLM_MODEL')}
+        with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,blank),patch('packages.resident_behavior.llm.openrouter_client',return_value='client') as make:
+            env=pathlib.Path(tmp)/'.env'
+            env.write_text('RO_WORLD_LLM_API_KEY=sk-or-v1-token  # ключ\n')
+            self.assertEqual(provider.from_environment(env,state_root=tmp),'client')
+            self.assertEqual(make.call_args.kwargs['api_key'],'sk-or-v1-token')
+            env.write_text('RO_WORLD_LLM_API_KEY=sk-or-v1-token\nRO_WORLD_LLM_MODEL=other/model\n')
+            with self.assertRaisesRegex(ValueError,'unapproved'):provider.from_environment(env,state_root=tmp)
+            env.write_text('')
+            with self.assertRaisesRegex(ValueError,'credential'):provider.from_environment(env,state_root=tmp)

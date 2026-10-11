@@ -198,7 +198,13 @@ def handle(event,r,c,store,model=None):
                         task['decision']=decision
                         if decision['action'] not in ('say','whisper'):
                             atomic(d/'chat-goal.json',{'id':task['id'],'event_id':event['id'],'decision':decision,'at':time.time()})
-                        result=run_native(sock,{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,d)
+                        try:result=run_native(sock,{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,d)
+                        except (OSError,RuntimeError,ValueError) as error:
+                            result='failed('+(str(error) or type(error).__name__)[:40]+')'
+                        if result!='done':  # no silent movement after an unspoken answer (manual.lock is ours already)
+                            try:
+                                if json.loads((d/'chat-goal.json').read_text()).get('id')==task['id']:(d/'chat-goal.json').unlink()
+                            except (OSError,ValueError):pass
                         task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
                         record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,seconds=time.time()-event['ts'])
                         return

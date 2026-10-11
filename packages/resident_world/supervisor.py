@@ -62,8 +62,8 @@ def brain(r):
     from packages.resident_world.chat import start_listener
     listener=start_listener(r) if config().get('chat_service')!='standalone' and 'name' in r and 'char_id' in r else None
     mind=None;mind_retry=0;settle_seconds=float(config().get('brain_settle_seconds',5))
-    if (d/'brain.json').exists():
-        old=json.loads((d/'brain.json').read_text());pending=old.get('pending')
+    try:pending=json.loads((d/'brain.json').read_text()).get('pending')
+    except (OSError,ValueError,AttributeError):pending=None
     while not (STATE/'STOP').exists():
         try:
             if (d/'CHAT_PENDING').exists():time.sleep(.1);continue
@@ -109,18 +109,19 @@ def brain(r):
                 try:proposal=mind.choose(s)
                 except Exception as error:  # a brain bug or odd network error must not kill the process
                     logging.getLogger('world').warning('mind.choose %s: %s',r['name'],type(error).__name__)
-                    mind.next_call=mind.unavailable_until=time.time()+30;proposal=None
+                    mind.next_call=mind.unavailable_until=time.time()+120;mind.pause_reason='ERROR';proposal=None
                 if (d/'CHAT_PENDING').exists() or (d/'chat-goal.json').exists():
-                    # A conversation started meanwhile: decide again afterwards, with it in mind.
-                    if proposal:mind.path.unlink(missing_ok=True);mind.next_call=0
+                    # A conversation started meanwhile: the saved intent is re-checked afterwards
+                    # (no new paid call unless it no longer fits).
                     time.sleep(.1);continue
                 if proposal:
                     from packages.resident_world.skills import execute
                     goal=proposal['decision']
                     atomic(d/'brain.json',dict(pending=None,activity=goal['action'],reason=goal['reason'],thought=proposal.get('thought',''),plan=proposal.get('plan',''),source='llm',decision_id=proposal['id'],at=time.time(),last=last))
                     try:result=execute(r['name'],goal['action'],goal['args'],origin='brain',task_id=proposal['id'],say=goal.get('say',''))
-                    except ValueError as error:
-                        result={'id':proposal['id'],'action':goal['action'],'outcome':'failed('+str(error)[:40]+')'}
+                    except BlockingIOError:raise
+                    except Exception as error:  # the model must learn the real reason, not INTERRUPTED
+                        result={'id':proposal['id'],'action':goal['action'],'outcome':'failed('+(str(error) or type(error).__name__)[:40]+')'}
                     mind.finished(result);last={'state':result['outcome'],'at':time.time()};retry=time.time()+settle_seconds;continue
                 if mind.waiting():time.sleep(.5);continue
             from packages.resident_world.fallback_life import city_goal,completed
