@@ -11,7 +11,7 @@ OpenKore исполняет ограниченные навыки, rAthena по�
 Лента: `python3 tools/events.py --char ResidentA --follow --duration 300` (на лабораторном VPS, приватный reader.cnf).
 
 ## Мозг жителей на LLM
-Вставь токен в `.env` (`RO_WORLD_LLM_API_KEY=...`, шаблон `.env.example`), проверь `tools/ro doctor`, перезапусти `ro-world`/`ro-chat`. Подробно — [docs/LLM_BRAIN.md](docs/LLM_BRAIN.md).
+Вставь токен в `.env` (`RO_WORLD_LLM_API_KEY=...`, шаблон `.env.example`), проверь `tools/ro doctor`, перезапусти `ro-world`/`ro-chat`. Подробно — [docs/LLM_BRAIN.md](docs/LLM_BRAIN.md). Новый мир на чистом VPS — [docs/DEPLOY_NEW_WORLD.md](docs/DEPLOY_NEW_WORLD.md).
 
 ## Исходники
 - `tools/`: eyes/events/wait/sql, literal-команды тестеру, а также provisioning. **Provision/prepare-* не запускать повторно на существующей БД.**
