@@ -7,7 +7,7 @@
 E05 перевес: тело продаёт добычу по типу предмета; SOLD подтверждается picklog сервера.
 V1: причина E01 (лишний nameID в кадре монстра) и E06 (cooldown на interrupted) исправлены.
 V1 остаётся экспериментальным путём под lease; основной путь — resident_world.
-make check: новые тесты зелёные; 7 старых падают вне VPS (зашитые пути /root/ragnarok).
+make check: 507 тестов, 5 раундов ревью; 3 старых падают и на main вне VPS (пути /root/ragnarok, OpenKore).
 Сквозной тест: настоящий brain + gateway, тело по протоколу плагина, 429 посередине — OK.
 Правка плагина проверена на заглушках OpenKore; на VPS её проверит test_perl_compile_against_actual_openkore.
 Не проверено вживую: первый запуск — шаги 1–3 в docs/LLM_BRAIN.md, затем `tools/ro status`.
