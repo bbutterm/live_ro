@@ -1,47 +1,135 @@
 {
   "state_dir": "/var/lib/ro-world",
   "daily_llm_usd": 2,
-  "llm": {"enabled": true, "max_hunt_minutes": 15, "min_decision_seconds": 20, "min_speech_seconds": 45, "short_pause_seconds": 60, "chat_calls_per_sender_2min": 3, "timeout_seconds": 25, "temperature": 0.8},
+  "llm": {
+    "enabled": true,
+    "max_hunt_minutes": 15,
+    "min_decision_seconds": 20,
+    "min_speech_seconds": 45,
+    "short_pause_seconds": 60,
+    "chat_calls_per_sender_2min": 3,
+    "timeout_seconds": 25,
+    "temperature": 0.8
+  },
   "brain_python": "/opt/ro-residents/world-venv/bin/python",
   "llm_timeout_seconds": 20,
   "chat_radius": 14,
   "chat_service": "standalone",
   "timezone": "Europe/Amsterdam",
   "residents": [
-    {"resident_id":"resident_a","name":"ResidentA","char_id":150001,"profile":"/root/ragnarok/run/Demo/resident_a","enabled":true},
-    {"resident_id":"resident_b","name":"Mira","char_id":150002,"profile":"/root/ragnarok/run/Demo/resident_b","enabled":true},
-    {"resident_id":"resident_c","name":"Borin","char_id":150003,"profile":"/root/ragnarok/run/Demo/resident_c","enabled":true}
+    {
+      "resident_id": "resident_a",
+      "name": "ResidentA",
+      "char_id": 150001,
+      "profile": "/root/ragnarok/run/Demo/resident_a",
+      "enabled": false
+    },
+    {
+      "resident_id": "resident_b",
+      "name": "Mira",
+      "char_id": 150002,
+      "profile": "/root/ragnarok/run/Demo/resident_b",
+      "enabled": true,
+      "persona": "Мира: внимательная, тёплая, не болтливая послушница (Acolyte, class 4), ИИ-персонаж. Текущее поручение владельца: качаться в настоящей группе с Борином на безопасных порингах prt_fild08. Борин впереди, ты держишься за ним через штатный follow и partySkill Heal, только если навык изучен и хватает SP. Если AL_HEAL=0, пока не умеешь лечить: опыт и первый Heal надо заработать. Выбирай hunt, он включает твою роль поддержки, не отдельный маршрут. Иногда коротко обсуждай конкретную тактику с Борином, здоровье и дистанцию из party/рядом; не выдумывай лечение. Не уходи спать из-за времени суток. Сохраняй возможность ответить игроку и прервать поход. Профессию предоставил оператор, это не награда за квест.",
+      "support_target": "Borin",
+      "duo_partner": "Borin"
+    },
+    {
+      "resident_id": "resident_c",
+      "name": "Borin",
+      "char_id": 150003,
+      "profile": "/root/ragnarok/run/Demo/resident_c",
+      "enabled": true,
+      "persona": "Борин: спокойный, прямой, заботливый мечник (Swordman, class 1), ИИ-персонаж. Текущее поручение владельца: качаться с Мирой в настоящей группе на безопасных порингах prt_fild08. Ты впереди и бьёшь порингов, Мира идёт следом и лечит через partySkill только после изучения Heal и при наличии SP. Выбирай hunt для опыта. Не убегай от Миры, учитывай наблюдаемую дистанцию; иногда обсуди тактику с ней короткой конкретной репликой. Не утверждай, что она уже лечила, без факта. Не уходи спать только потому, что ночь. Игрок может обратиться и изменить договорённость. Профессию дал оператор, не квестовая награда.",
+      "duo_partner": "Mira"
+    }
   ],
   "places": {
-    "fountain":{"map":"prontera","x":156,"y":191},
-    "market":{"map":"prontera","x":156,"y":180},
-    "south_gate":{"map":"prontera","x":150,"y":40},
-    "west_gate":{"map":"prontera","x":40,"y":205},
-    "east_gate":{"map":"prontera","x":272,"y":200},
-    "castle":{"map":"prontera","x":156,"y":330},
-    "church":{"map":"prontera","x":236,"y":310},
-    "fruit_stall":{"map":"prontera","x":104,"y":52},
-    "milk_stall":{"map":"prontera","x":76,"y":138},
-    "refiner":{"map":"prontera","x":176,"y":173},
-    "pet_groomer":{"map":"prontera","x":214,"y":207},
-    "field":{"map":"prt_fild08","x":170,"y":240},
-    "field_east":{"map":"prt_fild08","x":230,"y":250},
-    "field_gate":{"map":"prt_fild08","x":169,"y":319}
+    "fountain": {
+      "map": "prontera",
+      "x": 156,
+      "y": 191
+    },
+    "market": {
+      "map": "prontera",
+      "x": 156,
+      "y": 180
+    },
+    "south_gate": {
+      "map": "prontera",
+      "x": 150,
+      "y": 40
+    },
+    "west_gate": {
+      "map": "prontera",
+      "x": 40,
+      "y": 205
+    },
+    "east_gate": {
+      "map": "prontera",
+      "x": 272,
+      "y": 200
+    },
+    "castle": {
+      "map": "prontera",
+      "x": 156,
+      "y": 330
+    },
+    "church": {
+      "map": "prontera",
+      "x": 236,
+      "y": 310
+    },
+    "fruit_stall": {
+      "map": "prontera",
+      "x": 104,
+      "y": 52
+    },
+    "milk_stall": {
+      "map": "prontera",
+      "x": 76,
+      "y": 138
+    },
+    "refiner": {
+      "map": "prontera",
+      "x": 176,
+      "y": 173
+    },
+    "pet_groomer": {
+      "map": "prontera",
+      "x": 214,
+      "y": 207
+    },
+    "field": {
+      "map": "prt_fild08",
+      "x": 170,
+      "y": 240
+    },
+    "field_east": {
+      "map": "prt_fild08",
+      "x": 230,
+      "y": 250
+    },
+    "field_gate": {
+      "map": "prt_fild08",
+      "x": 169,
+      "y": 319
+    }
   },
   "place_labels": {
-    "fountain":"у фонтана",
-    "market":"у торговых рядов в центре",
-    "south_gate":"у южных ворот Пронтеры",
-    "west_gate":"у западных ворот",
-    "east_gate":"у восточных ворот",
-    "castle":"у ворот замка",
-    "church":"у церкви",
-    "fruit_stall":"у фруктовой лавки",
-    "milk_stall":"у молочника",
-    "refiner":"у мастера заточки",
-    "pet_groomer":"у грумера питомцев",
-    "field":"на поле",
-    "field_east":"на восточной части поля",
-    "field_gate":"на поле у городских ворот"
+    "fountain": "у фонтана",
+    "market": "у торговых рядов в центре",
+    "south_gate": "у южных ворот Пронтеры",
+    "west_gate": "у западных ворот",
+    "east_gate": "у восточных ворот",
+    "castle": "у ворот замка",
+    "church": "у церкви",
+    "fruit_stall": "у фруктовой лавки",
+    "milk_stall": "у молочника",
+    "refiner": "у мастера заточки",
+    "pet_groomer": "у грумера питомцев",
+    "field": "на поле",
+    "field_east": "на восточной части поля",
+    "field_gate": "на поле у городских ворот"
   }
 }

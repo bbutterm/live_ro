@@ -4,6 +4,7 @@ from .journal import TERMINAL
 class Executor:
  def __init__(self,journal,resident,char_id,send):
   self.j=journal;self.resident=resident;self.char_id=char_id;self.send=send;self.epoch=None;self.telemetry=None;self.received=0;self.projection={}
+  self.support_seen={}
   for row in self.j.db.execute("SELECT payload FROM events WHERE source='witness' ORDER BY ts"):
    self.witness(json.loads(row[0]),persist=False)
   for a in self.active():
@@ -24,6 +25,11 @@ class Executor:
      except ValueError:pass
   elif kind=='telemetry':
    self.telemetry=m;self.received=now
+   if m.get('cooperative_support') is True:
+    for a in self.active():
+     p=json.loads(a['params']);party=m.get('party') or {}
+     if a['skill']=='hunt' and p.get('support_target') in {u.get('name') for u in party.get('members',[])} and party.get('share')==1 and (m.get('running') or {}).get('action_id')==a['action_id']:
+      self.support_seen[a['action_id']]={'body_epoch':m.get('body_epoch'),'ts':m['ts'],'party':party}
    for field in ('map','pos','dead','hp','sp','zeny','weight','mode','running'):
     self.projection[field]={'value':m.get(field),'source':'body','ts':m['ts']}
   elif kind in ('skill_accepted','skill_progress','skill_result','skill_rejected'):
@@ -71,6 +77,10 @@ class Executor:
    if not isinstance(items,dict) or not items or any(k not in ('909','713','938') or type(n) is not int or not 1<=n<=1000 for k,n in items.items()):raise ValueError('INVALID_ITEMS')
    if not isinstance(bag,dict) or any(type(bag.get(k)) is not int or n>bag[k] for k,n in items.items()):raise ValueError('INVALID_ITEMS')
    params={**params,'items':dict(items)}
+  if skill=='hunt' and params.get('support_target'):
+   t=self.telemetry or {};party=t.get('party') or {}
+   if params['support_target'] not in {u.get('name') for u in party.get('members',[])} or party.get('share')!=1 or type(t.get('job_level')) is not int:raise ValueError('INVALID_SUPPORT_PARTY')
+   params={**params,'_job_level_before':t['job_level']}
   if skill in ('buy_potions','sell_loot'):params={**params,'_inventory_before':dict((self.telemetry or {}).get('inventory',{})),'_picklog_baseline':self.j.cursor('picklog')}
   if skill=='sell_loot' and 'items' not in params and isinstance((self.telemetry or {}).get('sellable'),dict):params['_sellable_before']=dict(self.telemetry['sellable'])
   now=time.time();a=self.j.plan(self.resident,skill,params,key,now+deadline,self.epoch,self.j.cursor('witness'));aid=a['action_id']
@@ -138,8 +148,14 @@ class Executor:
       if hit:break
      if spoken and hit:self.j.transition(aid,'confirmed','SPOKEN',{'server_parts':hit});continue
     elif a['skill']=='hunt':
-     kills=[r for r in rows if r['kind']=='kill' and r['map']==p['map']]
-     if len(kills)>=p.get('min_kills',1):self.j.transition(aid,'confirmed','HUNTED',{'server_kills':kills,'body':t});continue
+     if p.get('support_target'):
+      seen=self.support_seen.get(aid);party=t.get('party') or {}
+      progress=[r for r in rows if r['kind']=='job_level' and r['map']==p['map'] and r.get('a1',0)>p['_job_level_before'] and t.get('job_level',0)>=r['a1']]
+      if seen and seen['body_epoch']==a['epoch']==t.get('body_epoch') and progress and party.get('share')==1 and p['support_target'] in {u.get('name') for u in party.get('members',[])}:
+       self.j.transition(aid,'confirmed','SUPPORT_PROGRESS',{'server_earned_levels':progress,'native_support':seen,'body':t});continue
+     else:
+      kills=[r for r in rows if r['kind']=='kill' and r['map']==p['map']]
+      if len(kills)>=p.get('min_kills',1):self.j.transition(aid,'confirmed','HUNTED',{'server_kills':kills,'body':t});continue
     elif a['skill']=='whisper':
      history=self.j.trace(aid);sent=any(r['state']=='verifying' and r['code']=='SENT' for r in history)
      hits=[json.loads(r[0]) for r in self.j.db.execute("SELECT payload FROM events WHERE source='chat' AND ts BETWEEN ? AND ?",(a['created']-1,a['created']+10))]

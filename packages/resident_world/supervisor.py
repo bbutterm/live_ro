@@ -83,6 +83,12 @@ def brain(r):
                     proposal=json.loads(chat_goal.read_text());goal=proposal['decision'];proposal['id']
                     if not (isinstance(goal,dict) and isinstance(goal.get('action'),str) and isinstance(goal.get('args'),dict)):raise TypeError
                 except (OSError,ValueError,KeyError,TypeError):chat_goal.unlink(missing_ok=True);continue
+                from .continuity import chat_goal_ready,finish_task
+                if not chat_goal_ready(d,proposal):
+                    finish_task(d,proposal['id'],'timeout')
+                    clear_chat_goal(d,proposal['id'])
+                    record('CHAT_ACTION_EXPIRED',resident=r['name'],event_id=proposal.get('event_id'))
+                    continue
                 try:
                     # Own task id: the spoken reply already used proposal['id'] in manual_task.json
                     # (a meet under the same id raised MEETING_ID_CONFLICT forever).
@@ -92,6 +98,7 @@ def brain(r):
                 finally:
                     if not isinstance(sys.exc_info()[1],BlockingIOError):clear_chat_goal(d,proposal['id'])
                 record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal.get('event_id'),task=result)
+                finish_task(d,proposal['id'],result['outcome'])
                 if mind is not None:
                     mind.note(goal['action'],result['outcome'],'договорились в разговоре',proposal['id'])
                     # What was agreed changes the situation: think again instead of the pre-chat intent

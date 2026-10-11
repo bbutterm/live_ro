@@ -143,7 +143,12 @@ def execute_native_menu(action,args,c,sock,key,task,d):
             go=dict(skill='travel_to',params={'map':args['map'],'x':170,'y':240,'r':3},timeout=240 if task.get('origin')=='brain' else 55)
             result=run_native(sock,go,key+'-route',task,d)
             if result!='done':return result
-        return run_native(sock,native_plan(action,args,c),key,task,d)
+        plan=native_plan(action,args,c)
+        support=next((r.get('support_target') for r in c.get('residents',[]) if r.get('resident_id')==d.name),None)
+        if support:
+            params=plan['params'];assert isinstance(params,dict)
+            plan={**plan,'params':{**params,'support_target':support}}
+        return run_native(sock,plan,key,task,d)
     if action=='town_service':
         result=run_native(sock,native_plan(action,args,c),key+'-route',task,d)
         if result!='done':return result

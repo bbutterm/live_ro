@@ -2,6 +2,13 @@
 import re,json,sqlite3
 from .supervisor import online
 ALIASES={'Mira':('мира','миру','mira'), 'Borin':('борин','борина','borin'), 'ResidentA':('residenta','резидент','резидента')}
+LEGACY_FALLBACK='Слышу тебя. Сейчас я рядом.'
+
+def stop_requested(event):
+    text=event.get('text','').strip().lower().rstrip('.!')
+    for aliases in ALIASES.values():
+        for alias in aliases:text=re.sub(r'^'+re.escape(alias)+r'[, :]+','',text)
+    return bool(re.fullmatch(r'стой|стоп|остановись|отмени(?: задачу| встречу)?|не (?:иди|следуй)(?: за мной)?',text))
 
 def select_responder(event,residents,states,now,radius=14):
     eligible=[]
@@ -39,9 +46,13 @@ class ChatStore:
         with self.db:
             self.db.execute('BEGIN IMMEDIATE')
             if self.db.execute('SELECT 1 FROM inbox WHERE id=?',(event['id'],)).fetchone():return False
-            chain=self.get('chain')+1 if is_resident else 0
-            self.put('chain',chain)
+            chain=(self.get('chain')+1 if now-self.get('chain_last')<120 else 1) if is_resident else 0
+            self.put('chain',chain);self.put('chain_last',now)
             status='queued' if resident and now-event['ts']<=10 and (not is_resident or chain<=4) else 'ignored'
+            if is_resident:
+                prior=self.db.execute('SELECT 1 FROM inbox WHERE resident=? AND json_extract(payload,\'$.name\')=? AND json_extract(payload,\'$.text\')=? AND json_extract(payload,\'$.ts\')>? LIMIT 1',
+                                      (resident,event.get('name'),event.get('text'),now-120)).fetchone()
+                if prior or event.get('text')==LEGACY_FALLBACK:status='ignored'
             self.db.execute('INSERT INTO inbox VALUES(?,?,?,?,NULL,NULL)',(event['id'],json.dumps(event,ensure_ascii=False),resident,status))
             self.put('cursor',event['id']);return status=='queued'
     def claim(self,name,now):
@@ -54,10 +65,17 @@ class ChatStore:
             self.db.execute("UPDATE inbox SET status='claimed',claimed=? WHERE id=?",(now,row[0]));return json.loads(row[1])
     def finish(self,event_id,result):
         with self.db:self.db.execute("UPDATE inbox SET status='finished',result=? WHERE id=?",(json.dumps(result,ensure_ascii=False),event_id))
+    def suppress_repeat(self,event,decision,now,resident=None):
+        if decision is None or decision['action'] not in ('say','whisper') or stop_requested(event):return decision
+        row=self.db.execute('SELECT 1 FROM inbox WHERE (? IS NULL OR resident=?) AND json_extract(payload,\'$.name\')=? AND json_extract(payload,\'$.ts\')>? AND json_extract(result,\'$.outcome\')=\'done\' AND json_extract(result,\'$.decision.args.text\')=? LIMIT 1',
+                            (resident,resident,event['name'],now-120,decision['args']['text'])).fetchone()
+        return None if row else decision
 
 
 def fallback_reply(name,event,state):
     text=event['text'].lower();base={'reason':'Ответ на услышанную реплику'}
+    if stop_requested(event):
+        return dict(base,action='whisper' if event.get('type')=='W' else 'say',args=({'to':event['name'],'text':'Остановлюсь.'} if event.get('type')=='W' else {'text':'Остановлюсь.'}))
     visible={p['name'] for p in (state.get('telemetry') or {}).get('nearby_players',[])}
     if re.search(r'пойд[её]м со мной|иди за мной|следуй за мной',text) and event['name'] in visible:
         return dict(base,action='follow',args={'player':event['name'],'minutes':3},say='Пойдём, буду рядом.')
@@ -66,7 +84,8 @@ def fallback_reply(name,event,state):
             if peer!=name and any(re.search(r'(?<!\w)'+re.escape(a)+r'(?!\w)',text) for a in aliases):
                 return dict(base,action='meet',args={'resident':peer,'place':'fountain'},say='Встретимся у фонтана.')
         return dict(base,action='walk_to',args={'place':'fountain'},say='Иду к фонтану.')
-    phrase='Привет! Как твои дела?' if 'привет' in text else 'Я '+name+'. Живу здесь: охочусь, гуляю и отдыхаю.' if 'кто ты' in text else 'Слышу тебя. Сейчас я рядом.'
+    phrase='Привет!' if 'привет' in text else 'Я '+name+', ИИ-персонаж этого мира.' if 'кто ты' in text else None
+    if phrase is None:return None
     if event.get('type')=='W':return dict(base,action='whisper',args={'to':event['name'],'text':phrase})
     return dict(base,action='say',args={'text':phrase})
 
@@ -127,7 +146,7 @@ def queue_behavior_chat(d,event,r,c,s,lease):
     import hashlib
     from packages.resident_behavior.chat_intents import enqueue
     from packages.resident_behavior.config import load_behavior
-    decision=fallback_reply(r['name'],event,s)
+    decision=fallback_reply(r['name'],event,s) or {'action':'unsupported','args':{}}
     if decision.get('action') in ('walk_to','meet'):
         requested=decision['args'].get('place')
         point=c.get('places',{}).get(requested)
@@ -170,7 +189,8 @@ def handle(event,r,c,store,model=None):
     from .skills import manual,run_native
     from .mind import record
     from packages.body_gateway.cli import request
-    d=STATE/r['resident_id'];marker=d/'CHAT_PENDING';atomic(marker,{'id':event['id']})
+    peer=r.get('duo_partner')==event.get('name') and bool(r.get('duo_partner'))
+    d=STATE/r['resident_id'];marker=d/('PEER_CHAT_PENDING' if peer else 'CHAT_PENDING');atomic(marker,{'id':event['id']})
     started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+10}
     try:
         s=request(str(d/'actions.sock.control'),{'op':'status'})
@@ -181,9 +201,33 @@ def handle(event,r,c,store,model=None):
             return
         from .memory import day_decision
         daily=day_decision(r,event,d)
-        decision=validate_reply(daily or fallback_reply(r['name'],event,s),event,c,s)
-        if model is not None and daily is None:
+        decision=daily or fallback_reply(r['name'],event,s)
+        if decision is not None:decision=validate_reply(decision,event,c,s)
+        if model is not None and daily is None and not stop_requested(event):
             decision=model(event,s,decision)
+        silence='NO_REPLY' if decision is None else 'REPEATED_REPLY'
+        decision=store.suppress_repeat(event,decision,time.time(),r['name'])
+        if decision is None:
+            store.finish(event['id'],{'outcome':'silent('+silence+')'})
+            record('CHAT_SILENT',resident=r['name'],event_id=event['id'],reason=silence)
+            return
+        party=(s.get('telemetry') or {}).get('party') or {}
+        if peer and decision['action'] in ('say','whisper') and (s.get('telemetry') or {}).get('duo_speech') is True and party.get('share')==1 and event['name'] in {u.get('name') for u in party.get('members',[])}:
+            # Speech slot is independent; a tactical buddy reply must not cancel a hunt.
+            with legacy_chat_gate(d) as lease:
+                if lease:store.finish(event['id'],queue_behavior_chat(d,event,r,c,s,lease));return
+                from .continuity import confirm_chat_reply
+                skill='whisper' if decision['action']=='whisper' else 'say'
+                params={'to_name':event['name'],'text':decision['args']['text']} if skill=='whisper' else {'text':decision['args']['text']}
+                task['decision']=decision
+                speech_dir=d/'peer-speech';speech_dir.mkdir(mode=0o700,exist_ok=True)
+                try:result=run_native(str(d/'actions.sock.control'),{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,speech_dir)
+                except (OSError,RuntimeError,ValueError) as error:result='failed('+(str(error) or type(error).__name__)[:40]+')'
+                confirm_chat_reply(d,event,decision,result)
+                task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
+                record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,channel='duo_speech',seconds=time.time()-event['ts'])
+                return
+        if peer:atomic(d/'CHAT_PENDING',{'id':event['id']}) # explicit movement commitments still interrupt
         # The same resident writer owns speech and its persisted movement commitment.
         while time.time()<event['ts']+8:
             try:
@@ -192,12 +236,13 @@ def handle(event,r,c,store,model=None):
                         store.finish(event['id'],queue_behavior_chat(d,event,r,c,s,lease))
                         return
                     with manual(r,wait_limit=2) as (d,sock):
+                        from .continuity import cancel_chat_task,confirm_chat_reply
+                        if stop_requested(event):cancel_chat_task(d,event)
                         phrase=decision['args'].get('text',decision.get('say',''))
                         skill='whisper' if decision['action']=='whisper' else 'say'
                         params={'to_name':event['name'],'text':phrase} if skill=='whisper' else {'text':phrase}
                         task['decision']=decision
-                        if decision['action'] not in ('say','whisper'):
-                            atomic(d/'chat-goal.json',{'id':task['id'],'event_id':event['id'],'decision':decision,'at':time.time()})
+
                         try:result=run_native(sock,{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,d)
                         except (OSError,RuntimeError,ValueError) as error:
                             result='failed('+(str(error) or type(error).__name__)[:40]+')'
@@ -205,12 +250,19 @@ def handle(event,r,c,store,model=None):
                             try:
                                 if json.loads((d/'chat-goal.json').read_text()).get('id')==task['id']:(d/'chat-goal.json').unlink()
                             except (OSError,ValueError):pass
+                        confirm_chat_reply(d,event,decision,result)
                         task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
                         record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,seconds=time.time()-event['ts'])
                         return
             except BlockingIOError:time.sleep(.1)
         store.finish(event['id'],{'outcome':'failed(WRITER_BUSY)'})
-    finally:marker.unlink(missing_ok=True)
+    finally:
+        marker.unlink(missing_ok=True)
+        if peer:
+            p=d/'CHAT_PENDING'
+            try:
+                if json.loads(p.read_text()).get('id')==event['id']:p.unlink(missing_ok=True)
+            except (OSError,ValueError):pass
 
 
 def start_listener(r):

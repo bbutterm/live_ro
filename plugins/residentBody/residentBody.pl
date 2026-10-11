@@ -23,13 +23,21 @@ sub guardBehaviorConfig{
  # raiseSkill has cached state: assignment alone does NOT disable it.
  Plugins::callHook('configModify',{key=>'skillsAddAuto',val=>0})if Plugins->can('callHook');
 }
+# Explicit support profile; no GM or arbitrary console capability is exposed.
+sub cooperativeSupport{
+ return 0 if behaviorV1()||$mode ne'HUNT';
+ my$target=$config{residentSupportTarget}//'';
+ return 0 unless$target=~/^[\p{L}\p{N}_ -]{1,24}$/&&($config{followTarget}//'')eq$target&&$char->{party}{joined};
+ return scalar grep{($_->{name}//'')eq$target}values%{$char->{party}{users}//{}};
+}
 sub applyMode{
  guardBehaviorConfig();
  $Globals::masterServer->{serverEncoding}='UTF-8' if$ENV{RESIDENT_CHAT_UTF8};
  @config{qw(attackAuto route_randomWalk sellAuto buyAuto storageAuto follow partyAuto dealAuto)}=(behaviorV1()||$mode eq'IDLE_SAFE'?-1:1,0,0,0,0,0,0,0);
  $config{lockMap}='';$config{route_teleport}=0;$config{route_teleportAuto}=0;
  $config{itemsTakeAuto}=$mode eq'IDLE_SAFE'?0:2;$config{itemsGatherAuto}=0;
- if($mode eq'HUNT'&&$active){$config{route_randomWalk}=1;$config{lockMap}=$active->{params}{map}}
+ if($mode eq'HUNT'&&$active){$config{route_randomWalk}=2;$config{lockMap}=$active->{params}{map}} # native noMapRoute: stay on the verified hunt map
+ if(cooperativeSupport()){$config{follow}=1;$config{attackAuto}=-1;$config{route_randomWalk}=0;$config{itemsTakeAuto}=0}
 }
 sub bagItems{my$l=eval{$char->inventory->getItems()}//[];return$l}
 sub inventoryFrame{my%bag;for my$i(@{bagItems()}){$bag{$i->{nameID}}+=0+($i->{amount}//0)if$i->{nameID}}return\%bag}
@@ -117,9 +125,14 @@ sub monstersFrame{
  return\@seen;
 }
 sub learnedFrame{my%known;for my$handle(keys%{$char->{skills}//{}}){my$lv=$char->{skills}{$handle}{lv};$known{$handle}=0+$lv if defined$lv}return\%known}
+sub partyFrame{
+ return undef unless$char->{party}{joined};my@members;
+ for my$u(values%{$char->{party}{users}//{}}){push@members,{name=>$u->{name},online=>$u->{online}?JSON::PP::true:JSON::PP::false,map=>$u->{map},pos=>$u->{pos},hp=>$u->{hp},hp_max=>$u->{hp_max}}}
+ return{name=>$char->{party}{name},share=>$char->{party}{share},members=>\@members,source=>'native_client'};
+}
 sub telemetryFrame{
  my$p=calcPosition($char);
- return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),sellable=>sellableFrame(),nearby_players=>nearbyFrame(),near_players=>[map{{name=>$_->{name},x=>$_->{pos}{x},y=>$_->{pos}{y}}}@{nearbyFrame()}],near_monsters=>monstersFrame(),job_level=>defined$char->{lv_job}?0+$char->{lv_job}:undef,free_skill_points=>defined$char->{points_skill}?0+$char->{points_skill}:undef,learned_skills=>learnedFrame(),online_minutes=>defined$onlineSince?int((time()-$onlineSince)/60):undef,behavior_v1=>behaviorV1()?JSON::PP::true:JSON::PP::false,base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
+ return{proto=>1,type=>'telemetry',body_epoch=>$epoch,seq=>++$seq,ts=>time(),map=>$field->{baseName},pos=>{x=>0+$p->{x},y=>0+$p->{y}},dest=>{x=>0+$char->{pos_to}{x},y=>0+$char->{pos_to}{y}},hp=>0+($char->{hp}//0),hp_max=>0+($char->{hp_max}//0),sp=>0+($char->{sp}//0),sp_max=>0+($char->{sp_max}//0),zeny=>0+($char->{zeny}//0),weight=>0+($char->{weight}//0),weight_max=>0+($char->{weight_max}//0),dead=>($char->{dead}||!$char->{hp})?JSON::PP::true:JSON::PP::false,sitting=>$char->{sitting}?JSON::PP::true:JSON::PP::false,basic_skill=>0+($char->{skills}{NV_BASIC}{lv}//0),skill_points=>0+($char->{points_skill}//0),ai_action=>eval{AI::action()}//'',hunt_observation=>($active&&$active->{skill}eq'hunt'?{%{$active->{hunt_observation}}}:undef),inventory=>inventoryFrame(),class_id=>defined$char->{jobID}?0+$char->{jobID}:undef,party=>partyFrame(),cooperative_support=>cooperativeSupport()?JSON::PP::true:JSON::PP::false,duo_speech=>parallelSpeech()?JSON::PP::true:JSON::PP::false,sellable=>sellableFrame(),nearby_players=>nearbyFrame(),near_players=>[map{{name=>$_->{name},x=>$_->{pos}{x},y=>$_->{pos}{y}}}@{nearbyFrame()}],near_monsters=>monstersFrame(),job_level=>defined$char->{lv_job}?0+$char->{lv_job}:undef,free_skill_points=>defined$char->{points_skill}?0+$char->{points_skill}:undef,learned_skills=>learnedFrame(),online_minutes=>defined$onlineSince?int((time()-$onlineSince)/60):undef,behavior_v1=>behaviorV1()?JSON::PP::true:JSON::PP::false,base_level=>0+($char->{lv}//0),mode=>$mode,running=>$active?{action_id=>$active->{action_id},phase=>'running'}:undef};
 }
 sub sendFrame{
  return 0 unless$connection;my$bytes=encode_json($_[0])."\n";my$n=send($connection,$bytes,MSG_NOSIGNAL|MSG_DONTWAIT);
@@ -163,6 +176,7 @@ sub stopMotion{
  my$p=calcPosition($char);eval{$Globals::messageSender->sendMove(int$p->{x},int$p->{y})if$Globals::messageSender};
 }
 sub reject{my($a,$code,$why,$prev)=@_;emit('skill_rejected',{action_id=>$a,code=>$code,reason=>$why,prev_outcome=>$prev})}
+sub parallelSpeech{ return behaviorV1()||($config{residentDuo}&&$char->{party}{joined}) }
 sub command{
  my$m=shift;return unless ref$m eq'HASH'&&($m->{proto}//0)==1;my$t=$m->{type}//'';
  if($t eq'heartbeat'){$lastOrch=time();return}
@@ -174,12 +188,12 @@ sub command{
  return reject($a,'DUPLICATE','already journalled',$ledger{$existing}{result})if defined$existing;
  return reject($a,'EPOCH','body restarted')unless($m->{expect_epoch}//'')eq$epoch;
  my$isSpeech=($m->{skill}//'')eq'say'||($m->{skill}//'')eq'whisper';
- return reject($a,'BUSY','another skill active')if behaviorV1()?($isSpeech?$speech:$active):($active||$speech);
+ return reject($a,'BUSY','another skill active')if parallelSpeech()?($isSpeech?$speech:$active):($active||$speech);
  return reject($a,'ESTOP','emergency stop file present')if-f($ENV{RESIDENT_ESTOP}//'/root/ragnarok/run/ESTOP');
  return reject($a,'DIED','character not alive')if(!$char||!$char->{hp}||$char->{dead})&&($m->{skill}//'')ne'respawn';
  return reject($a,'TIMEOUT','expired deadline')unless($m->{deadline_ts}//0)>time();
  return reject($a,'UNSUPPORTED','respawn is v2 only')if behaviorV1()&&($m->{skill}//'')eq'respawn';
- return startSpeech($m)if behaviorV1()&&$isSpeech;
+ return startSpeech($m)if parallelSpeech()&&$isSpeech;
  if(($m->{skill}//'')eq'say'){
   my$p=$m->{params};return reject($a,'INVALID','no commands or controls in public speech')unless ref$p eq'HASH'&&plainSpeech($p->{text})&&$p->{text}!~/^\s*[\@#\/]/;
   $ledger{$k}={action_id=>$a,idem_key=>$k,result=>{outcome=>'unknown',code=>'IN_PROGRESS'}};push@order,$k;saveLedger();$active={%$m};
@@ -257,6 +271,7 @@ sub pollSkill{
   if(!behaviorV1()&&($char->{hp_max}//0)&&$char->{hp}*100/$char->{hp_max}<55&&time()-($active->{last_potion}//0)>=2){my($pot)=grep{$_->{nameID}==501&&$_->{amount}>0}@{bagItems()};if($pot){my$used=eval{$pot->use()};if($used){$active->{last_potion}=time();return}}}
   return if time()-($active->{last_potion}//0)<1;
   if(($char->{hp_max}//0)&&$char->{hp}*100/$char->{hp_max}<30){stopMotion();finish('error','NEEDS_REST','HP safety threshold reached');return}
+  return if cooperativeSupport(); # OpenKore follow + native partySkill own support; never fake a kill.
   require AI;
   if(time()-$active->{last_attack}>=2&&!AI::inQueue('attack')&&(AI::action()//'')ne'items_take'){
    $active->{last_attack}=time();my$list=eval{$Globals::monstersList->getItems()};if($@||ref($list)ne'ARRAY'){$active->{hunt_selection_failed}=1;return}my@seen=@$list;
