@@ -122,6 +122,11 @@ def brain_line():
     except LLMUnavailable:return 'Мозг: '+REASONS['NO_TOKEN']+'; жители живут на привычках.'
     client=Client(ROOT,STATE,c);spent,limit,calls=client.budget();gate=client.gate.state()
     line=f'{head}; сегодня ${spent:.4f} из ${limit} ({calls} вызовов)'
+    try:
+        import datetime
+        day=json.loads((STATE/'llm-spend.json').read_text())['days'][datetime.datetime.now(datetime.timezone.utc).date().isoformat()]
+        if calls:line+=f", ~{int(day.get('tokens_in',0))//calls} ток. на вход"
+    except (OSError,ValueError,KeyError,TypeError):pass
     if gate.get('until',0)>time.time():
         line+='; пауза до '+time.strftime('%H:%M',time.localtime(gate['until']))+': '+REASONS.get(gate.get('reason'),gate.get('reason',''))
     return line

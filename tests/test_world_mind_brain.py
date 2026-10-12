@@ -1,5 +1,6 @@
 """The LLM brain: lenient answers, honest availability, one repair, pauses, diary."""
 import json,pathlib,tempfile,unittest
+from decimal import Decimal
 from unittest.mock import Mock,patch
 
 C={'places':{'fountain':{'map':'prontera','x':156,'y':191},'market':{'map':'prontera','x':156,'y':180},'field':{'map':'prt_fild08','x':170,'y':240}},
@@ -120,7 +121,7 @@ class ChooseTests(unittest.TestCase):
         self.assertEqual(json.loads((self.d/'diary.json').read_text())[-1]['text'],'Встретила Тестера в Пронтере')
         self.assertEqual(self.m.plan(),'Потом на охоту')
         # Healthy pause between thoughts: the body is left alone, not handed to fallback.
-        self.assertTrue(self.m.waiting(1010));self.assertFalse(self.m.waiting(1046))
+        self.assertTrue(self.m.waiting(1010));self.assertFalse(self.m.waiting(self.m.next_call+1))
         records=[json.loads(l) for l in (self.state/'decisions.jsonl').read_text().splitlines()]
         self.assertEqual(records[-1]['kind'],'MODEL_DECISION')
     def test_one_repair_with_the_exact_reason(self):
@@ -215,11 +216,33 @@ class ChooseTests(unittest.TestCase):
         done,failed=self.m.heard()
         self.assertEqual(done['я ответил'],'Привет, привет');self.assertNotIn('я ответил',failed);self.assertIn('не смог ответить',failed)
     def test_budget_is_paced_over_the_day(self):
-        self.client.budget.return_value=(1,2,100)  # half the money spent by 03:00 UTC
-        self.assertGreater(self.m.gap(3*3600,{'action':'hunt'}),20*3)
-        self.client.budget.return_value=(.1,2,10)
-        self.assertEqual(self.m.gap(12*3600,{'action':'hunt'}),20)
+        # What is left of today's money (minus a 25% chat reserve) is spread over what is left
+        # of the UTC day for all residents (2 in this config).
+        self.client.budget.return_value=(Decimal('1.5'),Decimal(2),1500)  # $0.001 a call, $0.5 left at noon
+        self.assertAlmostEqual(self.m.gap(12*3600,{'action':'hunt'}),43200*2*.001/.375,delta=1)   # ≈ 230 s
+        self.client.budget.return_value=(Decimal('.1'),Decimal(2),100)
+        self.assertAlmostEqual(self.m.gap(12*3600,{'action':'hunt'}),43200*2*.001/1.425,delta=.01) # plenty left: ≈ 61 s
+        self.client.budget.return_value=(Decimal('.1'),Decimal(2),100)
+        self.assertEqual(self.m.gap(23.9*3600,{'action':'hunt'}),20)                             # near midnight: human pace
+        self.client.budget.return_value=(Decimal(2),Decimal(2),2000)
+        self.assertEqual(self.m.gap(12*3600,{'action':'hunt'}),300)                              # nothing left: rare rechecks
 
+
+
+class ContextSizeTests(unittest.TestCase):
+    def test_the_model_reads_at_most_about_one_and_a_half_k_and_the_v1_menu(self):
+        from packages.resident_world import mind
+        ctx={'сейчас':'12:00 (день)','я':{'имя':'Mira','class_id':4,'job_level':12,'learned_skills':{'AL_HEAL':1,'AL_DP':3},'party':{'members':[{'name':'Borin'}]},'cooperative_support':None},
+             'рядом':[{'имя':'P'+str(i),'житель':False,'клеток':i} for i in range(8)],'факты_с_сервера':[{'что':'убила Poring','когда':str(i)+' мин назад'} for i in range(12)],
+             'сегодня':'х'*600,'услышал':[{'кто':'Vanya','сказал':'длинная фраза '*8}]*16,'мой_план':'Накопить на меч','план_минут_назад':None,
+             'task':{'status':'active','action':'hunt','args':{'map':'prt_fild08','minutes':10}},'past_tasks':[{'id':'x'*36}]*12,
+             'мой_дневник':['запись '*10]*10,'последние_дела':[{'дело':'hunt','итог':'получилось'}]*8,'can_now':{a:'да' for a in mind.CORE_MENU}}
+        out=mind.fit_context(ctx,1536)
+        self.assertLessEqual(len(json.dumps(out,ensure_ascii=False,separators=(',',':'))),1536)
+        self.assertEqual(out['я']['класс'],'послушник, проф. ур. 12');self.assertEqual(out['я']['группа'],'Borin')
+        self.assertEqual(out['сейчас_делаю'][:4],'hunt');self.assertNotIn('past_tasks',out);self.assertEqual(out['мой_план'],'Накопить на меч')
+        self.assertEqual(set(mind.decision_schema(mind.CORE_MENU)['properties']['action']['enum']),set(mind.CORE_MENU))
+        self.assertNotIn('params',mind.decision_schema(mind.CORE_MENU)['properties'])
 
 
 class PlanContinuityTests(unittest.TestCase):

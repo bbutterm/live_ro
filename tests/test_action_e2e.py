@@ -2,9 +2,11 @@
 import contextlib,json,os,pathlib,subprocess,sys,tempfile,time,unittest
 from unittest.mock import patch
 from tests.world_sim import FakeWorld,FakeBody,FakeLLM
-from tests.test_world_brain_e2e import C,R,ROOT
+from tests.test_world_brain_e2e import C as BASE,R,ROOT
 from packages.resident_world import skills,mind,supervisor
 from packages.body_gateway.cli import request
+# The callable catalog is offered to the model only when the host enables it (llm.menu).
+C={**BASE,'llm':{**BASE.get('llm',{}),'menu':[*mind.CORE_MENU,'native_control']}}
 
 @unittest.skipUnless(sys.platform.startswith('linux'),'Unix gateway requires Linux')
 class CallableEndToEnd(unittest.TestCase):

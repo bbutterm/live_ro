@@ -22,7 +22,8 @@ class DuoContextTests(unittest.TestCase):
         try:
             s={**base.HEALTHY,'telemetry':{**base.HEALTHY['telemetry'],'class_id':4,'learned_skills':{'AL_HEAL':1},'party':{'name':'Duo','source':'native_client'}}}
             result=harness.m.perceive(s,1000)
-            self.assertEqual(result['я']['class_id'],4)
-            self.assertEqual(result['я']['learned_skills']['AL_HEAL'],1)
-            self.assertEqual(result['я']['party']['source'],'native_client')
+            # Compact, human-readable facts for the model (TZ §4 size): class, learned skills, party.
+            self.assertEqual(result['я']['класс'],'послушник')
+            self.assertIn('AL_HEAL',result['я']['умения'])
+            self.assertNotIn('party',result['я'])  # no members observed: nothing to claim
         finally:harness.tearDown()

@@ -238,7 +238,10 @@ class ActionInterfaceTests(unittest.TestCase):
                 self.assertEqual(skills.execute_native_menu('native_control',args,C,'sock','key',{},pathlib.Path(tmp)),'timeout')
                 self.assertEqual(run.call_args.args[1]['skill'],'travel_to')
         self.assertFalse(skills.retry_allowed('native_control',1,'timeout'))
-        self.assertIn('native_control',mind.Mind({'name':'Mira'},pathlib.Path('/unused'),C,client=object()).system_prompt())
+        # v1: the catalog is offered to the model only when the host lists it in llm.menu.
+        self.assertNotIn('native_control',mind.Mind({'name':'Mira'},pathlib.Path('/unused'),C,client=object()).system_prompt())
+        wide={**C,'llm':{**C.get('llm',{}),'menu':[*mind.CORE_MENU,'native_control']}}
+        self.assertIn('native_control',mind.Mind({'name':'Mira'},pathlib.Path('/unused'),wide,client=object()).system_prompt())
         self.assertTrue(mind.availability(C,HEALTHY)['heal'].startswith('нельзя'))
         with self.assertRaisesRegex(ValueError,'CAST_RESULT'):
             mind.normalize_decision({'action':'heal','player':'Tester','reason':'Помочь'},C,HEALTHY)
