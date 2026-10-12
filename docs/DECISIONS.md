@@ -1,4 +1,5 @@
 # Решения
+2026-10-12 — В ночной ветке support/hunt_party после подтверждённого маршрута повторяют eligibility по новому gateway status и текущему resident_id; потеря party/свежести/learned Heal запрещает hunt, native witness/live службы не меняются.
 2026-10-12 — В ночной ветке native_control whisper сохраняет ограничения адресата legacy whisper: nearby/enabled residents/собственные последние16 входящих за30мин, не себе; executor независимо читает inbox read-only и не доверяет caller _known, без native dispatch при WHISPER_TARGET, live не изменяется.
 2026-10-12 — Ночная ветка: find_party повторяет строгую проверку age 0–4 с при каждом опросе membership; ошибочный новый кадр завершает STALE_BODY без подтверждения party и без повтора предложения, native/server witness требования сохранены.
 2026-10-12 — В изолированной ночной ветке новые callable actions требуют явного числового возраста тела 0–4 с; неизвестный/некорректный возраст запрещает dispatch с STALE_BODY, witness/ownership и live службы неизменны.

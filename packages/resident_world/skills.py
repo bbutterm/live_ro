@@ -235,6 +235,11 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         if s['telemetry'].get('map')!=args['map']:
             result=run_native(sock,{'skill':'travel_to','params':{'map':args['map'],'x':170,'y':240,'r':3},'timeout':240},key+'-route',task,d)
             if result!='done':return result
+            # Travel can outlast membership/health/skill observations. Recheck the
+            # same eligibility contract before starting the cooperative hunt.
+            arrived={**request(sock,{'op':'status'}),'_resident_id':d.name}
+            reason=unavailable(action,args,c,arrived)
+            if reason:return 'failed('+reason+')'
         return run_native(sock,plan,key,task,d)
     if action in ('say','whisper','walk_to','rest'):
         plan=native_plan(action,args,c)

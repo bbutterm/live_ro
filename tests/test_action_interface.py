@@ -169,6 +169,38 @@ class ActionInterfaceTests(unittest.TestCase):
                 self.assertEqual(run.call_args.args[1]['params']['party_target'],'Borin')
                 self.assertTrue(run.call_args.args[1]['params']['solo'])
 
+    def test_cooperative_hunt_rechecks_eligibility_after_confirmed_travel(self):
+        args={'player':'Borin','map':'prt_fild08','minutes':5}
+        c={**C,'residents':[{'resident_id':'resident_b','name':'Mira','support_target':'Borin'}]}
+        initial={'age':0,'telemetry':{**HEALTHY['telemetry'],'map':'prontera','job_level':10,'learned_skills':{'AL_HEAL':3},'party':{'source':'native_client','share':1,'members':[{'name':'Borin','online':True}]}}}
+        arrived={**initial,'telemetry':{**initial['telemetry'],'map':'prt_fild08'}}
+        cases=[(arrived,'done'),
+               ({**arrived,'age':None},'failed(STALE_BODY)'),
+               ({**arrived,'telemetry':{**arrived['telemetry'],'party':None}},'failed(INVALID_SUPPORT_PARTY)'),
+               ({**arrived,'telemetry':{**arrived['telemetry'],'learned_skills':{'AL_HEAL':0}}},'failed(NO_LEARNED_HEAL)')]
+        for action in ('support','hunt_party'):
+            for final,expected in cases:
+                if action=='hunt_party' and expected=='failed(INVALID_SUPPORT_PARTY)':expected='failed(INVALID_PARTY)'
+                with self.subTest(action=action,expected=expected),tempfile.TemporaryDirectory() as tmp:
+                    d=pathlib.Path(tmp)/'resident_b'
+                    with patch.object(skills,'request',side_effect=[initial,final]) as rpc,patch.object(skills,'run_native',return_value='done') as run:
+                        self.assertEqual(skills.execute_native_menu(action,args,c,'sock','key',{},d),expected)
+                        self.assertEqual(rpc.call_count,2)
+                        self.assertEqual(run.call_count,2 if expected=='done' else 1)
+                        self.assertEqual(run.call_args_list[0].args[1]['skill'],'travel_to')
+        # Frontline party hunt must also reject membership lost during the route.
+        frontline={**C,'residents':[{'resident_id':'resident_b','name':'Mira'}]}
+        final={**arrived,'telemetry':{**arrived['telemetry'],'party':None}}
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(skills,'request',side_effect=[initial,final]),patch.object(skills,'run_native',return_value='done') as run:
+                self.assertEqual(skills.execute_native_menu('hunt_party',args,frontline,'sock','key',{},pathlib.Path(tmp)/'resident_b'),'failed(INVALID_PARTY)')
+                self.assertEqual(run.call_count,1)
+        # A failed route must never dispatch hunt or request a second status.
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(skills,'request',return_value=initial) as rpc,patch.object(skills,'run_native',return_value='timeout') as run:
+                self.assertEqual(skills.execute_native_menu('support',args,c,'sock','key',{},pathlib.Path(tmp)/'resident_b'),'timeout')
+                self.assertEqual(rpc.call_count,1);self.assertEqual(run.call_count,1)
+
     def test_find_party_contacts_only_consenting_candidates_once_and_waits_for_native_party(self):
         self.assertIn('find_party',skills.MENU)
         from packages.resident_world import actions
