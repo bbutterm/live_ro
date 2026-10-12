@@ -202,6 +202,11 @@ def execute_native_menu(action,args,c,sock,key,task,d):
     if action in ('sell_loot','sell_equipment','buy_potions'):
         result=run_native(sock,native_plan('town_service',{},c),key+'-route',task,d)
         if result!='done':return result
+        # The route may outlive the stock, loot and body observations that
+        # admitted this goal. Do not dispatch economics from that old snapshot.
+        arrived={**request(sock,{'op':'status'}),'_resident_id':d.name}
+        reason=unavailable(action,args,c,arrived)
+        if reason:return 'failed('+reason+')'
         if action=='buy_potions':plan={'skill':'buy_potions','params':{'item_id':501,**args},'timeout':40}
         else:plan={'skill':'sell_loot','params':{'category':'loot' if action=='sell_loot' else 'equipment'},'timeout':40}
         return run_native(sock,plan,key+'-trade',task,d)

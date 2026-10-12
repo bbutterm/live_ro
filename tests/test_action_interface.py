@@ -121,6 +121,32 @@ class ActionInterfaceTests(unittest.TestCase):
         s={'age':0,'telemetry':{'inventory':{},'sellable_by_category':{'equipment':{}}}}
         self.assertEqual(actions.unavailable('sell_equipment',{},C,s),'NO_SELLABLE_ITEMS')
 
+    def test_economic_actions_recheck_eligibility_after_confirmed_shop_route(self):
+        initial={'age':0,'telemetry':{'map':'prontera','zeny':300,'inventory':{},
+                 'sellable_by_category':{'loot':{'909':3},'equipment':{'1201':1}}}}
+        arrived={**initial,'telemetry':{**initial['telemetry'],'map':'prt_in'}}
+        for action in ('sell_loot','sell_equipment','buy_potions'):
+            args={'stock_goal':20,'max_zeny':300} if action=='buy_potions' else {}
+            changed=({'inventory':{'501':20}} if action=='buy_potions' else
+                     {'sellable_by_category':{'loot':{},'equipment':{}}})
+            depleted={**arrived,'telemetry':{**arrived['telemetry'],**changed}}
+            denied='STOCK_ALREADY_MET' if action=='buy_potions' else 'NO_SELLABLE_ITEMS'
+            cases=[(arrived,'done'),({**arrived,'age':None},'failed(STALE_BODY)'),
+                   (depleted,'failed('+denied+')'),
+                   ({**arrived,'telemetry':{**arrived['telemetry'],'dead':True}},'failed(DEAD)')]
+            for final,expected in cases:
+                with self.subTest(action=action,expected=expected),tempfile.TemporaryDirectory() as tmp:
+                    with patch.object(skills,'request',side_effect=[initial,final]) as rpc,patch.object(skills,'run_native',return_value='done') as run:
+                        self.assertEqual(skills.execute_native_menu(action,args,C,'sock','key',{},pathlib.Path(tmp)),expected)
+                        self.assertEqual(rpc.call_count,2)
+                        self.assertEqual(run.call_count,2 if expected=='done' else 1)
+                        self.assertEqual(run.call_args_list[0].args[1]['skill'],'travel_to')
+            # An unconfirmed route never attempts an economic operation or refresh.
+            with tempfile.TemporaryDirectory() as tmp:
+                with patch.object(skills,'request',return_value=initial) as rpc,patch.object(skills,'run_native',return_value='timeout') as run:
+                    self.assertEqual(skills.execute_native_menu(action,args,C,'sock','key',{},pathlib.Path(tmp)),'timeout')
+                    self.assertEqual(rpc.call_count,1);self.assertEqual(run.call_count,1)
+
     def test_free_native_control_has_schema_allowlist_and_no_console(self):
         self.assertIn('native_control',skills.MENU)
         from packages.resident_world import actions
