@@ -39,11 +39,12 @@ def main():
     if op=='actions':return action_cli(sys.argv[2:])
     if op=='stop':
         (STATE/'STOP').touch(mode=0o600)
-        subprocess.run(['systemctl','stop','ro-world.service'],check=True)
+        subprocess.run(['systemctl','stop','ro-world.service','ro-chat.service'],check=True)
         print('Все жители остановлены.');return
     if op=='start':
         (STATE/'STOP').unlink(missing_ok=True)
-        subprocess.run(['systemctl','start','ro-world.service'],check=True);return
+        subprocess.run(['systemctl','reset-failed','ro-chat.service'],check=False)
+        subprocess.run(['systemctl','start','ro-world.service','ro-chat.service'],check=True);return
     if op=='do':
         from .skills import execute
         if len(sys.argv)!=5:raise SystemExit('Формат: ro do житель action JSON-аргументы')
@@ -53,6 +54,7 @@ def main():
     if op=='doctor':return doctor()
     if op!='status':raise SystemExit('Доступно: ro status, ro doctor, ro stop, ro start, ro do.')
     print(version_line())
+    print(chat_line())
     for r in config()['residents']:
         d=STATE/r['resident_id'];name=r['name']
         try:
@@ -92,6 +94,17 @@ def version_line():
     try:line+='; ОШИБКА world.local.json ('+(STATE/'world.local.error').read_text().strip()[:120]+') — действует последняя верная копия'
     except OSError:pass
     return line
+
+def chat_line():
+    """Is the chat service alive (its listeners write chat-ready.json with their pid)."""
+    import os
+    for r in config()['residents']:
+        if not r.get('enabled',True):continue
+        try:
+            pid=json.loads((STATE/r['resident_id']/'chat-ready.json').read_text())['pid']
+            os.kill(int(pid),0);return f'Чат: работает (pid {pid})'
+        except (OSError,ValueError,KeyError,TypeError):continue
+    return 'Чат: НЕ работает — игрокам никто не ответит: systemctl reset-failed ro-chat; systemctl start ro-chat'
 
 def brain_line():
     from .llm import Client,LLMUnavailable,load_settings

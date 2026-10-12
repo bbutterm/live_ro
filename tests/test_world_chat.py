@@ -102,7 +102,7 @@ class ChatTests(unittest.TestCase):
         src=inspect.getsource(brain)
         self.assertIn('start_listener(r)',src)
         self.assertIn("d/'chat-goal.json'",src)
-        self.assertIn("d/'CHAT_PENDING'",src)
+        self.assertIn("chat_pending(d)",src)
         self.assertIn("d/'BRAIN_HOLD'",src)
 
     def test_reversible_goal_yields_to_incoming_chat_without_retry(self):
@@ -182,6 +182,39 @@ class ChatTests(unittest.TestCase):
             self.assertEqual(len(spoken),3);self.assertEqual(len(set(spoken)),3)  # three answers, no silence, no parroting
             outcomes=[json.loads(x[0])['outcome'] for x in store.db.execute('SELECT result FROM inbox ORDER BY id')]
             self.assertEqual(outcomes,['done','done','done'])
+
+    def test_a_marker_left_by_a_crashed_reply_never_freezes_the_resident(self):
+        import json,os,subprocess
+        from packages.resident_world.supervisor import chat_pending
+        with tempfile.TemporaryDirectory() as tmp:
+            d=pathlib.Path(tmp);p=d/'CHAT_PENDING'
+            p.write_text(json.dumps({'id':1,'pid':os.getpid(),'deadline':time.time()+10}))
+            self.assertTrue(chat_pending(d));self.assertTrue(p.exists())          # a live reply: wait
+            dead=subprocess.Popen(['true']);dead.wait()
+            p.write_text(json.dumps({'id':2,'pid':dead.pid,'deadline':time.time()+10}))
+            self.assertFalse(chat_pending(d));self.assertFalse(p.exists())       # its chat process died
+            p.write_text(json.dumps({'id':3,'pid':os.getpid(),'deadline':time.time()-1}))
+            self.assertFalse(chat_pending(d));self.assertFalse(p.exists())       # the reply window passed
+            p.write_text(json.dumps({'id':4}));os.utime(p,(time.time()-120,time.time()-120))
+            self.assertFalse(chat_pending(d))                                     # an old-format marker: a minute at most
+
+    def test_chat_service_pauses_on_stop_and_resumes_without_exiting(self):
+        import threading
+        from unittest.mock import patch
+        from packages.resident_world import chat,supervisor
+        with tempfile.TemporaryDirectory() as tmp:
+            state=pathlib.Path(tmp);(state/'STOP').touch();started=[]
+            def listener(r):
+                started.append(r['name'])
+                th=threading.Thread(target=lambda:[time.sleep(.05) for _ in iter(lambda:(state/'STOP').exists(),True)],daemon=True);th.start();return th
+            cfg={'residents':[{'name':'Mira','resident_id':'b','enabled':True}]}
+            with patch.object(supervisor,'STATE',state),patch.object(supervisor,'config',return_value=cfg),patch.object(chat,'start_listener',side_effect=listener):
+                server=threading.Thread(target=chat.serve,daemon=True);server.start()
+                time.sleep(1.5);self.assertTrue(server.is_alive());self.assertEqual(started,[])   # STOP: paused, not exited
+                (state/'STOP').unlink();time.sleep(1.5);self.assertEqual(started,['Mira'])
+                (state/'STOP').touch();time.sleep(1.5);(state/'STOP').unlink();time.sleep(2.5)
+                self.assertTrue(server.is_alive());self.assertEqual(started,['Mira','Mira'])      # resumed after ro start
+                (state/'STOP').touch()
 
 class ChatGoalLoopTests(unittest.TestCase):
     """The brain carries out what was agreed in a conversation exactly once."""

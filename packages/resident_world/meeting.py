@@ -1,6 +1,6 @@
 """Ограниченные переговоры: никакого согласия без отдельного решения модели."""
 import contextlib,json,re,time
-from .supervisor import atomic
+from .supervisor import atomic,chat_pending
 
 
 def validate_vote(v,c,place,allow_counter):
@@ -66,7 +66,7 @@ def execute(args,c,sock,key,task,d):
     other_sock=str(other_d/'actions.sock.control')
     if target['name']==task['resident']:return 'failed(SELF_MEETING)'
     task['meeting_chat_dirs']=[str(d),str(other_d)]
-    def busy():return (d/'CHAT_PENDING').exists() or (other_d/'CHAT_PENDING').exists() or (other_d/'chat-goal.json').exists()
+    def busy():return chat_pending(d) or chat_pending(other_d) or (other_d/'chat-goal.json').exists()
     def label(place):return skills.place_phrase(c,place)
     def speak(sock,path,owner,text,suffix,to):
         owner.setdefault('protocol_speech',[]).append(text)

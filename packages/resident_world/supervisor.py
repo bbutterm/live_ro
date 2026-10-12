@@ -52,6 +52,30 @@ def atomic(path,value):
     tmp=path.with_name(f'{path.name}.{os.getpid()}.{threading.get_ident()}.tmp')
     tmp.write_text(json.dumps(value,ensure_ascii=False));os.replace(tmp,path)
 
+def chat_pending(d,now=None):
+    """A live conversation marker. A stale one (its chat process died, or the reply window
+    passed) is removed, so a crash mid-reply can never freeze a resident forever."""
+    p=d/'CHAT_PENDING'
+    try:raw=p.read_text();m=json.loads(raw)
+    except FileNotFoundError:return False
+    except (OSError,ValueError):raw=None;m={}
+    now=time.time() if now is None else now
+    if not isinstance(m,dict):m={}
+    deadline=m.get('deadline')
+    if not isinstance(deadline,(int,float)) or isinstance(deadline,bool):
+        try:deadline=p.stat().st_mtime+60  # an old-format marker: at most a minute
+        except OSError:return False
+    alive=True
+    if type(m.get('pid')) is int:
+        try:os.kill(m['pid'],0)
+        except ProcessLookupError:alive=False
+        except PermissionError:pass
+    if alive and now<=deadline:return True
+    try:
+        if raw is None or p.read_text()==raw:p.unlink()  # never remove a newer marker
+    except OSError:pass
+    return False
+
 # Host state of one concrete world (who is enabled, duo roles, operator personas) lives on
 # that host in STATE/world.local.json, never in git: config/world.yaml is the shared base.
 OVERLAY_RESIDENT_KEYS={'enabled':bool,'persona':str,'support_target':str,'duo_partner':str,'party_search_consent':list}
@@ -126,7 +150,7 @@ def brain(r):
     except (OSError,ValueError,AttributeError):pending=None
     while not (STATE/'STOP').exists():
         try:
-            if (d/'CHAT_PENDING').exists():time.sleep(.1);continue
+            if chat_pending(d):time.sleep(.1);continue
             # Lazy and retried: inserting the token in .env needs no restart.
             if mind is None and config().get('llm',{}).get('enabled') and 'name' in r and 'char_id' in r and time.time()>=mind_retry:
                 try:
@@ -192,7 +216,7 @@ def brain(r):
                 except Exception as error:  # a brain bug or odd network error must not kill the process
                     logging.getLogger('world').warning('mind.choose %s: %s',r['name'],type(error).__name__)
                     mind.next_call=mind.unavailable_until=time.time()+120;mind.pause_reason='ERROR';proposal=None
-                if (d/'CHAT_PENDING').exists() or (d/'chat-goal.json').exists():
+                if chat_pending(d) or (d/'chat-goal.json').exists():
                     # A conversation started meanwhile: the saved intent is re-checked afterwards
                     # (no new paid call unless it no longer fits).
                     time.sleep(.1);continue

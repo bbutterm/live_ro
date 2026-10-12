@@ -9,7 +9,7 @@ reopens (packages.resident_world.llm); native habits keep the body alive meanwhi
 import contextlib,datetime,fcntl,json,logging,math,random,re,sqlite3,time,uuid
 from logging.handlers import RotatingFileHandler
 from packages.resident_world.skills import validate,MENU,PROMISE,has_sellable,place_phrase
-from packages.resident_world.supervisor import ROOT,STATE,atomic,regeneration_blocked
+from packages.resident_world.supervisor import ROOT,STATE,atomic,regeneration_blocked,chat_pending
 from packages.resident_world.llm import Client,LLMUnavailable,BadModelOutput,parse_json_object
 from .continuity import task_state,begin_task,finish_task,past_tasks,intent
 
@@ -507,7 +507,7 @@ class Mind:
             decision={'action':'idle','args':{'minutes':3},'reason':'Не повторяю завершённое дело или прощание'}
             notes.update(plan='',remember='')
         self.next_call=now+self.gap(now,decision)
-        if (self.d/'CHAT_PENDING').exists() or (self.d/'chat-goal.json').exists():
+        if chat_pending(self.d) or (self.d/'chat-goal.json').exists():
             record('MODEL_DEFERRED',resident=self.r['name'],reason='PLAYER_INTERRUPTION')
             return None
         proposal={'id':str(uuid.uuid4()),'at':now,'decision':decision,'thought':notes.get('thought',''),'plan':notes.get('plan',''),'state':self.situation(s)}
@@ -581,7 +581,7 @@ class Mind:
     def negotiate(self,offer,s,allow_counter):
         from .meeting import validate_vote
         if time.time()<max(self.next_call,self.unavailable_until):return None
-        if (self.d/'CHAT_PENDING').exists():return None
+        if chat_pending(self.d):return None
         chat_goal=self.d/'chat-goal.json'
         if chat_goal.exists():
             from .skills import chat_goal_task

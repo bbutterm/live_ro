@@ -2,8 +2,9 @@
 Description=RO resident chat independent of brain lifecycle
 After=ro-world.service
 Wants=ro-world.service
-StartLimitIntervalSec=300
-StartLimitBurst=10
+PartOf=ro-world.service
+# Never give up: `ro stop/start` and short outages must not leave the chat failed.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple

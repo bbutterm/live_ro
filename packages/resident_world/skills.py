@@ -1,6 +1,6 @@
 """Versioned menu skills. Native ACK is never completion; economics never blind-retry."""
 import contextlib,fcntl,json,os,pathlib,re,sqlite3,time,uuid
-from .supervisor import STATE,config,atomic
+from .supervisor import STATE,config,atomic,chat_pending
 from packages.body_gateway.cli import request
 from packages.body_gateway.journal import TERMINAL
 from packages.resident_demo.life_cycle import LOOT
@@ -113,8 +113,8 @@ def retry_allowed(action,attempt,result):return action in REVERSIBLE and action!
 def interrupted(task,skill,d):
     if skill not in ('buy_potions','sell_loot') and cancelled(task,d):return True
     if skill not in ('buy_potions','sell_loot') and task.get('meeting_chat_dirs'):
-        return any((pathlib.Path(path)/'CHAT_PENDING').exists() for path in task['meeting_chat_dirs'])
-    return task.get('origin')!='chat' and skill not in ('buy_potions','sell_loot') and (d/'CHAT_PENDING').exists()
+        return any(chat_pending(pathlib.Path(path)) for path in task['meeting_chat_dirs'])
+    return task.get('origin')!='chat' and skill not in ('buy_potions','sell_loot') and chat_pending(d)
 
 
 def native_plan(action,args,c):

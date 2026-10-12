@@ -219,7 +219,9 @@ def handle(event,r,c,store,model=None):
     from .mind import record
     from packages.body_gateway.cli import request
     peer=r.get('duo_partner')==event.get('name') and bool(r.get('duo_partner'))
-    d=STATE/r['resident_id'];marker=d/('PEER_CHAT_PENDING' if peer else 'CHAT_PENDING');atomic(marker,{'id':event['id']})
+    import os
+    pending={'id':event['id'],'pid':os.getpid(),'deadline':float(event.get('ts') or time.time())+15}  # stale-proof (supervisor.chat_pending)
+    d=STATE/r['resident_id'];marker=d/('PEER_CHAT_PENDING' if peer else 'CHAT_PENDING');atomic(marker,pending)
     started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+10}
     try:
         s=request(str(d/'actions.sock.control'),{'op':'status'})
@@ -261,7 +263,7 @@ def handle(event,r,c,store,model=None):
                 task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
                 record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,channel='duo_speech',seconds=time.time()-event['ts'])
                 return
-        if peer:atomic(d/'CHAT_PENDING',{'id':event['id']}) # explicit movement commitments still interrupt
+        if peer:atomic(d/'CHAT_PENDING',pending) # explicit movement commitments still interrupt
         # The same resident writer owns speech and its persisted movement commitment.
         while time.time()<event['ts']+8:
             try:
@@ -328,9 +330,17 @@ def serve():
     os.umask(0o077)
     with (STATE/'chat-service.lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        threads=[start_listener(r) for r in config()['residents'] if r.get('enabled',True)]
-        while not (STATE/'STOP').exists():
-            if not all(t.is_alive() for t in threads):raise RuntimeError('CHAT_LISTENER_DIED')
+        threads=[];paused=False
+        while True:
+            if (STATE/'STOP').exists():
+                # `ro stop`: pause, never exit — an exit loop would exhaust systemd's restart limit
+                # and leave the chat dead after `ro start`. Listeners leave their loops by themselves.
+                paused=True;time.sleep(1);continue
+            if paused:
+                for t in threads:t.join(timeout=15)  # let a reply in progress finish
+                threads=[];paused=False
+            if not threads:threads=[start_listener(r) for r in config()['residents'] if r.get('enabled',True)]
+            elif not all(t.is_alive() for t in threads):raise RuntimeError('CHAT_LISTENER_DIED')
             time.sleep(.2)
 
 
