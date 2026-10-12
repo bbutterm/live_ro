@@ -131,6 +131,14 @@ def unavailable(action,args,c,s):
         if t.get('learned_skills',{}).get('AL_HEAL',0)<1:return 'NO_LEARNED_HEAL'
     return None
 
+def whisper_target_allowed(c,s,target,known=(),me=None):
+    own=next((r for r in c.get('residents',[]) if r.get('resident_id')==s.get('_resident_id')), {})
+    me=me or own.get('name') or s.get('_me')
+    nearby=[p.get('name') for p in (s.get('telemetry') or {}).get('nearby_players',[])]
+    residents=[r.get('name') for r in c.get('residents',[]) if r.get('enabled',True)]
+    return isinstance(target,str) and target!=me and target in nearby+residents+list(known)
+
+
 def party_member(t,target=None):
     party=t.get('party') or {}
     return party.get('source')=='native_client' and party.get('share')==1 and any(u.get('online') is True and (not target or u.get('name')==target) for u in party.get('members',[]))

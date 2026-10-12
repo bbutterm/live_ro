@@ -1,5 +1,5 @@
 """Versioned menu skills. Native ACK is never completion; economics never blind-retry."""
-import contextlib,fcntl,json,os,pathlib,re,time,uuid
+import contextlib,fcntl,json,os,pathlib,re,sqlite3,time,uuid
 from .supervisor import STATE,config,atomic
 from packages.body_gateway.cli import request
 from packages.body_gateway.journal import TERMINAL
@@ -175,11 +175,25 @@ def run_native(sock,plan,key,task,d):
     if plan['skill'] not in ('buy_potions','sell_loot'):request(sock,{'op':'cancel','action_id':a['action_id']})
     return 'timeout'
 
+def recent_whisper_contacts(d,name):
+    """Read only this resident's bounded inbox; absent/unreadable evidence grants nothing."""
+    now=time.time()
+    try:
+        with contextlib.closing(sqlite3.connect('file:'+str(d.parent/'chat.sqlite')+'?mode=ro',uri=True)) as db:
+            rows=db.execute("SELECT json_extract(payload,'$.name') FROM inbox WHERE resident=? AND json_extract(payload,'$.ts') BETWEEN ? AND ? AND status NOT IN ('ignored','expired') ORDER BY id DESC LIMIT 16",(name,now-1800,now)).fetchall()
+    except sqlite3.Error:return []
+    return [row[0] for row in rows if isinstance(row[0],str)]
+
+
 def execute_native_menu(action,args,c,sock,key,task,d):
     if action in EXTRA:
         s=request(sock,{'op':'status'});s={**s,'_resident_id':d.name}
         reason=unavailable(action,args,c,s)
         if reason:return 'failed('+reason+')'
+        if action=='native_control' and args['skill']=='whisper':
+            from .actions import whisper_target_allowed
+            own=next((r for r in c.get('residents',[]) if r.get('resident_id')==d.name),None)
+            if own is None or not whisper_target_allowed(c,s,args['params']['to_name'],recent_whisper_contacts(d,own['name'])):return 'failed(WHISPER_TARGET)'
     if action in ('travel_to','respawn','native_control'):
         skill=args['skill'] if action=='native_control' else action
         params=args['params'] if action=='native_control' else args

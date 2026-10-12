@@ -40,6 +40,48 @@ class ActionInterfaceTests(unittest.TestCase):
         for age in (0,0.5,4):
             self.assertIsNone(actions.unavailable('native_control',args,C,{**HEALTHY,'age':age}))
 
+    def test_native_whisper_runtime_and_model_restrict_targets_to_own_recent_contacts(self):
+        import json,sqlite3,time
+        c={**C,'residents':[{'resident_id':'resident_b','name':'Mira'},
+                          {'resident_id':'resident_a','name':'Borin'},
+                          {'resident_id':'disabled','name':'Disabled','enabled':False}]}
+        now=time.time()
+        with tempfile.TemporaryDirectory() as tmp:
+            root=pathlib.Path(tmp);d=root/'resident_b';d.mkdir()
+            with sqlite3.connect(root/'chat.sqlite') as db:
+                db.execute('CREATE TABLE inbox(id INTEGER PRIMARY KEY,payload TEXT,resident TEXT,status TEXT,result TEXT)')
+                # Sixteen more recent turns exclude an older contact even within 30min.
+                db.execute('INSERT INTO inbox(payload,resident,status) VALUES(?,?,?)',
+                           (json.dumps({'name':'Evicted','ts':now-60}),'Mira','done'))
+                for _ in range(16):
+                    db.execute('INSERT INTO inbox(payload,resident,status) VALUES(?,?,?)',
+                               (json.dumps({'name':'Recent','ts':now-30}),'Mira','done'))
+                # Insert invalid contacts last so each predicate, not just the limit, excludes them.
+                for target,resident,status,ts in (
+                    ('Old','Mira','done',now-1801),('Ignored','Mira','ignored',now-60),
+                    ('Expired','Mira','expired',now-60),('Foreign','Borin','done',now-60),
+                    ('Future','Mira','done',now+60)):
+                    db.execute('INSERT INTO inbox(payload,resident,status) VALUES(?,?,?)',
+                               (json.dumps({'name':target,'ts':ts}),resident,status))
+            for target in ('Mira','Stranger','Disabled','Old','Ignored','Expired','Foreign','Future','Evicted','Tester','Borin','Recent'):
+                args={'skill':'whisper','params':{'to_name':target,'text':'Привет!'}}
+                permitted=target in ('Tester','Borin','Recent')
+                with self.subTest(target=target),patch.object(skills,'STATE',root),patch.object(skills,'request',return_value={**HEALTHY,'_known':['Stranger']}),patch.object(skills,'run_native',return_value='done') as run:
+                    actual=skills.execute_native_menu('native_control',args,c,'sock','key',{},d)
+                    self.assertEqual(actual,'done' if permitted else 'failed(WHISPER_TARGET)')
+                    self.assertEqual(run.call_count,int(permitted))
+                if permitted:
+                    decision,_=mind.normalize_decision({'action':'native_control',**args,'reason':'Привет'},c,HEALTHY,known=('Recent',),me='Mira')
+                    self.assertEqual(decision['args'],args)
+                else:
+                    with self.assertRaisesRegex(ValueError,'WHISPER_TARGET'):
+                        mind.normalize_decision({'action':'native_control',**args,'reason':'Привет'},c,HEALTHY,known=('Recent',),me='Mira')
+            # No durable inbox: nearby and enabled residents remain usable, recent stranger fails closed.
+            (root/'chat.sqlite').unlink()
+            with patch.object(skills,'STATE',root),patch.object(skills,'request',return_value=HEALTHY),patch.object(skills,'run_native') as run:
+                self.assertEqual(skills.execute_native_menu('native_control',{'skill':'whisper','params':{'to_name':'Recent','text':'Привет!'}},c,'sock','key',{},d),'failed(WHISPER_TARGET)')
+                run.assert_not_called()
+
     def test_catalog_support_guard_and_explicit_unavailable_heal(self):
         self.assertTrue(hasattr(skills,'discover'),'catalog missing')
         from packages.resident_world import actions

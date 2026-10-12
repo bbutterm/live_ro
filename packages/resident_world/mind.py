@@ -175,6 +175,10 @@ def normalize_decision(obj,c,s,allowed=tuple(MENU),event=None,known=(),me=None):
         nested=obj.get('args')
         if isinstance(nested,dict) and set(nested)-MENU[action]:raise ValueError('INVALID_ACTION_ARGS')
         if action!='hunt_solo':args={k:given[k] for k in MENU[action] if k in given}
+        if action=='native_control' and args.get('skill')=='whisper':
+            from .actions import whisper_target_allowed
+            params=args.get('params')
+            if isinstance(params,dict) and not whisper_target_allowed(c,s,params.get('to_name'),known,me):raise ValueError('WHISPER_TARGET')
     say=clean_text(obj.get('say') or '',80)
     if action in ('say','whisper') or (action=='native_control' and args.get('skill') in ('say','whisper')) or (say and (not re.search('[А-Яа-яЁё]',say) or (PROMISE.search(say) and action not in MOVING))):
         say=''  # one speech channel; never a promise without the matching movement
