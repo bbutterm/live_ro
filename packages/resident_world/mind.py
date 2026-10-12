@@ -37,6 +37,8 @@ for key in ARG_KEYS:
         DECISION_SCHEMA['properties'][key]={'anyOf':[spec,{'type':'null'}]}
 # v1 autonomous menu (TZ §4). The callable catalog stays for operators (`ro actions`) and is
 # offered to the model only when the host lists it in llm.menu (after v1 acceptance).
+CHAT_SKIP={'TIMEOUT':'ИИ не успел за 7,5 с','DAILY_LIMIT':'суточный лимит трат','NO_TOKEN':'нет токена','AUTH':'ключ не принят','NO_CREDITS':'нет денег на счёте','RATE_LIMIT':'лимит запросов провайдера (429)','OUTAGE':'провайдер недоступен'}
+CHAT_DEADLINE_S=7.5  # the model must answer by then: speaking and the server's confirmation fit in the 10 s a player waits
 CORE_MENU=('say','whisper','walk_to','hunt','rest','town_service','follow','meet','idle')
 NOTE_KEYS=('thought','action','say','remember','plan','reason')
 
@@ -276,6 +278,7 @@ def compact_state(r,s,d,history,memory='',activity=None,limit=1536):
     except sqlite3.Error:pass
     state={'name':r['name'],'map':p.get('server_map',{}).get('value'),'pos':p.get('server_pos',{}).get('value'),'hp':t.get('hp'),'hp_max':t.get('hp_max'),'sp':t.get('sp'),'sp_max':t.get('sp_max'),'weight':t.get('weight'),'weight_max':t.get('weight_max'),'potions':t.get('inventory',{}).get('501',0),'zeny':t.get('zeny'),'nearby':[{'name':a['name'][:24],'pos':a.get('pos')} for a in t.get('nearby_players',[])[:6]],'events':facts,'history':[{'action':a['action'],'outcome':a['outcome']} for a in history[-6:]],'memory':memory[:600]}
     state.update(class_id=t.get('class_id'),job_level=t.get('job_level'),learned_skills=t.get('learned_skills'),party=t.get('party'),cooperative_support=t.get('cooperative_support'))
+    state.update(base_level=t.get('base_level'),job=CLASSES.get(t.get('class_id')))  # «какой у тебя уровень?» is answered from facts
     if activity is not None:state['activity']=activity
     while True:
         text=json.dumps(state,ensure_ascii=False,separators=(',',':'))
@@ -616,15 +619,14 @@ class Mind:
     def respond(self,event,s,default):
         from .chat import validate_reply
         now=time.time()
-        remaining=float(event.get('ts',now))+6.5-now
-        if now<self.chat_next or remaining<2:return default  # too late for a model: the quick default still makes it
+        remaining=float(event.get('ts',now))+CHAT_DEADLINE_S-now;self.last_skip=None  # why the quick default answered (ro chat)
+        if now<self.chat_next:self.last_skip='ИИ на паузе после ошибки провайдера';return default
+        if remaining<2:self.last_skip='реплика дошла поздно';return default  # too late for a model: the quick default still makes it
         sender=str(event.get('name',''))
         calls=self.__dict__.setdefault('chat_calls',{});recent=[t for t in calls.get(sender,[]) if now-t<120]
-        if len(recent)>=int(self.llm.get('chat_calls_per_sender_2min',12)):return default  # one chatty player cannot burn the day (12 ≈ a line every 10 s)
-        try:
-            spent,limit,_=self.client.budget(now)
-            if limit>0 and float(spent/limit)>max(.3,1.5*((now%86400)/86400)):return default  # keep money for living
-        except Exception:pass
+        # Flood guard only (a line every 4 s for 2 minutes): a person talking is always answered by the model.
+        # Money: the brain already leaves chat_reserve of the day to conversations; the ledger stops at the daily limit.
+        if len(recent)>=int(self.llm.get('chat_calls_per_sender_2min',30)):self.last_skip='флуд: больше 30 реплик за 2 минуты';return default
         calls[sender]=recent+[now]
         try:self.history=json.loads(self.history_path.read_text())
         except (OSError,ValueError,AttributeError):pass
@@ -642,15 +644,19 @@ class Mind:
                 'walk_to(place) — пойти в место; meet(resident,place) — встретиться с жителем. Для follow/walk_to/meet обязательно добавь say с ответом. '
                 'Места: '+', '.join(f'{k} ({place_phrase(self.c,k)})' for k in self.c['places'])+'. Неиспользуемые поля — null. Ответ — один JSON-объект.')
         try:
-            raw=self._complete([{'role':'system','content':prompt},{'role':'user','content':json.dumps(context,ensure_ascii=False)}],timeout=min(8.0,remaining),schema=CHAT_SCHEMA,purpose='chat',max_tokens=200,shared_pause=False,deadline=float(event.get('ts',now))+6.5)
+            raw=self._complete([{'role':'system','content':prompt},{'role':'user','content':json.dumps(context,ensure_ascii=False)}],timeout=min(8.0,remaining),schema=CHAT_SCHEMA,purpose='chat',max_tokens=200,shared_pause=False,deadline=float(event.get('ts',now))+CHAT_DEADLINE_S)
             decision,_=normalize_decision(parse_json_object(raw),self.c,s,allowed=CHAT_ACTIONS,event=event,me=self.r['name'])
             if decision['action'] not in ('say','whisper') and not decision.get('say'):decision['say']=clean_text((default or {}).get('say') or (default or {}).get('args',{}).get('text') or 'Хорошо.',80)
             return validate_reply(decision,event,self.c,s)
         except LLMUnavailable as error:
-            self.chat_next=min(error.until,now+300) if error.reason in ('DAILY_LIMIT','NO_TOKEN') else error.until
+            # A slow answer only missed this line; the next line asks again. Provider errors pause chat briefly.
+            if error.reason!='TIMEOUT':self.chat_next=min(error.until,now+300) if error.reason in ('DAILY_LIMIT','NO_TOKEN') else error.until
+            self.last_skip=CHAT_SKIP.get(error.reason,'ИИ недоступен: '+str(error.reason))
             record('CHAT_MODEL_UNAVAILABLE',resident=self.r['name'],reason=error.reason,status=error.status);return default
         except Exception as error:
-            self.chat_next=now+5;record('CHAT_MODEL_FALLBACK',resident=self.r['name'],error=type(error).__name__+': '+str(error)[:200]);return default
+            # One odd answer is not a provider outage: the next line asks the model again.
+            self.last_skip='ИИ ответил не по правилам: '+str(error)[:40]
+            record('CHAT_MODEL_FALLBACK',resident=self.r['name'],error=type(error).__name__+': '+str(error)[:200]);return default
     def negotiate(self,offer,s,allow_counter):
         from .meeting import validate_vote
         if time.time()<max(self.next_call,self.unavailable_until):return None

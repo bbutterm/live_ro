@@ -3,6 +3,7 @@ import re,json,sqlite3
 from .supervisor import online
 ALIASES={'Mira':('мира','миру','mira'), 'Borin':('борин','борина','borin'), 'ResidentA':('residenta','резидент','резидента')}
 LEGACY_FALLBACK='Слышу тебя. Сейчас я рядом.'
+PLACES={'prontera':'в Пронтере','prt_fild08':'на поле к югу от Пронтеры','prt_in':'в лавке в Пронтере'}
 COME=r'пойд[её]м со мной|иди за мной|следуй за мной|(?:иди|приходи|подойди|беги)\s+(?:ко мне|сюда)|найди меня'
 
 def stop_requested(event):
@@ -11,7 +12,8 @@ def stop_requested(event):
         for alias in aliases:text=re.sub(r'^'+re.escape(alias)+r'[, :]+','',text)
     return bool(re.fullmatch(r'стой|стоп|остановись|отмени(?: задачу| встречу)?|не (?:иди|следуй)(?: за мной)?',text))
 
-def select_responder(event,residents,states,now,radius=14):
+def select_responder(event,residents,states,now,radius=14,partner=None):
+    """partner: the resident this speaker was just talking with — a follow-up without a name is theirs."""
     eligible=[]
     for r in residents:
         s=states.get(r['resident_id'],{})
@@ -32,13 +34,29 @@ def select_responder(event,residents,states,now,radius=14):
     if mentioned:
         addressed=min(mentioned)[1]
         return next((r for _,r in eligible if r['name']==addressed),None)
+    if partner:
+        same=next((r for _,r in eligible if r['name']==partner),None)
+        if same:return same
     return min(eligible,key=lambda pair:(pair[0],pair[1]['name']))[1]
 
 class ChatStore:
     def __init__(self,path):
         self.db=sqlite3.connect(path,timeout=2)
         self.db.execute('PRAGMA journal_mode=WAL');self.db.execute('PRAGMA synchronous=FULL')
-        self.db.executescript('CREATE TABLE IF NOT EXISTS inbox(id INTEGER PRIMARY KEY,payload TEXT,resident TEXT,status TEXT,claimed REAL,result TEXT); CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value REAL);')
+        self.db.executescript('CREATE TABLE IF NOT EXISTS inbox(id INTEGER PRIMARY KEY,payload TEXT,resident TEXT,status TEXT,claimed REAL,result TEXT); CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value REAL);'
+                              'CREATE TABLE IF NOT EXISTS outgoing(resident TEXT,text TEXT,at REAL,to_human INTEGER);')
+    def note_outgoing(self,resident,text,to_human,now):
+        """Written before the words are spoken, so the poller already knows whose answer it hears."""
+        with self.db:
+            self.db.execute('DELETE FROM outgoing WHERE at<?',(now-300,))
+            self.db.execute('INSERT INTO outgoing VALUES(?,?,?,?)',(resident,text,now,1 if to_human else 0))
+    def answer_to_human(self,resident,text,now):
+        """This resident line is its answer to a player: other residents must not take it as addressed to them."""
+        return self.db.execute('SELECT 1 FROM outgoing WHERE resident=? AND text=? AND to_human=1 AND at>? LIMIT 1',(resident,text,now-60)).fetchone() is not None
+    def partner(self,name,now):
+        """The resident who answered this player during the last 90 seconds."""
+        row=self.db.execute("SELECT resident FROM inbox WHERE json_extract(payload,'$.name')=? AND resident IS NOT NULL AND claimed>? ORDER BY id DESC LIMIT 1",(name,now-90)).fetchone()
+        return row[0] if row else None
     def get(self,key,default=0):
         row=self.db.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone()
         return row[0] if row else default
@@ -54,14 +72,15 @@ class ChatStore:
                 prior=self.db.execute('SELECT 1 FROM inbox WHERE resident=? AND json_extract(payload,\'$.name\')=? AND json_extract(payload,\'$.text\')=? AND json_extract(payload,\'$.ts\')>? LIMIT 1',
                                       (resident,event.get('name'),event.get('text'),now-120)).fetchone()
                 if prior or event.get('text')==LEGACY_FALLBACK:status='ignored'
-            self.db.execute('INSERT INTO inbox VALUES(?,?,?,?,NULL,NULL)',(event['id'],json.dumps(event,ensure_ascii=False),resident,status))
+            self.db.execute('INSERT INTO inbox VALUES(?,?,?,?,NULL,NULL)',(event['id'],json.dumps(dict(event,human=not is_resident),ensure_ascii=False),resident,status))
             self.put('cursor',event['id']);return status=='queued'
     def claim(self,name,now):
         with self.db:
             self.db.execute('BEGIN IMMEDIATE')
             self.db.execute("UPDATE inbox SET status='expired' WHERE status='queued' AND json_extract(payload,'$.ts')<?",(now-10,))
-            if self.db.execute('SELECT COUNT(*) FROM inbox WHERE resident=? AND claimed>?',(name,now-60)).fetchone()[0]>=12:return None  # a line every 5 s still gets an answer
-            row=self.db.execute("SELECT id,payload FROM inbox WHERE resident=? AND status='queued' ORDER BY id LIMIT 1",(name,)).fetchone()
+            if self.db.execute('SELECT COUNT(*) FROM inbox WHERE resident=? AND claimed>?',(name,now-60)).fetchone()[0]>=30:return None  # flood guard: a person talking fast is still answered
+            # A player first: residents' small talk never makes a person wait.
+            row=self.db.execute("SELECT id,payload FROM inbox WHERE resident=? AND status='queued' ORDER BY COALESCE(json_extract(payload,'$.human'),0) DESC,id LIMIT 1",(name,)).fetchone()
             if not row:return None
             self.db.execute("UPDATE inbox SET status='claimed',claimed=? WHERE id=?",(now,row[0]));return json.loads(row[1])
     def finish(self,event_id,result):
@@ -90,11 +109,18 @@ def activity_phrase(state):
     return {'prt_fild08':'на поле','prontera':'в городе','prt_in':'в торговой лавке'}.get(t.get('map'),'здесь')
 
 def human_templates(name,text,state):
-    """Honest short answers for a human when the model is not used: never silence."""
-    a=activity_phrase(state)
+    """Honest short answers for a human when the model is not used: never silence.
+    Simple questions about the resident itself are answered from its own body telemetry."""
+    a=activity_phrase(state);t=(state or {}).get('telemetry') or {}
     if re.search(r'кто ты|ты кто',text):return ['Я '+name+', ИИ-персонаж этого мира.','Я '+name+'. Сейчас '+a+'.']
+    if re.search(r'уров',text) and t.get('base_level'):
+        from .mind import CLASSES
+        job=CLASSES.get(t.get('class_id'),'')
+        return [f"У меня {t['base_level']} уровень"+(f", я {job}" if job else '')+'.',f"Уровень {t['base_level']}"+(f", профессия — {job}" if job else '')+'.']
+    if re.search(r'зени|деньг|денег',text) and t.get('zeny') is not None:return [f"У меня {t['zeny']} зени.",f"Сейчас {t['zeny']} зени."]
+    if re.search(r'где ты|ты где|где сейчас',text):return ['Я '+PLACES.get(t.get('map'),'здесь')+', '+a+'.','Сейчас '+a+', '+PLACES.get(t.get('map'),'здесь')+'.']
     if re.search(r'привет|здравств|добр(ый|ое|ого)|хай|салют',text):return ['Привет!','Привет! Сейчас '+a+'.','Здравствуй! Я '+a+'.']
-    return ['Слышу тебя. Сейчас '+a+'.','Я тут, '+a+'. Спроси чуть позже, сейчас не до разговора.','Слышу. Пока '+a+'.']
+    return ['Слышу тебя. Сейчас '+a+'.','Прости, секунду. Повтори?','Слышу. Пока '+a+'.']
 
 def fallback_reply(name,event,state,human=True,avoid=()):
     """Quick reply without the model. A human player always gets an answer;
@@ -169,7 +195,9 @@ def ingest(store,c):
                     task=json.loads((STATE/source['resident_id']/'manual_task.json').read_text())
                     internal=task.get('started',0)<=event['ts']+1<=min(task.get('ended',time.time()),task.get('expires',time.time()))+2 and meeting_protocol(event,task,c)
                 except (OSError,ValueError):pass
-            responder=None if internal else select_responder(event,c['residents'],states,time.time(),c.get('chat_radius',14))
+            if source and not internal:internal=store.answer_to_human(source['name'],event['text'],time.time())
+            partner=None if source else store.partner(event['name'],time.time())
+            responder=None if internal else select_responder(event,c['residents'],states,time.time(),c.get('chat_radius',14),partner)
             store.enqueue(event,responder['name'] if responder else None,event['char_id'] in ids,time.time())
         with store.db:store.put('last_poll',time.time())
 
@@ -244,6 +272,8 @@ def handle(event,r,c,store,model=None):
         if model is not None and daily is None and not stop_requested(event):
             decision=model(event,s,decision)
         task['by']='память' if daily else 'правила' if decision is rules else 'LLM'  # the model returns the quick default untouched when it is not used
+        why=getattr(getattr(model,'__self__',None),'last_skip',None) if task['by']=='правила' and model is not None else None
+        if why:task['by']='правила: '+why
         silence='NO_REPLY' if decision is None else 'REPEATED_REPLY'
         if human:
             # A player is never left in silence: a repeated line becomes another honest phrase.
@@ -264,6 +294,7 @@ def handle(event,r,c,store,model=None):
                 params={'to_name':event['name'],'text':decision['args']['text']} if skill=='whisper' else {'text':decision['args']['text']}
                 task['decision']=decision
                 speech_dir=d/'chat-speech';speech_dir.mkdir(mode=0o700,exist_ok=True)  # never the motor's manual_task.json
+                store.note_outgoing(r['name'],params['text'],human,time.time())
                 try:result=run_native(str(d/'actions.sock.control'),{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,speech_dir)
                 except (OSError,RuntimeError,ValueError) as error:result='failed('+(str(error) or type(error).__name__)[:40]+')'
                 confirm_chat_reply(d,event,decision,result)
@@ -287,7 +318,7 @@ def handle(event,r,c,store,model=None):
                         skill='whisper' if decision['action']=='whisper' or event.get('type')=='W' else 'say'
                         params={'to_name':event['name'],'text':phrase} if skill=='whisper' else {'text':phrase}
                         task['decision']=decision
-
+                        store.note_outgoing(r['name'],phrase,human,time.time())
                         try:result=run_native(sock,{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,d)
                         except (OSError,RuntimeError,ValueError) as error:
                             result='failed('+(str(error) or type(error).__name__)[:40]+')'

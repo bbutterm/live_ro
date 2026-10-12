@@ -7,7 +7,7 @@
     "min_decision_seconds": 20,
     "min_speech_seconds": 45,
     "short_pause_seconds": 60,
-    "chat_calls_per_sender_2min": 12,
+    "chat_calls_per_sender_2min": 30,
     "timeout_seconds": 25,
     "temperature": 0.8
   },

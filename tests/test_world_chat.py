@@ -39,13 +39,45 @@ class ChatTests(unittest.TestCase):
         event.update(type='W',to='Mira')
         self.assertEqual(select_responder(event,residents,states,100)['name'],'Mira')
 
+    def test_the_screenshot_conversation_stays_with_the_resident_who_answered(self):
+        # admin asks ResidentA, then «а уровень у вас какой» without a name: ResidentA answers, not the nearer Mira;
+        # ResidentA's answers to admin are not lines for Mira to answer (that queued admin behind her and gave templates).
+        from packages.resident_world.chat import ChatStore,select_responder
+        residents=[{'name':'Mira','char_id':2,'resident_id':'b'},{'name':'ResidentA','char_id':1,'resident_id':'a'}]
+        def state(x):return {'age':0,'projection':{'server_online':{'value':True},'server_map':{'value':'prontera'},'server_pos':{'value':{'x':x,'y':10},'ts':100}}}
+        states={'b':state(11),'a':state(15)}
+        ask={'char_id':9,'name':'admin','text':'а уровень у вас какой','type':'O','map':'prontera','x':10,'y':10}
+        self.assertEqual(select_responder(ask,residents,states,100)['name'],'Mira')                       # nobody talked yet: the nearest
+        self.assertEqual(select_responder(ask,residents,states,100,partner='ResidentA')['name'],'ResidentA')
+        self.assertEqual(select_responder(dict(ask,text='Мира, а ты?'),residents,states,100,partner='ResidentA')['name'],'Mira')  # a name wins
+        self.assertEqual(select_responder(ask,residents,{'b':state(11),'a':state(40)},100,partner='ResidentA')['name'],'Mira')  # partner walked away
+        with tempfile.TemporaryDirectory() as tmp:
+            store=ChatStore(pathlib.Path(tmp)/'chat.sqlite')
+            store.enqueue({'id':1,'name':'admin','char_id':9,'text':'сколько зени у тебя?','ts':100},'ResidentA',False,100)
+            self.assertEqual(store.claim('ResidentA',100)['id'],1);self.assertEqual(store.partner('admin',120),'ResidentA');self.assertIsNone(store.partner('admin',300))
+            store.note_outgoing('ResidentA','У меня сейчас 2721 зени.',True,101)
+            self.assertTrue(store.answer_to_human('ResidentA','У меня сейчас 2721 зени.',102))
+            self.assertFalse(store.answer_to_human('ResidentA','Мира, пойдём на охоту?',102))        # own small talk still reaches Mira
+            # A person never waits behind residents' small talk.
+            store.enqueue({'id':5,'name':'Borin','char_id':3,'text':'Мира, как дела?','ts':200},'Mira',True,200)
+            store.enqueue({'id':6,'name':'admin','char_id':9,'text':'какой уровень?','ts':201},'Mira',False,201)
+            self.assertEqual(store.claim('Mira',202)['id'],6)
+
+    def test_simple_questions_get_facts_even_without_the_model(self):
+        from packages.resident_world.chat import fallback_reply
+        s={'telemetry':{'map':'prontera','base_level':22,'class_id':4,'zeny':2721,'nearby_players':[]}}
+        say=lambda text:fallback_reply('Mira',{'name':'admin','text':text,'type':'O'},s)['args']['text']
+        self.assertIn('22',say('какой уровень?'));self.assertIn('послушник',say('а уровень у вас какой'))
+        self.assertIn('2721',say('сколько зени у тебя?'));self.assertIn('Пронтере',say('ты где?'))
+        self.assertNotIn('не до разговора',' '.join(say(t) for t in ('ну и?','что нового','как жизнь')))
+
     def test_durable_inbox_once_rate_limit_and_four_resident_turns(self):
         from packages.resident_world.chat import ChatStore
         with tempfile.TemporaryDirectory() as tmp:
             path=pathlib.Path(tmp)/'chat.sqlite';store=ChatStore(path)
-            for i in range(1,15):
+            for i in range(1,33):
                 store.enqueue({'id':i if i<9 else 100+i,'name':'Human','char_id':9,'text':'привет','ts':100},'Mira',False,100)
-            for i in range(12):self.assertIsNotNone(store.claim('Mira',101))  # a player writing every 5 s is still answered
+            for i in range(30):self.assertIsNotNone(store.claim('Mira',101))  # a person talking fast is still answered; only a flood waits
             self.assertIsNone(store.claim('Mira',101))
             self.assertIsNone(ChatStore(path).claim('Mira',101))
             # Residents talking to each other: at most 4 turns in a chain (distinct lines).
