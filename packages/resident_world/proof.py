@@ -93,7 +93,7 @@ def _uptime(residents,start,end):
         ms=sorted(minutes.get(int(r['char_id']),[]))
         edges=[int(start//60)]+ms+[int(end//60)]
         gap=max((b-a for a,b in zip(edges,edges[1:])),default=total)
-        result[r['name']]={'coverage':round(len(ms)/total,3),'longest_gap_min':gap}
+        result[r['name']]={'coverage':round(min(1.0,len(ms)/total),3),'longest_gap_min':gap}
     return result
 
 
