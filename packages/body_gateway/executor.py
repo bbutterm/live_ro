@@ -5,12 +5,12 @@ class Executor:
  def __init__(self,journal,resident,char_id,send):
   self.j=journal;self.resident=resident;self.char_id=char_id;self.send=send;self.epoch=None;self.telemetry=None;self.received=0;self.projection={}
   self.support_seen={}
-  for row in self.j.db.execute("SELECT payload FROM events WHERE source='witness' ORDER BY ts"):
+  for row in self.j.db.execute("SELECT payload FROM events WHERE source='witness' AND ts>=? ORDER BY ts",(time.time()-7200,)):  # recent facts only
    self.witness(json.loads(row[0]),persist=False)
   for a in self.active():
    if a['state']=='planned':self.j.transition(a['action_id'],'rejected_local','RECOVERY_UNDISPATCHED',{'reason':'plan never dispatched; no replay'})
    elif a['state']!='unknown':self.j.transition(a['action_id'],'unknown','COORDINATOR_RESTART',{'reason':'no replay of dispatched action'})
- def active(self):return [a for a in self.j.actions() if a['resident']==self.resident and a['state'] not in TERMINAL]
+ def active(self):return self.j.open_actions(self.resident)
  def body(self,m):
   kind=m['type'];now=time.time()
   if kind=='hello':

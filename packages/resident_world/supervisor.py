@@ -104,6 +104,14 @@ def apply_overlay(base,overlay):
         c['daily_llm_usd']=v
     return c
 
+def rotate_logs(paths,limit=50*2**20):
+    """copytruncate: children keep appending (O_APPEND) to the same file; one old copy is kept."""
+    import shutil
+    for p in paths:
+        try:
+            if p.stat().st_size>limit:shutil.copyfile(p,p.with_name(p.name+'.1'));os.truncate(p,0)
+        except OSError:pass
+
 def code_version(root=None):
     """Which code is this: short commit plus '+правки' for local edits (or VERSION of a release dir)."""
     root=pathlib.Path(root or ROOT)
@@ -269,7 +277,7 @@ def supervise():
     for r in config()['residents']:
         if r.get('enabled',True):
             for name,argv,cwd,env in commands(r):rows[name]=dict(argv=argv,cwd=cwd,env=env,policy=RestartPolicy(),proc=None)
-    version=code_version();log.info('code version %s',version)
+    version=code_version();log.info('code version %s',version);last_rotate=0
     try:
         while not stopping and not (STATE/'STOP').exists():
             now=time.monotonic()
@@ -283,9 +291,13 @@ def supervise():
                             if path.is_socket():path.unlink()
                 elif p is not None:policy.healthy(now)
                 if x['proc'] is None and now>=policy.next_start:
-                    with (STATE/(name+'.log')).open('ab',buffering=0) as output:
-                        x['proc']=subprocess.Popen(x['argv'],cwd=x['cwd'],env=dict(os.environ,**x['env']),stdin=subprocess.DEVNULL,stdout=output,stderr=output,start_new_session=True)
+                    try:
+                        with (STATE/(name+'.log')).open('ab',buffering=0) as output:
+                            x['proc']=subprocess.Popen(x['argv'],cwd=x['cwd'],env=dict(os.environ,**x['env']),stdin=subprocess.DEVNULL,stdout=output,stderr=output,start_new_session=True)
+                    except OSError as error:  # EAGAIN/ENOMEM/ENOSPC for one child must not take the others down
+                        policy.failed(now);log.warning('%s failed to start: %s; independent backoff',name,type(error).__name__);continue
                     policy.started=now;log.info('%s started',name)
+            if now-last_rotate>=60:last_rotate=now;rotate_logs([STATE/(n+'.log') for n in rows])
             atomic(STATE/'identity.json',{'at':time.time(),'pid':os.getpid(),'version':version,'children':{n:{'pid':x['proc'].pid if x['proc'] else None,'restarts':x['policy'].attempts} for n,x in rows.items()}})
             time.sleep(.2)
     finally:

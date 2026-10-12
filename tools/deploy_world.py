@@ -201,6 +201,8 @@ def phase_rathena_services():
             drop=pathlib.Path(f'/etc/systemd/system/{unit}.d');drop.mkdir(exist_ok=True)
             (drop/'10-restart.conf').write_text('[Service]\nRestart=on-failure\nRestartSec=10\n')
         run(['systemctl','daemon-reload']);run(['systemctl','start','ro-residents-login','ro-residents-char','ro-residents-map'])
+        pathlib.Path('/etc/logrotate.d/ro-residents').write_text(  # rAthena and OpenKore logs of a permanent world
+            f'{LOGS}/*.log {LOGS}/*/*.txt {{\n daily\n rotate 7\n maxsize 100M\n compress\n missingok\n notifempty\n copytruncate\n}}\n')
     for port in (6900,6121,5121):
         if not wait_port(port,180):raise Stop(f'порт {port} не открылся: смотри {LOGS}/*-server.log')
     listen=run(['ss','-ltnH']).stdout

@@ -10,7 +10,10 @@ CREATE TABLE IF NOT EXISTS actions(action_id TEXT PRIMARY KEY,resident TEXT,skil
 CREATE TABLE IF NOT EXISTS action_transitions(id INTEGER PRIMARY KEY,action_id TEXT,ts REAL,state TEXT,code TEXT,evidence TEXT);
 CREATE TABLE IF NOT EXISTS operator_log(id INTEGER PRIMARY KEY,ts REAL,op TEXT,payload TEXT);
 CREATE TABLE IF NOT EXISTS cursors(source TEXT PRIMARY KEY,value INTEGER);
-CREATE INDEX IF NOT EXISTS events_source_ts ON events(source,ts);''')
+CREATE INDEX IF NOT EXISTS events_source_ts ON events(source,ts);
+CREATE INDEX IF NOT EXISTS actions_resident_state ON actions(resident,state);
+CREATE INDEX IF NOT EXISTS transitions_action ON action_transitions(action_id);
+CREATE INDEX IF NOT EXISTS operator_log_ts ON operator_log(ts);''')
  def plan(self,resident,skill,params,idem,deadline,epoch,baseline):
   row=self.db.execute('SELECT * FROM actions WHERE resident=? AND idem_key=?',(resident,idem)).fetchone()
   if row:return dict(row)
@@ -24,6 +27,24 @@ CREATE INDEX IF NOT EXISTS events_source_ts ON events(source,ts);''')
   if not row:raise ValueError('UNKNOWN_ACTION')
   return dict(row)
  def actions(self):return [dict(r) for r in self.db.execute('SELECT * FROM actions ORDER BY created')]
+ def open_actions(self,resident):
+  """Non-terminal actions only (indexed): the hot path must not rescan the whole history."""
+  marks=','.join('?'*len(TERMINAL))
+  return [dict(r) for r in self.db.execute(f'SELECT * FROM actions WHERE resident=? AND state NOT IN ({marks}) ORDER BY created',(resident,*sorted(TERMINAL)))]
+ def purge(self,now=None,keep_events=48*3600,keep_actions=30*86400):
+  """Bounded growth for a permanent world: old server/body rows, operator log and long
+  finished actions go; anything an open action may still need as evidence stays."""
+  now=time.time() if now is None else now
+  oldest_open=self.db.execute(f"SELECT MIN(created) FROM actions WHERE state NOT IN ({','.join('?'*len(TERMINAL))})",tuple(sorted(TERMINAL))).fetchone()[0]
+  cut=min(now-keep_events,(oldest_open or now)-60)
+  with self.db:
+   n=self.db.execute('DELETE FROM events WHERE ts<?',(cut,)).rowcount
+   n+=self.db.execute('DELETE FROM operator_log WHERE ts<?',(now-keep_events,)).rowcount
+   old=f"SELECT action_id FROM actions WHERE updated<? AND state IN ({','.join('?'*len(TERMINAL))})"
+   n+=self.db.execute(f'DELETE FROM action_transitions WHERE action_id IN ({old})',(now-keep_actions,*sorted(TERMINAL))).rowcount
+   n+=self.db.execute(f"DELETE FROM actions WHERE updated<? AND state IN ({','.join('?'*len(TERMINAL))})",(now-keep_actions,*sorted(TERMINAL))).rowcount
+  self.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+  return n
  def transition(self,aid,state,code='',evidence=None):
   a=self.action(aid)
   if a['state']==state:return

@@ -24,7 +24,8 @@ SPEECH={'say','whisper'}
 def control_request(e,j,send,directory,m):
  """Per-actor fence at the actual control boundary, including legacy clients."""
  from packages.resident_behavior.ownership import read_lease,lease_active,dispatch_allowed
- op=m.get('op');j.log(op,m);token=m.get('behavior_owner');lease=read_lease(directory)
+ op=m.get('op');token=m.get('behavior_owner');lease=read_lease(directory)
+ if op not in ('status','action'):j.log(op,m)  # read-only polls (several per second) are not journaled
  def owner(a):
   return None if a['skill'] in SPEECH else json.loads(a['params']).get('_behavior_owner')
  def cleanup(a=None):
@@ -108,7 +109,12 @@ def serve(path,store,resident,char_id,char_name,duration,witness=True):
    if not j.cursor('chat'):
     baseline=int(query(DEFAULTS,f'SELECT COALESCE(MAX(id),0) FROM ro_residents_logs.chatlog WHERE src_charid={char_id}').strip());j.db.execute('INSERT OR REPLACE INTO cursors VALUES(?,?)',('chat',baseline));j.db.commit()
   print(json.dumps({'status':'ready','resident':resident}),flush=True)
+  last_purge=time.monotonic()
   while not stopping and time.monotonic()<deadline:
+   if time.monotonic()-last_purge>=3600:
+    last_purge=time.monotonic()
+    try:j.log('purge',{'rows':j.purge()})
+    except Exception as err:j.log('purge_error',{'reason':type(err).__name__})
    for key,_ in sel.select(.05):
     c=key.fileobj
     if c in listeners:
@@ -134,7 +140,8 @@ def serve(path,store,resident,char_id,char_name,duration,witness=True):
       if m['type']=='hello':
        if body is not None and body is not c:raise ValueError('BODY_ALREADY_CONNECTED')
        body=c
-      j.event('body',m['body_epoch']+':'+str(m['seq']),m['ts'],m);e.body(m)
+      if m.get('type')!='telemetry':j.event('body',m['body_epoch']+':'+str(m['seq']),m['ts'],m)  # 1 Hz frames stay in memory
+      e.body(m)
      except (ValueError,KeyError,TypeError,OSError) as err:
       j.log('peer_rejected',{'reason':type(err).__name__});close(c);break
    now=time.time()
