@@ -168,7 +168,12 @@ def run_native(sock,plan,key,task,d):
         a=request(sock,{'op':'action','action_id':a['action_id']})
         result=outcome(a)
         if result is not None:
-            task.setdefault('native_results',[]).append({'action_id':a['action_id'],'skill':plan['skill'],'outcome':result,'at':time.time()});persist_task(task,d)
+            confirmed_at=time.time()
+            task.setdefault('native_results',[]).append({'action_id':a['action_id'],'skill':plan['skill'],'outcome':result,'at':confirmed_at});persist_task(task,d)
+            # A slow polling RPC may cross the caller's lease. Preserve the
+            # actual native terminal (especially economics), but do not turn
+            # late confirmation into successful bounded goal completion.
+            if result=='done' and confirmed_at>=task.get('expires',float('inf')):return 'timeout'
             return result
         time.sleep(.25)
     task['unresolved']=True

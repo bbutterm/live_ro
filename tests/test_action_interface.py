@@ -51,6 +51,33 @@ class ActionInterfaceTests(unittest.TestCase):
                 self.assertEqual(skills.execute_native_menu('hunt_solo',args,c,'sock','key',{},pathlib.Path(tmp)/'resident_b'),'timeout')
                 self.assertEqual(rpc.call_count,2);self.assertEqual(run.call_count,1)
 
+    def test_native_confirmation_after_task_deadline_is_not_goal_success(self):
+        # Slow gateway reads can return a terminal ACK after the caller's lease.
+        # Keep the actual terminal record, particularly for economics, but never
+        # claim that the bounded goal finished within its execution window.
+        for skill,params in (('travel_to',{'map':'prontera','x':156,'y':191,'r':3}),
+                             ('sell_loot',{'category':'loot'})):
+            for completed_at in (109,110,111):
+                with self.subTest(skill=skill,completed_at=completed_at),tempfile.TemporaryDirectory() as tmp:
+                    d=pathlib.Path(tmp);task={'id':'bounded-native','expires':110}
+                    clock={'now':100}
+                    calls=[]
+                    def rpc(sock,payload):
+                        calls.append(payload)
+                        if payload['op']=='run':return {'action_id':'native-one','state':'running'}
+                        clock['now']=completed_at
+                        return {'action_id':'native-one','state':'confirmed','code':'OK'}
+                    with patch.object(skills,'request',side_effect=rpc),patch.object(skills.time,'time',side_effect=lambda:clock['now']),patch.object(skills.time,'monotonic',return_value=0):
+                        result=skills.run_native('sock',{'skill':skill,'params':params,'timeout':40},'single-dispatch',task,d)
+                    self.assertEqual(result,'done' if completed_at<110 else 'timeout')
+                    self.assertEqual([p['op'] for p in calls],['run','action'])
+                    self.assertEqual(task['native_results'][0]['outcome'],'done')
+                    self.assertEqual(task['native_results'][0]['at'],completed_at)
+                    self.assertNotIn('unresolved',task)  # Native terminal is known, not a blind retry.
+                    if completed_at>=110:
+                        self.assertFalse(skills.retry_allowed('native_control',1,result))
+                        self.assertFalse(skills.retry_allowed('sell_loot',1,result))
+
     def test_new_actions_reject_unknown_or_invalid_body_age_before_dispatch(self):
         from packages.resident_world import actions
         args={'skill':'travel_to','params':{'map':'prontera','x':156,'y':191,'r':3}}
