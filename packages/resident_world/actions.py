@@ -150,7 +150,7 @@ def party_candidates(c,s):
     t=s.get('telemetry') or {};mine=t.get('pos') or {};out=[]
     for p in t.get('nearby_players',[])[:32]:
         name=p.get('name');pos=p.get('pos') or {}
-        if name not in consent or not isinstance(name,str) or not re.fullmatch(r'[\w -]{1,24}',name):continue
+        if name==own.get('name') or name not in consent or not isinstance(name,str) or not re.fullmatch(r'[\w -]{1,24}',name):continue
         if any(type(q) is not int for q in (pos.get('x'),pos.get('y'),mine.get('x'),mine.get('y'))):continue
         out.append({'name':name,'distance':max(abs(pos['x']-mine['x']),abs(pos['y']-mine['y'])),'consent_source':'operator_config'})
     return sorted(out,key=lambda p:(p['distance'],p['name']))[:8]

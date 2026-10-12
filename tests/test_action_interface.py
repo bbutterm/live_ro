@@ -108,6 +108,28 @@ class ActionInterfaceTests(unittest.TestCase):
                 self.assertEqual(skills.execute_native_menu('native_control',{'skill':'whisper','params':{'to_name':'Recent','text':'Привет!'}},c,'sock','key',{},d),'failed(WHISPER_TARGET)')
                 run.assert_not_called()
 
+    def test_party_search_never_offers_to_self_even_with_operator_consent(self):
+        from packages.resident_world import actions
+        c={**C,'residents':[{'resident_id':'resident_b','name':'Mira',
+                           'party_search_consent':['Mira','Tester']}]}
+        self_player={'name':'Mira','pos':{'x':100,'y':100}}
+        other={'name':'Tester','pos':{'x':102,'y':100}}
+        t={**HEALTHY['telemetry'],'pos':{'x':100,'y':100},
+           'nearby_players':[self_player,other]}
+        for identity in ({'_resident_id':'resident_b'},{'_me':'Mira'}):
+            with self.subTest(identity=identity):
+                s={**HEALTHY,**identity,'telemetry':t}
+                self.assertEqual([p['name'] for p in actions.party_candidates(c,s)],['Tester'])
+                self.assertIsNone(actions.unavailable('find_party',{'minutes':1},c,s))
+        self_only={**HEALTHY,'_resident_id':'resident_b',
+                   'telemetry':{**t,'nearby_players':[self_player]}}
+        self.assertEqual(actions.unavailable('find_party',{'minutes':1},c,self_only),'NO_CONSENTING_CANDIDATES')
+        self.assertFalse(actions.discover(c,self_only)['actions']['find_party']['available'])
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(skills,'request',return_value=self_only),patch.object(skills,'run_native') as run:
+                self.assertEqual(skills.execute_native_menu('find_party',{'minutes':1},c,'sock','key',{},pathlib.Path(tmp)/'resident_b'),'failed(NO_CONSENTING_CANDIDATES)')
+                run.assert_not_called()
+
     def test_catalog_support_guard_and_explicit_unavailable_heal(self):
         self.assertTrue(hasattr(skills,'discover'),'catalog missing')
         from packages.resident_world import actions

@@ -1,4 +1,5 @@
 # Решения
+2026-10-12 — В ночной ветке find_party исключает собственное имя из operator opt-in nearby-кандидатов по identity жителя; при self-only список недоступен без whisper, настоящий consenting player и native membership/witness требования сохранены; live не меняется.
 2026-10-12 — В ночной ветке hunt_solo повторяет eligibility по новому status после подтверждённой дороги: stale/dead/перевес/недостаточные ресурсы запрещают hunt; solo=true без поддержки профиля, native witness и legacy hunt сохранены, live не меняется.
 2026-10-12 — В ночной ветке sell_loot/sell_equipment/buy_potions повторяют eligibility по свежему gateway status после дороги до economic dispatch; исчезнувший лут/достигнутый stock/dead/stale запрещают операцию, native whitelist/witness/no-retry и live службы неизменны.
 2026-10-12 — В ночной ветке support/hunt_party после подтверждённого маршрута повторяют eligibility по новому gateway status и текущему resident_id; потеря party/свежести/learned Heal запрещает hunt, native witness/live службы не меняются.
