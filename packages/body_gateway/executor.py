@@ -46,7 +46,14 @@ class Executor:
     if outcome=='done':
      if a['state'] in ('dispatched','accepted','running','unknown'):self.j.transition(aid,'verifying',code,m)
     elif outcome=='cancelled':self.j.transition(aid,'cancelled',code,m)
+    elif a['skill']=='hunt' and code=='NEEDS_REST' and not json.loads(a['params']).get('support_target') and self.hunt_kills(a):
+     # HP safety stopped the fight after real server-witnessed kills: an honest partial hunt.
+     self.j.transition(aid,'verifying',code,m);self.j.transition(aid,'confirmed','HUNTED_PARTIAL',{'server_kills':self.hunt_kills(a),'body':m})
     else:self.j.transition(aid,'timed_out' if code=='TIMEOUT' and a['state']!='unknown' else 'failed',code,m)
+ def hunt_kills(self,a):
+  p=json.loads(a['params'])
+  rows=[json.loads(r[0]) for r in self.j.db.execute("SELECT payload FROM events WHERE source='witness' AND ts>=? ORDER BY ts",(a['created'],))]
+  return [r for r in rows if r.get('kind')=='kill' and r.get('map')==p.get('map')]
  def witness(self,r,persist=True):
   if r.get('char_id')!=self.char_id:return
   ts=r['event_ts']

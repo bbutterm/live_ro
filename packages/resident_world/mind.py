@@ -343,6 +343,12 @@ class Mind:
     def diary(self):
         try:return json.loads((self.d/'diary.json').read_text())
         except (OSError,ValueError):return []
+    def still_there(self,decision,s):
+        """The goal of a done walk_to is still true (within 5 cells); meet/follow done are just done."""
+        if decision['action']!='walk_to':return True
+        p=self.c.get('places',{}).get(decision['args'].get('place'));t=s.get('telemetry') or {};pos=t.get('pos') or {}
+        if not p or t.get('map')!=p.get('map') or 'x' not in pos:return False
+        return max(abs(pos['x']-p['x']),abs(pos['y']-p['y']))<=5
     def plan(self):
         return intent(self.d)[0]
     def remember(self,notes,now):
@@ -501,10 +507,15 @@ class Mind:
         except (OSError,ValueError):spoken={}
         repeat_speech=bool(phrase and now-spoken.get('at',0)<900 and (phrase==spoken.get('text') or (FAREWELL.search(phrase) and spoken.get('farewell'))))
         lifecycle=task_state(self.d,now)
-        repeat_task=(decision['action'] in ('walk_to','meet','follow') and any(t.get('status') in ('done','failed','expired','cancelled')
-                     and now-t.get('ended',0)<900 and decision['action']==t.get('action') and decision['args']==t.get('args') for t in [lifecycle]+past_tasks(self.d)))
+        same=[t for t in [lifecycle]+past_tasks(self.d) if decision['action'] in ('walk_to','meet','follow') and decision['action']==t.get('action')
+              and decision['args']==t.get('args') and now-(t.get('ended') or 0)<900]
+        # Done and still there: nothing to repeat. Failed: up to 3 real attempts (TZ §4); a
+        # conversation interrupting the goal is not a failure of the goal.
+        done_here=any(t.get('status')=='done' for t in same) and self.still_there(decision,s)
+        failures=sum(1 for t in same if t.get('status') in ('failed','expired') and 'CHAT_INTERRUPT' not in str(t.get('outcome','')))
+        repeat_task=done_here or failures>=3
         if repeat_speech or repeat_task:
-            decision={'action':'idle','args':{'minutes':3},'reason':'Не повторяю завершённое дело или прощание'}
+            decision={'action':'idle','args':{'minutes':3},'reason':'Три попытки не вышли — займусь другим' if failures>=3 and not done_here else 'Не повторяю завершённое дело или прощание'}
             notes.update(plan='',remember='')
         self.next_call=now+self.gap(now,decision)
         if chat_pending(self.d) or (self.d/'chat-goal.json').exists():

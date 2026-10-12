@@ -108,7 +108,14 @@ def cancel_action(name,task_id):
 
 def execution_deadline(action,started):return started+(60 if action=='walk_to' else 300 if action in ('meet','find_party') else 1200)
 
-def retry_allowed(action,attempt,result):return action in REVERSIBLE and action!='meet' and attempt<3 and result not in ('done','failed(CHAT_INTERRUPT)','failed(CANCELLED)')
+HUNTS={'hunt','hunt_solo','support','hunt_party'}
+NO_RETRY={'done','failed(CHAT_INTERRUPT)','failed(CANCELLED)','failed(NEEDS_REST)','failed(DIED)','failed(NO_TARGET)','failed(TEST_WINDOW_LIMIT)'}
+
+def retry_allowed(action,attempt,result,task=None):
+    """Reversible goals get up to 3 attempts. A hunt is retried only when it failed on the
+    way to the field: once it fought, its real result (rest needed, died, no targets) stands."""
+    if action not in REVERSIBLE or action=='meet' or attempt>=3 or result in NO_RETRY:return False
+    return not (action in HUNTS and (task or {}).get('phase')=='hunt')
 
 def interrupted(task,skill,d):
     if skill not in ('buy_potions','sell_loot') and cancelled(task,d):return True
@@ -156,7 +163,10 @@ def run_native(sock,plan,key,task,d):
     if cancelled(task,d):return 'failed(CANCELLED)'
     remaining=task.get('expires',float('inf'))-time.time()
     if remaining<=1:return 'timeout'
-    if plan['skill']=='hunt' and plan['params']['duration']>remaining:return 'failed(TEST_WINDOW_LIMIT)'
+    if plan['skill']=='hunt' and plan['params']['duration']>remaining-30:
+        # Hunt what the goal's lease still allows instead of failing a long route+hunt goal.
+        if remaining<120:return 'failed(TEST_WINDOW_LIMIT)'
+        plan={**plan,'params':{**plan['params'],'duration':int(remaining-30)},'timeout':int(remaining-1)}
     timeout=min(plan['timeout'],remaining-1)
     a=request(sock,dict(op='run',skill=plan['skill'],params=plan['params'],deadline=timeout,idem=key))
     task['native_action']=a['action_id'];persist_task(task,d)
@@ -248,6 +258,7 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         else:plan['params'].update(solo=True)
         if action=='hunt_party':plan['params']['party_target']=args['player']
         if s['telemetry'].get('map')!=args['map']:
+            task['phase']='route'  # persisted by run_native
             result=run_native(sock,{'skill':'travel_to','params':{'map':args['map'],'x':170,'y':240,'r':3},'timeout':240},key+'-route',task,d)
             if result!='done':return result
             # Travel can outlast membership/health/skill observations. Recheck the
@@ -255,6 +266,7 @@ def execute_native_menu(action,args,c,sock,key,task,d):
             arrived={**request(sock,{'op':'status'}),'_resident_id':d.name}
             reason=unavailable(action,args,c,arrived)
             if reason:return 'failed('+reason+')'
+        task['phase']='hunt'  # persisted by run_native
         return run_native(sock,plan,key,task,d)
     if action in ('say','whisper','walk_to','rest'):
         plan=native_plan(action,args,c)
@@ -263,6 +275,7 @@ def execute_native_menu(action,args,c,sock,key,task,d):
     if action in ('hunt','hunt_solo'):
         t=request(sock,{'op':'status'}).get('telemetry') or {}
         if t.get('map')!=args['map']:
+            task['phase']='route'  # persisted by run_native
             go=dict(skill='travel_to',params={'map':args['map'],'x':170,'y':240,'r':3},timeout=240 if task.get('origin')=='brain' else 55)
             result=run_native(sock,go,key+'-route',task,d)
             if result!='done':return result
@@ -277,6 +290,7 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         elif support:
             params=plan['params'];assert isinstance(params,dict)
             plan={**plan,'params':{**params,'support_target':support}}
+        task['phase']='hunt'  # persisted by run_native
         return run_native(sock,plan,key,task,d)
     if action=='town_service':
         result=run_native(sock,native_plan(action,args,c),key+'-route',task,d)
@@ -375,8 +389,9 @@ def execute(name,action,args,*,origin='manual',task_id=None,say=''):
                 spoken=run_native(sock,{'skill':'say','params':{'text':say},'timeout':10},task['id']+'-speech-'+str(attempt),task,d)
                 task['prelude_outcome']=spoken;persist_task(task,d)
             result=execute_native_menu(action,args,c,sock,task['id']+'-'+str(attempt),task,d) if spoken=='done' else spoken
+            if attempt>1 and result=='failed(TEST_WINDOW_LIMIT)':break  # no time left: the real result of the last try stands
             task['outcome']=result;persist_task(task,d)
-            if not retry_allowed(action,attempt,result) or task.get('unresolved') or time.time()+5>=task['expires']:break
+            if not retry_allowed(action,attempt,result,task) or task.get('unresolved') or time.time()+5>=task['expires']:break
             time.sleep(5)
         task['ended']=time.time();persist_task(task,d)
         with (STATE/'skills.jsonl').open('a') as f:f.write(json.dumps(task,ensure_ascii=False)+'\n')

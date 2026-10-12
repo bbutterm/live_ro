@@ -239,6 +239,62 @@ class PlanContinuityTests(unittest.TestCase):
             self.assertEqual(intent(d),('Накопить на меч',400.0))
 
 
+class HonestRetryTests(unittest.TestCase):
+    def test_hunt_retries_only_the_way_there_and_keeps_its_real_result(self):
+        from packages.resident_world.skills import retry_allowed
+        self.assertTrue(retry_allowed('hunt',1,'failed(NO_ROUTE)',{'phase':'route'}))
+        self.assertFalse(retry_allowed('hunt',1,'timeout',{'phase':'hunt'}))           # it fought: no blind second hunt
+        for code in ('NEEDS_REST','DIED','NO_TARGET'):self.assertFalse(retry_allowed('hunt',1,f'failed({code})',{'phase':'route'}))
+        self.assertTrue(retry_allowed('walk_to',2,'failed(NO_ROUTE)'));self.assertFalse(retry_allowed('walk_to',3,'failed(NO_ROUTE)'))
+    def test_a_short_lease_shortens_the_hunt_instead_of_failing_it(self):
+        import time
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        sent=[]
+        def request(sock,m):
+            if m['op']=='run':sent.append(m);return {'action_id':'a'}
+            return {'state':'confirmed','code':'HUNTED','action_id':'a'}
+        with tempfile.TemporaryDirectory() as tmp,patch.object(skills,'request',side_effect=request):
+            task={'id':'t','expires':time.time()+400}
+            self.assertEqual(skills.run_native('sock',{'skill':'hunt','params':{'map':'prt_fild08','duration':600,'min_kills':1},'timeout':630},'k',task,pathlib.Path(tmp)),'done')
+            self.assertLessEqual(sent[0]['params']['duration'],371)
+            self.assertEqual(skills.run_native('sock',{'skill':'hunt','params':{'map':'prt_fild08','duration':600,'min_kills':1},'timeout':630},'k2',{'id':'t','expires':time.time()+90},pathlib.Path(tmp)),'failed(TEST_WINDOW_LIMIT)')
+    def test_hp_safety_after_real_kills_is_a_partial_hunt_not_a_failure(self):
+        import time
+        from packages.body_gateway.journal import Journal
+        from packages.body_gateway.executor import Executor
+        with tempfile.TemporaryDirectory() as tmp:
+            j=Journal(str(pathlib.Path(tmp)/'j.sqlite'));e=Executor(j,'r',150001,lambda m:None)
+            for kills,expected in ((1,('confirmed','HUNTED_PARTIAL')),(0,('failed','NEEDS_REST'))):
+                a=j.plan('r','hunt',{'map':'prt_fild08','duration':300,'min_kills':1},'h'+str(kills),time.time()+400,'ep',0)
+                for state in ('dispatched','accepted','running'):j.transition(a['action_id'],state)
+                for i in range(kills):e.witness({'id':900+i,'char_id':150001,'event_ts':time.time(),'kind':'kill','map':'prt_fild08','x':1,'y':1})
+                e.body({'type':'skill_result','action_id':a['action_id'],'outcome':'error','code':'NEEDS_REST','ts':time.time()})
+                got=j.action(a['action_id']);self.assertEqual((got['state'],got['code']),expected)
+            j.close()
+    def test_anti_repeat_stops_only_done_goals_or_three_real_failures(self):
+        import time
+        from unittest.mock import Mock,patch
+        from packages.resident_world import mind
+        from packages.resident_world.continuity import begin_task,finish_task
+        with tempfile.TemporaryDirectory() as tmp,patch.object(mind,'STATE',pathlib.Path(tmp)),patch('packages.resident_world.memory.refresh'):
+            d=pathlib.Path(tmp)/'resident_b';d.mkdir()
+            client=Mock();client.budget.return_value=(0,2,0)
+            m=mind.Mind({'name':'Mira','char_id':2,'resident_id':'resident_b','persona':'x'},d,C,client=client)
+            from packages.resident_world.llm import Reply
+            from decimal import Decimal
+            ask=lambda:Reply(json.dumps({'thought':'t','action':'walk_to','place':'market','text':None,'to':None,'map':None,'minutes':None,'until_hp':None,'player':None,'resident':None,'say':None,'remember':None,'plan':None,'reason':'к рядам'}),Decimal('0'),1,1,'json_schema',.1)
+            now=time.time();far=dict(HEALTHY)  # standing at (150,190), the market is at (156,180)
+            def tries(outcomes):
+                for i,o in enumerate(outcomes):
+                    begin_task(d,f'w{len(outcomes)}{i}',{'action':'walk_to','args':{'place':'market'}},'к рядам',now=now-600+i*60);finish_task(d,f'w{len(outcomes)}{i}',o,now=now-570+i*60)
+            for outcomes,expected in ((['failed(NO_ROUTE)','failed(CHAT_INTERRUPT)','failed(NO_ROUTE)'],'walk_to'),(['failed(NO_ROUTE)']*3,'idle'),(['done'],'walk_to')):
+                with self.subTest(outcomes=outcomes):
+                    (d/'plan.json').unlink(missing_ok=True);m.path.unlink(missing_ok=True);tries(outcomes);m.next_call=0;client.complete.side_effect=[ask()]
+                    p=m.choose(far);self.assertEqual(p['decision']['action'],expected)
+                    finish_task(d,p['id'],'cancelled',now=time.time())
+
+
 class WorldConfigTests(unittest.TestCase):
     ROOT=pathlib.Path(__file__).resolve().parents[1]
     def config(self):return json.loads((self.ROOT/'config/world.yaml').read_text())
