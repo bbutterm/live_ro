@@ -18,7 +18,8 @@
 - **Чистый лист.** Старую БД, память и дневники не переносим.
 - **Аккаунты.** На новом сервере создаём 4 аккаунта штатными `prepare_*` скриптами: Tester (group 99) и трёх жителей.
 - **Старт новичков** — сразу в Пронтере (`start_point: prontera,156,191`). С острова новичков жители сами не выберутся.
-- **Профессии.** Все трое — Novice 1 уровня. GM-выдачи профессий и уровней нет. В персоны в `residents.yaml` дописываем «пока новичок», чтобы модель не приписывала себе умения мечника или послушника.
+- **Профессии.** Все трое — Novice 1 уровня. GM-выдачи профессий и уровней нет. Персоны в `residents.yaml` уже нейтральные («мечтает стать…»); текущий класс модель видит из телеметрии.
+- **Настройки этого сервера** (выключить жителя, лимит, параметры LLM) — только в `/var/lib/ro-world/world.local.json`, не в `config/world.yaml` и не в git. Формат и проверка — `packages/resident_world/supervisor.py` (`apply_overlay`); ошибка видна первой строкой `ro status`.
 - **LLM:** OpenRouter + `deepseek/deepseek-v3.2`, лимит $2 в сутки. Если на сервере уже есть `.env` с ключом, его не трогать.
 - **Сеть.** Фаервол и порты не трогаем. rAthena слушает только `127.0.0.1`. Владелец заходит клиентом RagexeRE 2018-06-20 через SSH-туннель на порты 6900, 6121 и 5121.
 - **Аккаунт владельца** создаётся только по отдельной просьбе.
@@ -60,6 +61,7 @@
 [ -d /root/ragnarok/repos/live_ro/.git ] && git -C /root/ragnarok/repos/live_ro pull --ff-only origin main \
   || git clone https://github.com/bbutterm/live_ro.git /root/ragnarok/repos/live_ro
 git -C /root/ragnarok/repos/live_ro checkout -B deploy/new-world origin/main
+(cd /root/ragnarok/repos/live_ro && make check)   # должен быть зелёным (пропуски — только тесты стенда VPS); иначе не разворачивать
 git init -q /root/ragnarok/repos/rathena
 git -C /root/ragnarok/repos/rathena remote add origin https://github.com/rathena/rathena.git
 git -C /root/ragnarok/repos/rathena fetch -q --depth 1 origin e985006171d2eb320ee512a653f4c83aea3d81b6
@@ -245,7 +247,6 @@ cd /root/ragnarok/repos/live_ro && python3 tools/events.py --char Tester --after
 # pos примерно каждые 5 с; ts_utc отличается от date -u на секунды, а не на часы
 ```
 
-**4. Персоны.** В `residents.yaml` допиши каждому «Пока новичок (Novice), умений мечника/послушника ещё нет» и запиши решение в `DECISIONS.md`.
 
 ## Ф10. Мир
 1. Python. Мозг запускается системным `/usr/bin/python3`: python из venv — симлинк на тот же бинарник, поэтому re-exec не происходит. Персоны читаются только при установленном в систему `python3-yaml`. `pip` и `openai` не нужны.
@@ -327,6 +328,7 @@ cd /root/ragnarok/repos/live_ro && python3 tools/events.py --char Tester --after
    - после `systemctl kill -s KILL ro-residents-map` служба снова `active`, а жители снова онлайн без ручных действий;
    - если убить тело одного жителя, он снова онлайн не позже чем через 60 с, а у остальных в `identity.json` не изменились `restarts`.
 10. **Тесты:** `make check`, результат одной строкой в `STATUS.md`. Тесты — не доказательство.
+11. **Версия:** первая строка `ro status` — «Код: <коммит>» без «+правки» и без «запущен …, в checkout …».
 
 ## Известные риски
 - **Переход на зимнее время.** 25.10.2026 с 02:00 до 03:00 DATETIME свидетеля неоднозначен. Около часа жители могут показываться без свежего подтверждения и жить на привычках.
