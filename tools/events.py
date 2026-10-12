@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
-"""SELECT-only server event stream. Raw DB time is Europe/Amsterdam (SYSTEM)."""
-import argparse,datetime,json,re,subprocess,time
+"""SELECT-only server event stream. Times come from the DB itself as UNIX_TIMESTAMP,
+so the DB time zone (UTC on the new world) and DST never shift a fact."""
+import argparse,datetime,functools,json,pathlib,re,subprocess,time
 from zoneinfo import ZoneInfo
 DEFAULTS='/root/ragnarok/run/private/reader.cnf'
+
+@functools.lru_cache(maxsize=1)
+def db_zone():
+ """Zone of raw DATETIME values, only for rows without a DB-computed epoch."""
+ try:return json.loads((pathlib.Path(__file__).resolve().parents[1]/'config/world.yaml').read_text()).get('db_timezone','Europe/Amsterdam')
+ except (OSError,ValueError):return 'Europe/Amsterdam'
+
+def row_epoch(row):
+ """Seconds since epoch for a witness/chat/pick row: the DB's UNIX_TIMESTAMP when present."""
+ if row.get('epoch') is not None:return float(row['epoch'])
+ return datetime.datetime.fromisoformat(row['ts']).replace(tzinfo=ZoneInfo(db_zone())).timestamp()
+
 def query(defaults,sql):
  try:
   p=subprocess.run(['mariadb','--defaults-extra-file='+defaults,'-NBr'],input=sql,text=True,capture_output=True,timeout=8)
@@ -19,16 +32,16 @@ def get_events(defaults,char,after=0,since=None,kind=None):
  where='char_id='+cid+' AND id>'+str(after)
  if since:
   dt=datetime.datetime.fromisoformat(since)
-  if dt.tzinfo:dt=dt.astimezone(ZoneInfo('Europe/Amsterdam'))
-  where+=" AND ts>='"+dt.strftime('%Y-%m-%d %H:%M:%S.%f')+"'"
+  if not dt.tzinfo:dt=dt.replace(tzinfo=ZoneInfo(db_zone()))
+  where+=" AND ts>=FROM_UNIXTIME(%.6f)"%dt.timestamp()
  if kind:
   if not re.fullmatch(r'[a-z_]{1,16}',kind):raise ValueError('Invalid kind')
   where+=" AND kind='"+kind+"'"
- sql="SELECT JSON_OBJECT('id',id,'ts',CAST(ts AS CHAR),'char_id',char_id,'kind',kind,'map',map,'x',x,'y',y,'a1',a1,'a2',a2) FROM residents.resident_events WHERE "+where+' ORDER BY id LIMIT 200'
+ sql="SELECT JSON_OBJECT('id',id,'ts',CAST(ts AS CHAR),'epoch',UNIX_TIMESTAMP(ts),'char_id',char_id,'kind',kind,'map',map,'x',x,'y',y,'a1',a1,'a2',a2) FROM residents.resident_events WHERE "+where+' ORDER BY id LIMIT 200'
  rows=[json.loads(l) for l in query(defaults,sql).splitlines() if l]
  for row in rows:
-  row['ts_utc']=datetime.datetime.fromisoformat(row['ts']).replace(tzinfo=ZoneInfo('Europe/Amsterdam')).astimezone(datetime.timezone.utc).isoformat()
-  row['db_timezone']='Europe/Amsterdam'
+  row['ts_utc']=datetime.datetime.fromtimestamp(row_epoch(row),datetime.timezone.utc).isoformat()
+  row['db_timezone']=db_zone()
  return rows
 
 def main():

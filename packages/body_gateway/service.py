@@ -12,10 +12,10 @@ def read_witness_batch(char_id,char_name,cursors,stop):
  if stop.is_set():return None
  rows=get_events(DEFAULTS,char_name,cursors['witness'])
  if stop.is_set():return None
- sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'type',type,'char_id',src_charid,'to',dst_charname,'text',message) FROM ro_residents_logs.chatlog WHERE src_charid={char_id} AND id>{cursors['chat']} ORDER BY id LIMIT 200"
+ sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'epoch',UNIX_TIMESTAMP(time),'type',type,'char_id',src_charid,'to',dst_charname,'text',message) FROM ro_residents_logs.chatlog WHERE src_charid={char_id} AND id>{cursors['chat']} ORDER BY id LIMIT 200"
  chat=[json.loads(line) for line in query(DEFAULTS,sql).splitlines()]
  if stop.is_set():return None
- sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'char_id',char_id,'type',type,'item_id',nameid,'amount',amount,'map',map) FROM ro_residents_logs.picklog WHERE char_id={char_id} AND id>{cursors['picklog']} ORDER BY id LIMIT 200"
+ sql=f"SELECT JSON_OBJECT('id',id,'ts',CAST(time AS CHAR),'epoch',UNIX_TIMESTAMP(time),'char_id',char_id,'type',type,'item_id',nameid,'amount',amount,'map',map) FROM ro_residents_logs.picklog WHERE char_id={char_id} AND id>{cursors['picklog']} ORDER BY id LIMIT 200"
  picks=[json.loads(line) for line in query(DEFAULTS,sql).splitlines()]
  return rows,chat,picks
 
@@ -150,10 +150,10 @@ def serve(path,store,resident,char_id,char_name,duration,witness=True):
       rows,chat,picks=batch
       for r in rows:
        r['event_ts']=datetime.datetime.fromisoformat(r['ts_utc']).timestamp();e.witness(r)
-      from zoneinfo import ZoneInfo
+      from tools.events import row_epoch
       for source,entries in (('chat',chat),('picklog',picks)):
        for r in entries:
-        ts=datetime.datetime.fromisoformat(r['ts']).replace(tzinfo=ZoneInfo('Europe/Amsterdam')).timestamp();j.event(source,r['id'],ts,r,r['id'])
+        j.event(source,r['id'],row_epoch(r),r,r['id'])
     except (RuntimeError,ValueError) as err:j.log('witness_read_error',{'reason':type(err).__name__})
     polling=None;last_poll=now
    if witness and polling is None and now-last_poll>=1:
