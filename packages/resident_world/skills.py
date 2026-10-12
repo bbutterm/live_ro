@@ -62,6 +62,25 @@ def witness_at(status,point,now,radius=5):
     pos=p.get('value',{});age=status.get('age')
     return age is not None and age<4 and now-p.get('ts',0)<15 and proj.get('server_map',{}).get('value')==point['map'] and max(abs(pos.get('x',-999)-point['x']),abs(pos.get('y',-999)-point['y']))<=radius
 
+def register_guest(name):
+    """Make a player the witness can see (residents.registry is our own schema) while a resident
+    follows them. A narrow DB user (registry.cnf: SELECT/INSERT/DELETE on that table only) does it.
+    Returns the char_id to unregister later, or None (already witnessed / no such user / unknown)."""
+    from tools.events import query,DEFAULTS
+    cnf=str(pathlib.Path(DEFAULTS).with_name('registry.cnf'))
+    if not re.fullmatch(r'[\w -]{1,24}',name) or not pathlib.Path(cnf).exists():return None
+    try:
+        cid=query(DEFAULTS,"SELECT char_id FROM ro_residents_main.`char` WHERE name='"+name+"'").strip()
+        if not cid.isdigit() or query(cnf,'SELECT COUNT(*) FROM residents.registry WHERE char_id='+cid).strip()!='0':return None
+        query(cnf,f"INSERT IGNORE INTO residents.registry(char_id,resident_id,enabled) VALUES ({cid},'guest-{cid}',1)")
+        return int(cid)
+    except RuntimeError:return None
+
+def unregister_guest(cid):
+    from tools.events import query,DEFAULTS
+    try:query(str(pathlib.Path(DEFAULTS).with_name('registry.cnf')),f"DELETE FROM residents.registry WHERE char_id={int(cid)} AND resident_id='guest-{int(cid)}'")
+    except RuntimeError:pass
+
 def follow_verified(samples):return bool(samples) and sum(bool(p.get('near')) for p in samples)*100>=len(samples)*70
 
 def chat_goal_task(goal_id):
@@ -109,7 +128,8 @@ def cancel_action(name,task_id):
 def execution_deadline(action,started):return started+(60 if action=='walk_to' else 300 if action in ('meet','find_party') else 1200)
 
 HUNTS={'hunt','hunt_solo','support','hunt_party'}
-NO_RETRY={'done','failed(CHAT_INTERRUPT)','failed(CANCELLED)','failed(NEEDS_REST)','failed(DIED)','failed(NO_TARGET)','failed(TEST_WINDOW_LIMIT)'}
+NO_RETRY={'done','failed(CHAT_INTERRUPT)','failed(CANCELLED)','failed(NEEDS_REST)','failed(DIED)','failed(NO_TARGET)','failed(TEST_WINDOW_LIMIT)',
+          'failed(NO_TARGET_WITNESS)','failed(TARGET_NOT_VISIBLE)','failed(STALE_TARGET_WITNESS)'}
 
 def retry_allowed(action,attempt,result,task=None):
     """Reversible goals get up to 3 attempts. A hunt is retried only when it failed on the
@@ -319,37 +339,51 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         if p.get('ts',0)<start:return 'failed(NO_EVIDENCE)'
         task['idle_witness']=p;persist_task(task,d);return 'done'
     if action=='follow':
-        end=time.monotonic()+args['minutes']*60;proof=[]
-        while time.monotonic()<end:
-            if interrupted(task,action,d):return 'failed(CANCELLED)' if cancelled(task,d) else 'failed(CHAT_INTERRUPT)'
-            s=request(sock,{'op':'status'});t=s.get('telemetry') or {}
-            now=time.time()
-            if s.get('age') is None or s['age']>4:return 'failed(STALE_BODY)'
-            target=next((p for p in t.get('nearby_players',[]) if p['name']==args['player']),None)
-            if not target:return 'failed(TARGET_NOT_VISIBLE)'
-            pos=target['pos'];mine=t['pos']
-            if max(abs(pos['x']-mine['x']),abs(pos['y']-mine['y']))>3:
-                result=run_native(sock,{'skill':'travel_to','params':dict(map=t['map'],x=pos['x'],y=pos['y'],r=3),'timeout':15},key+'-'+str(len(proof)),task,d)
-                if result!='done':return result
-            peer=next((r for r in c['residents'] if r['name']==args['player']),None)
-            if peer:
-                target_status=request(str(STATE/peer['resident_id']/'actions.sock.control'),{'op':'status'})
-            else:
-                from tools.events import query,DEFAULTS
-                raw=query(DEFAULTS,"SELECT e.map,e.x,e.y,UNIX_TIMESTAMP(e.ts) FROM residents.resident_events e JOIN ro_residents_main.char c ON c.char_id=e.char_id WHERE c.name='"+args['player']+"' AND e.kind IN('pos','loadmap') ORDER BY e.id DESC LIMIT 1")
-                if not raw:return 'failed(NO_TARGET_WITNESS)'
-                m,x,y,ts=raw.split('\t');target_status={'age':0,'projection':{'server_map':{'value':m},'server_pos':{'value':{'x':int(x),'y':int(y)},'ts':float(ts)}}}
-            p=target_status.get('projection',{}).get('server_pos',{});v=p.get('value',{})
-            if now-p.get('ts',0)>15:return 'failed(STALE_TARGET_WITNESS)'
-            target_point={'map':target_status['projection']['server_map']['value'],'x':v['x'],'y':v['y']}
-            s=request(sock,{'op':'status'})
-            proof.append({'at':time.time(),'target_witness':p,'self_witness':s.get('projection',{}).get('server_pos'),'near':witness_at(s,target_point,time.time())});time.sleep(1)
-        task['follow_samples']=proof;persist_task(task,d)
-        return 'done' if follow_verified(proof) else 'failed(FOLLOW_DISTANCE)'
+        peer=next((r for r in c['residents'] if r['name']==args['player']),None)
+        guest=None if peer else register_guest(args['player'])
+        if guest:task['guest_registered']=guest;persist_task(task,d)
+        try:return follow_player(args,c,sock,key,task,d,peer)
+        finally:
+            if guest:unregister_guest(guest)
     if action=='meet':
         from .meeting import execute as negotiate_meeting
         return negotiate_meeting(args,c,sock,key,task,d)
     raise ValueError('UNSUPPORTED')
+
+def follow_player(args,c,sock,key,task,d,peer):
+    """Keep within reach of the player for the asked minutes; proof = own and target server positions.
+    Short invisibility (≤20 s) is tolerated by walking to the last witnessed spot."""
+    end=time.monotonic()+args['minutes']*60;proof=[];last_seen=time.time();first_witness=time.time()+8;last_point=None
+    while time.monotonic()<end:
+        if interrupted(task,'follow',d):return 'failed(CANCELLED)' if cancelled(task,d) else 'failed(CHAT_INTERRUPT)'
+        s=request(sock,{'op':'status'});t=s.get('telemetry') or {}
+        now=time.time()
+        if s.get('age') is None or s['age']>4:return 'failed(STALE_BODY)'
+        target=next((p for p in t.get('nearby_players',[]) if p['name']==args['player']),None)
+        if target:last_seen=now
+        elif now-last_seen>20:return 'failed(TARGET_NOT_VISIBLE)'
+        if peer:target_status=request(str(STATE/peer['resident_id']/'actions.sock.control'),{'op':'status'})
+        else:
+            from tools.events import query,DEFAULTS
+            raw=query(DEFAULTS,"SELECT e.map,e.x,e.y,UNIX_TIMESTAMP(e.ts) FROM residents.resident_events e JOIN ro_residents_main.char c ON c.char_id=e.char_id WHERE c.name='"+args['player']+"' AND e.kind IN('pos','loadmap') ORDER BY e.id DESC LIMIT 1")
+            if not raw.strip():
+                if now<first_witness:time.sleep(1);continue  # a just-registered guest needs one 5 s witness tick
+                return 'failed(NO_TARGET_WITNESS)'
+            m,x,y,ts=raw.split('\t');target_status={'age':0,'projection':{'server_map':{'value':m},'server_pos':{'value':{'x':int(x),'y':int(y)},'ts':float(ts)}}}
+        p=target_status.get('projection',{}).get('server_pos',{});v=p.get('value',{})
+        if now-p.get('ts',0)>15:
+            if now<first_witness:time.sleep(1);continue
+            return 'failed(STALE_TARGET_WITNESS)'
+        target_point={'map':target_status['projection']['server_map']['value'],'x':v['x'],'y':v['y']};last_point=target_point
+        goal=target['pos'] if target else {'x':last_point['x'],'y':last_point['y']}
+        mine=t.get('pos') or {}
+        if 'x' not in mine or t.get('map')!=target_point['map'] or max(abs(goal['x']-mine['x']),abs(goal['y']-mine['y']))>3:
+            result=run_native(sock,{'skill':'travel_to','params':dict(map=target_point['map'] if not target else t['map'],x=goal['x'],y=goal['y'],r=3),'timeout':15},key+'-'+str(len(proof)),task,d)
+            if result not in ('done','timeout'):return result  # a moving target makes one step late, not a failure
+        s=request(sock,{'op':'status'})
+        proof.append({'at':time.time(),'target_witness':p,'self_witness':s.get('projection',{}).get('server_pos'),'near':witness_at(s,target_point,time.time())});time.sleep(1)
+    task['follow_samples']=proof;persist_task(task,d)
+    return 'done' if follow_verified(proof) else 'failed(FOLLOW_DISTANCE)'
 
 def execute(name,action,args,*,origin='manual',task_id=None,say=''):
     c=config();args=validate(action,args,c)

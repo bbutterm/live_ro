@@ -22,7 +22,7 @@ class WorldSkillsTests(unittest.TestCase):
         from unittest.mock import patch
         from packages.resident_world import skills
         c={'residents':[{'name':'Mira','resident_id':'b'}],'places':{}}
-        for speech_results,menu_results,spoken_count in [(['done'],['failed(TARGET_NOT_VISIBLE)','done'],1),(['failed(NO_EVIDENCE)','done'],['done'],2)]:
+        for speech_results,menu_results,spoken_count in [(['done'],['failed(NO_ROUTE)','done'],1),(['failed(NO_EVIDENCE)','done'],['done'],2)]:
             with self.subTest(speech_results=speech_results),tempfile.TemporaryDirectory() as tmp:
                 root=pathlib.Path(tmp);d=root/'b';d.mkdir()
                 with patch.object(skills,'STATE',root),patch.object(skills,'config',return_value=c),patch.object(skills,'manual',return_value=nullcontext((d,'sock'))),patch.object(skills.time,'sleep'),patch.object(skills,'run_native',side_effect=speech_results) as prelude,patch.object(skills,'execute_native_menu',side_effect=menu_results) as run:
@@ -31,6 +31,33 @@ class WorldSkillsTests(unittest.TestCase):
                     self.assertEqual(prelude.call_count,spoken_count)
                     self.assertEqual(run.call_count,len(menu_results))
                     self.assertEqual(result['prelude_outcome'],'done')
+
+    def test_follow_registers_an_unwitnessed_player_only_for_its_duration(self):
+        import tempfile,pathlib
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        calls=[]
+        def query(cnf,sql):
+            calls.append((pathlib.Path(cnf).name,sql.split()[0]))
+            if 'SELECT char_id' in sql:return '150007\n'
+            if 'COUNT(*)' in sql:return '0\n'
+            return ''
+        with tempfile.TemporaryDirectory() as tmp,patch('tools.events.query',side_effect=query),patch('tools.events.DEFAULTS',str(pathlib.Path(tmp)/'reader.cnf')):
+            (pathlib.Path(tmp)/'registry.cnf').write_text('[client]\n')
+            d=pathlib.Path(tmp)/'b';d.mkdir()
+            with patch.object(skills,'follow_player',return_value='done') as walk:
+                self.assertEqual(skills.execute_native_menu('follow',{'player':'Owner','minutes':3},{'residents':[]},'sock','k',{'id':'t'},d),'done')
+            walk.assert_called_once()
+            self.assertEqual(calls,[('reader.cnf','SELECT'),('registry.cnf','SELECT'),('registry.cnf','INSERT'),('registry.cnf','DELETE')])
+            calls.clear()
+            with patch.object(skills,'follow_player',side_effect=RuntimeError('crash')):
+                with self.assertRaises(RuntimeError):skills.execute_native_menu('follow',{'player':'Owner','minutes':3},{'residents':[]},'sock','k',{'id':'t'},d)
+            self.assertEqual(calls[-1],('registry.cnf','DELETE'))                 # unregistered even when following crashed
+        from packages.resident_world.chat import fallback_reply
+        s={'telemetry':{'nearby_players':[{'name':'Vanya'}]}}
+        self.assertEqual(fallback_reply('Mira',{'name':'Vanya','text':'пойдём со мной','type':'O'},s)['action'],'follow')
+        for text in ('не иди за мной','пожалуйста, не надо идти к фонтану','не пойдём со мной'):
+            self.assertEqual(fallback_reply('Mira',{'name':'Vanya','text':text,'type':'O'},s)['action'],'say',text)
 
     def test_cli_do_routes_validated_json_to_menu(self):
         import io,sys

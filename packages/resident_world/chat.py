@@ -102,9 +102,10 @@ def fallback_reply(name,event,state,human=True,avoid=()):
     if stop_requested(event):
         return dict(base,action='whisper' if event.get('type')=='W' else 'say',args=({'to':event['name'],'text':'Остановлюсь.'} if event.get('type')=='W' else {'text':'Остановлюсь.'}))
     visible={p['name'] for p in (state.get('telemetry') or {}).get('nearby_players',[])}
-    if re.search(r'пойд[её]м со мной|иди за мной|следуй за мной',text) and event['name'] in visible:
+    negated=bool(re.search(r'(?<!\w)не\s+(?:надо\s+)?(?:иди|идти|ходи|следуй|пойд|встреч|приход)',text))  # «не иди за мной» is not «иди за мной»
+    if not negated and re.search(r'пойд[её]м со мной|иди за мной|следуй за мной',text) and event['name'] in visible:
         return dict(base,action='follow',args={'player':event['name'],'minutes':3},say='Пойдём, буду рядом.')
-    if re.search(r'фонтан',text) and re.search(r'встрет|пойд|иди|приход',text):
+    if not negated and re.search(r'фонтан',text) and re.search(r'встрет|пойд|иди|приход',text):
         for peer,aliases in ALIASES.items():
             if peer!=name and any(re.search(r'(?<!\w)'+re.escape(a)+r'(?!\w)',text) for a in aliases):
                 return dict(base,action='meet',args={'resident':peer,'place':'fountain'},say='Встретимся у фонтана.')
@@ -222,7 +223,8 @@ def handle(event,r,c,store,model=None):
     d=STATE/r['resident_id'];marker=None
     # Stale-proof conversation marker (supervisor.chat_pending): only for replies that need the motor.
     pending={'id':event['id'],'pid':os.getpid(),'deadline':float(event.get('ts') or time.time())+15}
-    started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+10}
+    # Speak within the 10 s the player waits; the server's confirmation of that speech may land later.
+    started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+30}
     try:
         s=request(str(d/'actions.sock.control'),{'op':'status'})
         from packages.resident_behavior.ownership import read_lease,lease_active
