@@ -51,8 +51,17 @@ def main():
         try:result=execute(sys.argv[2],sys.argv[3],json.loads(sys.argv[4]))
         except (ValueError,RuntimeError,OSError) as e:raise SystemExit('Навык отклонён: '+str(e))
         print(json.dumps(result,ensure_ascii=False));return
-    if op=='doctor':return doctor()
-    if op!='status':raise SystemExit('Доступно: ro status, ro doctor, ro stop, ro start, ro do.')
+    if op=='doctor':
+        if sys.argv[2:3]==['world']:
+            from .proof import print_doctor_world
+            return print_doctor_world()
+        return doctor()
+    if op=='accept':
+        from .proof import print_accept
+        window=sys.argv[sys.argv.index('--window')+1] if '--window' in sys.argv[:-1] else '6h'
+        try:return print_accept(window)
+        except ValueError as e:raise SystemExit(str(e))
+    if op!='status':raise SystemExit('Доступно: ro status, ro doctor [world], ro accept --window 6h|24h, ro stop, ro start, ro do.')
     print(version_line())
     print(chat_line())
     for r in config()['residents']:
