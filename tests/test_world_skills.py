@@ -93,6 +93,32 @@ class WorldSkillsTests(unittest.TestCase):
             with patch.object(skills,'STATE',d),patch.object(skills,'request',return_value=s),patch.object(skills,'run_native',side_effect=native),patch.object(skills.time,'sleep'),patch('packages.resident_world.meeting.decide',return_value={'choice':'decline','place':'fountain','reason':'Хочу отдыхать'}):
                 self.assertEqual(skills.execute_native_menu('meet',{'resident':'Mira','place':'fountain'},c,'self-sock','key',{'id':'key','resident':'ResidentA','native_results':[]},d),'failed(MEETING_DECLINED)')
                 self.assertFalse(any(p['skill']=='travel_to' for _,p in plans))
+    def test_follow_from_afar_walks_to_the_witnessed_player_then_counts_from_the_meeting(self):
+        import tempfile,pathlib,time
+        from unittest.mock import patch
+        from packages.resident_world import skills
+        clock={'t':1000.0}
+        def body(sock,msg):
+            met=clock['t']>=1060
+            return {'age':1,'telemetry':{'map':'prontera','pos':{'x':150,'y':150} if met else {'x':100,'y':100},'nearby_players':[{'name':'Owner','pos':{'x':151,'y':151}}] if met else []},
+                    'projection':{'server_map':{'value':'prontera'},'server_pos':{'value':{'x':150,'y':150} if met else {'x':100,'y':100},'ts':clock['t']}}}
+        def query(defaults,sql):return f"prontera\t151\t151\t{clock['t']}\n"
+        def native(sock,plan,key,task,d):clock['t']+=30;return 'timeout'
+        def sleep(s):clock['t']+=s
+        with tempfile.TemporaryDirectory() as tmp,patch.object(skills,'request',side_effect=body),patch('tools.events.query',side_effect=query),\
+             patch.object(skills,'run_native',side_effect=native) as walk,patch.object(skills.time,'sleep',side_effect=sleep),\
+             patch.object(skills.time,'time',side_effect=lambda:clock['t']),patch.object(skills.time,'monotonic',side_effect=lambda:clock['t']),\
+             patch.object(skills,'interrupted',return_value=False),patch.object(skills,'witness_at',return_value=True):
+            task={'id':'t','origin':'brain','action':'follow'}
+            self.assertEqual(skills.follow_player({'player':'Owner','minutes':1},{},'sock','k',task,pathlib.Path(tmp),None),'done')
+            self.assertEqual(walk.call_args_list[0].args[1]['params'],{'map':'prontera','x':151,'y':151,'r':3})  # by the witness, not by sight
+            self.assertTrue(task['met']);self.assertGreaterEqual(task['met_after_s'],60)
+            self.assertTrue(all(s['at']>=1060 for s in task['follow_samples']))  # the way there is not proof of following
+            clock['t']=-10**6  # never met: give up after APPROACH_SECONDS with an honest code
+            task={'id':'t2','origin':'brain','action':'follow'}
+            self.assertEqual(skills.follow_player({'player':'Owner','minutes':1},{},'sock','k',task,pathlib.Path(tmp),None),'failed(TARGET_NOT_REACHED)')
+            self.assertNotIn('met',task)
+
     def test_follow_requires_measured_proximity_not_just_seen_target(self):
         from packages.resident_world.skills import follow_verified
         self.assertTrue(follow_verified([{'near':True}]*7+[{'near':False}]*3))

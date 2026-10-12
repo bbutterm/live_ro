@@ -70,6 +70,27 @@ class AcceptTests(unittest.TestCase):
         with patch.object(self.proof,'_query',side_effect=self.witness()):
             _,report=self.proof.accept(9*3600,now=self.now)
         self.assertTrue(report['criteria']['occupations']['result'],report['criteria']['occupations'])
+    def test_lines_the_server_could_not_log_are_counted_from_the_map_server_log(self):
+        # A Windows client in cp1251: MariaDB refuses the line, so no resident can ever hear it.
+        log=self.state/'map-server.log'
+        log.write_text("[Info]: 'Owner' logged in.\n[SQL]: DB error - Incorrect string value: '\\xCF\\xF0...' for column `ro_residents_logs`.`chatlog`.`message` at row 1\n"*2)
+        with patch.object(self.proof,'_systemd',return_value=False):
+            self.assertEqual(self.proof.rejected_chat(dev_log=str(log)),2)
+            self.assertIsNone(self.proof.rejected_chat(dev_log=str(self.state/'no-such.log')))  # unknown is not «0 lost»
+    def test_chat_report_says_how_many_answers_came_from_the_model(self):
+        db=sqlite3.connect(self.state/'chat.sqlite')
+        db.execute('CREATE TABLE inbox(id INTEGER PRIMARY KEY,payload TEXT,resident TEXT,status TEXT,claimed REAL,result TEXT)')
+        rows=[(1,{'char_id':9,'ts':self.now-60,'name':'Owner','text':'привет','type':'W','to':'Mira'},'Mira','finished',{'outcome':'done','ended':self.now-58,'by':'LLM','decision':{'action':'whisper','args':{'to':'Owner','text':'Привет! Я тут.'}}}),
+              (2,{'char_id':9,'ts':self.now-30,'name':'Owner','text':'иди ко мне','type':'W','to':'Mira'},'Mira','finished',{'outcome':'done','ended':self.now-27,'by':'правила','decision':{'action':'follow','args':{'player':'Owner','minutes':3},'say':'Иду к тебе.'}}),
+              (3,{'char_id':9,'ts':self.now-10,'name':'Owner','text':'mira?','type':'W','to':'mira'},None,'ignored',None)]
+        for i,e,r,st,res in rows:db.execute('INSERT INTO inbox VALUES(?,?,?,?,NULL,?)',(i,json.dumps(e,ensure_ascii=False),r,st,json.dumps(res,ensure_ascii=False) if res else None))
+        db.commit();db.close()
+        stats=self.proof._chat(C['residents'],self.now-3600,self.now)
+        self.assertEqual((stats['messages'],stats['answered'],stats['by_llm']),(2,2,1))
+        from packages.resident_world import cli
+        with patch.object(cli,'STATE',self.state),patch.object(cli,'config',return_value=C):lines=cli.chat_lines(10)
+        self.assertEqual(len(lines),6);self.assertIn('Owner → Mira (шёпот): привет',lines[0]);self.assertIn('LLM: Привет! Я тут.',lines[1])
+        self.assertIn('Иду к тебе. [follow]',lines[3]);self.assertIn('регистр важен',lines[5])
     def test_window_parsing(self):
         self.assertEqual([self.proof.parse_window(x) for x in ('30m','6h','24h','1d','2')],[1800,21600,86400,86400,7200])
         with self.assertRaises(ValueError):self.proof.parse_window('вчера')

@@ -42,6 +42,13 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(norm({'action':'whisper','to':'tester','text':'Привет!','reason':'x'})[0]['args'],{'text':'Привет!','to':'Tester'})
         self.assertEqual(norm({'action':'follow','player':'TESTER','minutes':40,'reason':'x'})[0]['args'],{'player':'Tester','minutes':15})
         with self.assertRaises(ValueError):norm({'action':'follow','player':'Nobody','reason':'x'})
+    def test_model_follow_to_a_far_requester_is_allowed_only_for_that_requester(self):
+        event={'name':'Owner','type':'W','text':'иди ко мне'}
+        d,_=norm({'action':'follow','player':'owner','minutes':3,'say':'Иду к тебе.','reason':'Позвали'},allowed=('say','whisper','follow','walk_to','meet'),event=event)
+        self.assertEqual(d['args'],{'player':'Owner','minutes':3})
+        with self.assertRaisesRegex(ValueError,'TARGET_NOT_VISIBLE'):
+            norm({'action':'follow','player':'Stranger','minutes':3,'say':'Иду.','reason':'x'},allowed=('say','whisper','follow','walk_to','meet'),event=event)
+        with self.assertRaisesRegex(ValueError,'TARGET_NOT_VISIBLE'):norm({'action':'follow','player':'Owner','minutes':3,'reason':'x'})  # the brain alone: only who is near
     def test_chat_reply_to_whisper_stays_private_and_targets_sender(self):
         d,_=norm({'action':'say','text':'Да, слышу.','reason':'x'},allowed=('say','whisper','follow','walk_to','meet'),event={'name':'Tester','type':'W','text':'эй'})
         self.assertEqual(d['action'],'whisper');self.assertEqual(d['args']['to'],'Tester')
@@ -165,17 +172,17 @@ class ChooseTests(unittest.TestCase):
         with patch.object(self.mind_module.time,'time',return_value=1000):p=self.m.choose(HEALTHY)
         self.assertEqual(p['decision']['action'],'idle')
     def test_chat_is_paced_per_player_and_late_messages_get_the_quick_default(self):
-        self.reply(*[{'action':'say','text':'Привет!','reason':'Ответ'} for _ in range(5)])
+        self.reply(*[{'action':'say','text':'Привет!','reason':'Ответ'} for _ in range(14)])
         default={'action':'say','args':{'text':'Слышу тебя.'},'reason':'Ответ'}
         s=dict(HEALTHY)
         with patch.object(self.mind_module.time,'time',return_value=1000):
             late=self.m.respond({'name':'Tester','type':'O','text':'эй','ts':994},s,default)
             self.assertIs(late,default);self.client.complete.assert_not_called()
-            answers=[self.m.respond({'name':'Tester','type':'O','text':'привет','ts':1000},s,default) for _ in range(5)]
-        self.assertEqual(self.client.complete.call_count,3)  # a chatty player gets the quick default afterwards
+            answers=[self.m.respond({'name':'Tester','type':'O','text':'привет','ts':1000},s,default) for _ in range(13)]
+        self.assertEqual(self.client.complete.call_count,12)  # a line every 10 s is a conversation; more gets the quick default
         self.assertIs(answers[-1],default)
         with patch.object(self.mind_module.time,'time',return_value=1000):self.m.respond({'name':'Other','type':'O','text':'привет','ts':1000},s,default)
-        self.assertEqual(self.client.complete.call_count,4)
+        self.assertEqual(self.client.complete.call_count,13)
     def test_vote_place_is_the_offered_key(self):
         self.reply({'choice':'accept','place':'у фонтана','reason':'Давно не виделись'},{'choice':'counter','place':'Market','reason':'Там удобнее'})
         with patch.object(self.mind_module.time,'time',return_value=1000):

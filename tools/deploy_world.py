@@ -442,6 +442,9 @@ def adopt_restart():
         for _ in range(30):
             if run(['pgrep','-f','packages.resident_world.supervisor'],check=False).returncode:break
             time.sleep(1)
+        # The chat service only pauses on STOP (systemd must not see it exit): stop the old one explicitly.
+        run(['pkill','-f','packages.resident_world.chat'],check=False)
+        time.sleep(2)
         phase_world();return
     run(['systemctl','reset-failed','ro-chat.service'],check=False)
     (STATE/'STOP').unlink(missing_ok=True)

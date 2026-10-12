@@ -14,6 +14,24 @@ def _systemd():
     return shutil.which('systemctl') is not None and pathlib.Path('/run/systemd/system').is_dir()
 
 
+def rejected_chat(tail_bytes=2**20,dev_log='/root/ragnarok/logs/map-server.log'):
+    """How many player lines the map-server could not write into chatlog (a client that does not
+    send UTF-8, e.g. a Windows client in cp1251): the residents never hear them. None = log unknown."""
+    target='append:'+dev_log
+    try:
+        if _systemd():
+            target=subprocess.run(['systemctl','show','-p','StandardOutput','--value','ro-residents-map.service'],capture_output=True,text=True,timeout=5).stdout.strip()
+        if target.startswith(('append:','file:')):
+            path=pathlib.Path(target.split(':',1)[1])
+            with path.open('rb') as f:
+                f.seek(max(0,path.stat().st_size-tail_bytes));text=f.read().decode('utf-8','replace')
+        elif target.startswith('journal') or target in ('inherit',''):
+            text=subprocess.run(['journalctl','-u','ro-residents-map.service','--since','-24h','-o','cat','--no-pager'],capture_output=True,text=True,errors='replace',timeout=15).stdout
+        else:return None
+    except (OSError,subprocess.SubprocessError):return None
+    return sum(1 for line in text.splitlines() if 'Incorrect string value' in line and 'chatlog' in line)
+
+
 def _query(sql):
     from tools.events import query,DEFAULTS
     return query(DEFAULTS,sql)
@@ -50,6 +68,8 @@ def doctor_world(now=None):
     except (RuntimeError,ValueError):out.append(('FAIL','свидетель: БД не читается (reader.cnf?)'))
     from .cli import chat_line,brain_line
     chat=chat_line();out.append(('OK' if 'НЕ' not in chat else 'FAIL',chat))
+    lost=rejected_chat()
+    if lost:out.append(('WARN',f'реплик игроков, не записанных сервером: {lost} (клиент пишет не в UTF-8) — жители их не слышат; docs/OWNER_PLAY.md, «Кодировка»'))
     version=code_version();out.append(('WARN' if '+правки' in version or version=='неизвестно' else 'OK','код: '+version))
     try:
         overlay_error=(STATE/'world.local.error').read_text().strip()
@@ -98,7 +118,7 @@ def _uptime(residents,start,end):
 
 
 def _chat(residents,start,end):
-    names={r['name'] for r in residents};ids={int(r['char_id']) for r in residents};stats={'messages':0,'answered':0,'late':0,'silent':0,'worst_s':0.0}
+    names={r['name'] for r in residents};ids={int(r['char_id']) for r in residents};stats={'messages':0,'answered':0,'late':0,'silent':0,'worst_s':0.0,'by_llm':0}
     path=STATE/'chat.sqlite'
     if not path.exists():return stats
     with sqlite3.connect('file:'+str(path)+'?mode=ro',uri=True,timeout=2) as db:
@@ -107,7 +127,7 @@ def _chat(residents,start,end):
         try:e=json.loads(payload);res=json.loads(result) if result else {}
         except ValueError:continue
         if resident not in names or e.get('char_id') in ids or not start<=float(e.get('ts',0) or 0)<=end:continue
-        stats['messages']+=1
+        stats['messages']+=1;stats['by_llm']+=res.get('by')=='LLM'
         if res.get('outcome')=='done':
             delay=float(res.get('ended',e['ts']))-float(e['ts']);stats['worst_s']=max(stats['worst_s'],round(delay,1))
             stats['answered' if delay<=10 else 'late']+=1
@@ -146,7 +166,8 @@ def accept(window_seconds,now=None):
             {n:[sorted(s) for s in segs] for n,segs in occupations.items()})
     chat=_chat(residents,start,now)
     put('chat',None if not chat['messages'] else chat['late']==0 and chat['silent']==0,
-        'ответ игроку ≤10 с и без молчания'+(' — реплик игроков в окне не было' if not chat['messages'] else ''),chat)
+        'ответ игроку ≤10 с и без молчания'+(' — реплик игроков в окне не было' if not chat['messages'] else
+        f": реплик {chat['messages']}, вовремя {chat['answered']}, ответил ИИ {chat['by_llm']}, худший {chat['worst_s']} с"),chat)
     follows=[e for e in _decisions(start,now) if e.get('kind') in ('CHAT_ACTION_OUTCOME',) and (e.get('task') or {}).get('action')=='follow']
     fdone=sum(1 for e in follows if (e.get('task') or {}).get('outcome')=='done')
     put('follow',None if not follows else fdone>0,f'«пойдём со мной»: follow выполнен {fdone} из {len(follows)}' if follows else '«пойдём со мной» в окне не просили')

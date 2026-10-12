@@ -203,6 +203,10 @@ def brain(r):
                 finally:
                     if not isinstance(sys.exc_info()[1],BlockingIOError):clear_chat_goal(d,proposal['id'])
                 record('CHAT_ACTION_OUTCOME',resident=r['name'],event_id=proposal.get('event_id'),task=result)
+                if goal['action']=='follow' and not result.get('met') and result.get('outcome') not in ('done','failed(CANCELLED)','failed(CHAT_INTERRUPT)'):
+                    # We said «иду к тебе» and never got there: say so instead of silence.
+                    try:execute(r['name'],'whisper',{'to':goal['args']['player'],'text':'Не получилось до тебя дойти, прости.'},origin='brain')
+                    except Exception as error:logging.getLogger('world').warning('follow apology for %s failed: %s',r['name'],type(error).__name__)
                 finish_task(d,proposal['id'],result['outcome'])
                 if mind is not None:
                     mind.note(goal['action'],result['outcome'],'договорились в разговоре',proposal['id'])

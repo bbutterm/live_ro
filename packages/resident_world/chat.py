@@ -3,6 +3,7 @@ import re,json,sqlite3
 from .supervisor import online
 ALIASES={'Mira':('мира','миру','mira'), 'Borin':('борин','борина','borin'), 'ResidentA':('residenta','резидент','резидента')}
 LEGACY_FALLBACK='Слышу тебя. Сейчас я рядом.'
+COME=r'пойд[её]м со мной|иди за мной|следуй за мной|(?:иди|приходи|подойди|беги)\s+(?:ко мне|сюда)|найди меня'
 
 def stop_requested(event):
     text=event.get('text','').strip().lower().rstrip('.!')
@@ -59,7 +60,7 @@ class ChatStore:
         with self.db:
             self.db.execute('BEGIN IMMEDIATE')
             self.db.execute("UPDATE inbox SET status='expired' WHERE status='queued' AND json_extract(payload,'$.ts')<?",(now-10,))
-            if self.db.execute('SELECT COUNT(*) FROM inbox WHERE resident=? AND claimed>?',(name,now-60)).fetchone()[0]>=6:return None
+            if self.db.execute('SELECT COUNT(*) FROM inbox WHERE resident=? AND claimed>?',(name,now-60)).fetchone()[0]>=12:return None  # a line every 5 s still gets an answer
             row=self.db.execute("SELECT id,payload FROM inbox WHERE resident=? AND status='queued' ORDER BY id LIMIT 1",(name,)).fetchone()
             if not row:return None
             self.db.execute("UPDATE inbox SET status='claimed',claimed=? WHERE id=?",(now,row[0]));return json.loads(row[1])
@@ -102,9 +103,11 @@ def fallback_reply(name,event,state,human=True,avoid=()):
     if stop_requested(event):
         return dict(base,action='whisper' if event.get('type')=='W' else 'say',args=({'to':event['name'],'text':'Остановлюсь.'} if event.get('type')=='W' else {'text':'Остановлюсь.'}))
     visible={p['name'] for p in (state.get('telemetry') or {}).get('nearby_players',[])}
-    negated=bool(re.search(r'(?<!\w)не\s+(?:надо\s+)?(?:иди|идти|ходи|следуй|пойд|встреч|приход)',text))  # «не иди за мной» is not «иди за мной»
-    if not negated and re.search(r'пойд[её]м со мной|иди за мной|следуй за мной',text) and event['name'] in visible:
-        return dict(base,action='follow',args={'player':event['name'],'minutes':3},say='Пойдём, буду рядом.')
+    negated=bool(re.search(r'(?<!\w)не\s+(?:надо\s+)?(?:иди|идти|ходи|следуй|пойд|встреч|приход|подход|беги)',text))  # «не иди за мной» is not «иди за мной»
+    if not negated and re.search(COME,text):
+        # From afar (a whisper): first come to the player by the witnessed position, then stay near.
+        near=event['name'] in visible
+        return dict(base,action='follow',args={'player':event['name'],'minutes':3},say='Пойдём, буду рядом.' if near else 'Иду к тебе.')
     if not negated and re.search(r'фонтан',text) and re.search(r'встрет|пойд|иди|приход',text):
         for peer,aliases in ALIASES.items():
             if peer!=name and any(re.search(r'(?<!\w)'+re.escape(a)+r'(?!\w)',text) for a in aliases):
@@ -122,7 +125,7 @@ def fallback_reply(name,event,state,human=True,avoid=()):
 
 def validate_reply(d,event,c,s):
     from .mind import validate_decision
-    validate_decision(d,c,s)
+    validate_decision(d,c,s,requester=event['name'])
     if d['action'] not in ('say','whisper','follow','walk_to','meet'):raise ValueError('NOT_A_CHAT_REPLY')
     if d['action'] in ('say','whisper') and d.get('say'):raise ValueError('DOUBLE_REPLY')
     if d['action'] in ('follow','whisper') and d['args'].get('player',d['args'].get('to'))!=event['name']:raise ValueError('WRONG_CHAT_TARGET')
@@ -237,13 +240,15 @@ def handle(event,r,c,store,model=None):
         human=event.get('char_id') not in {x.get('char_id') for x in c.get('residents',[])}
         decision=daily or fallback_reply(r['name'],event,s,human=human)
         if decision is not None:decision=validate_reply(decision,event,c,s)
+        rules=decision
         if model is not None and daily is None and not stop_requested(event):
             decision=model(event,s,decision)
+        task['by']='память' if daily else 'правила' if decision is rules else 'LLM'  # the model returns the quick default untouched when it is not used
         silence='NO_REPLY' if decision is None else 'REPEATED_REPLY'
         if human:
             # A player is never left in silence: a repeated line becomes another honest phrase.
             if decision is None or store.suppress_repeat(event,decision,time.time(),r['name']) is None:
-                decision=validate_reply(fallback_reply(r['name'],event,s,human=True,avoid=store.recent_replies(event,time.time(),r['name'])),event,c,s)
+                decision=validate_reply(fallback_reply(r['name'],event,s,human=True,avoid=store.recent_replies(event,time.time(),r['name'])),event,c,s);task['by']='правила'
         else:decision=store.suppress_repeat(event,decision,time.time(),r['name'])
         if decision is None:
             store.finish(event['id'],{'outcome':'silent('+silence+')'})
@@ -263,7 +268,7 @@ def handle(event,r,c,store,model=None):
                 except (OSError,RuntimeError,ValueError) as error:result='failed('+(str(error) or type(error).__name__)[:40]+')'
                 confirm_chat_reply(d,event,decision,result)
                 task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
-                record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,channel='parallel_speech',seconds=time.time()-event['ts'])
+                record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,channel='parallel_speech',seconds=time.time()-event['ts'],by=task['by'])
                 return
         # Movement (follow/walk_to/meet), «стой», or a body without a speech slot: the motor is needed.
         marker=d/'CHAT_PENDING';atomic(marker,pending)
@@ -278,7 +283,8 @@ def handle(event,r,c,store,model=None):
                         from .continuity import cancel_chat_task,confirm_chat_reply
                         if stop_requested(event):cancel_chat_task(d,event)
                         phrase=decision['args'].get('text',decision.get('say',''))
-                        skill='whisper' if decision['action']=='whisper' else 'say'
+                        # A whisper is answered by a whisper, also «иду к тебе» to a player far away.
+                        skill='whisper' if decision['action']=='whisper' or event.get('type')=='W' else 'say'
                         params={'to_name':event['name'],'text':phrase} if skill=='whisper' else {'text':phrase}
                         task['decision']=decision
 
@@ -291,7 +297,7 @@ def handle(event,r,c,store,model=None):
                             except (OSError,ValueError):pass
                         confirm_chat_reply(d,event,decision,result)
                         task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
-                        record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,seconds=time.time()-event['ts'])
+                        record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,seconds=time.time()-event['ts'],by=task['by'])
                         return
             except BlockingIOError:time.sleep(.1)
         store.finish(event['id'],{'outcome':'failed(WRITER_BUSY)'})
@@ -325,14 +331,15 @@ def start_listener(r):
     thread=threading.Thread(target=listen,name='chat-'+r['name'],daemon=True);thread.start();return thread
 
 
-def serve():
+def serve(until=None):
+    """until: a threading.Event for tests; the service itself never exits."""
     import time,os,fcntl
     from .supervisor import STATE,config
     os.umask(0o077)
     with (STATE/'chat-service.lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         threads=[];paused=False
-        while True:
+        while until is None or not until.is_set():
             if (STATE/'STOP').exists():
                 # `ro stop`: pause, never exit — an exit loop would exhaust systemd's restart limit
                 # and leave the chat dead after `ro start`. Listeners leave their loops by themselves.

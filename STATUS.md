@@ -10,5 +10,6 @@ Follow за игроком: 99% замеров рядом; гость време
 Журнал шлюза очищается раз в час; логи ротируются; суточный бэкап в /var/backups/ro-world.
 make check зелёный. Каталог действий Hermes — для оператора; в меню LLM через llm.menu.
 12.10 сервер: --adopt прошёл; 3 жителя онлайн, решения от LLM; doctor world PASS; accept 30m без FAIL по аптайму и тратам.
-Следующее: ro accept --window 6h на сервере, затем пассивная ro accept 24h.
+Разговор владельца: шёпот с любой карты, «иди ко мне» издалека, ro chat; памятка docs/OWNER_PLAY.md.
+Следующее: --adopt на сервере, разговор владельца в игре, ro accept --window 6h, затем 24h.
 Правило main: fetch → merge origin/main → make check → push (AGENTS.md п.16).

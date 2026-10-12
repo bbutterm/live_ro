@@ -81,6 +81,8 @@ def unregister_guest(cid):
     try:query(str(pathlib.Path(DEFAULTS).with_name('registry.cnf')),f"DELETE FROM residents.registry WHERE char_id={int(cid)} AND resident_id='guest-{int(cid)}'")
     except RuntimeError:pass
 
+APPROACH_SECONDS=300  # «иди ко мне» from another map: Prontera fields are 1–3 minutes away
+
 def follow_verified(samples):return bool(samples) and sum(bool(p.get('near')) for p in samples)*100>=len(samples)*70
 
 def chat_goal_task(goal_id):
@@ -129,7 +131,7 @@ def execution_deadline(action,started):return started+(60 if action=='walk_to' e
 
 HUNTS={'hunt','hunt_solo','support','hunt_party'}
 NO_RETRY={'done','failed(CHAT_INTERRUPT)','failed(CANCELLED)','failed(NEEDS_REST)','failed(DIED)','failed(NO_TARGET)','failed(TEST_WINDOW_LIMIT)',
-          'failed(NO_TARGET_WITNESS)','failed(TARGET_NOT_VISIBLE)','failed(STALE_TARGET_WITNESS)'}
+          'failed(NO_TARGET_WITNESS)','failed(TARGET_NOT_VISIBLE)','failed(STALE_TARGET_WITNESS)','failed(TARGET_NOT_REACHED)'}
 
 def retry_allowed(action,attempt,result,task=None):
     """Reversible goals get up to 3 attempts. A hunt is retried only when it failed on the
@@ -352,15 +354,24 @@ def execute_native_menu(action,args,c,sock,key,task,d):
 
 def follow_player(args,c,sock,key,task,d,peer):
     """Keep within reach of the player for the asked minutes; proof = own and target server positions.
-    Short invisibility (≤20 s) is tolerated by walking to the last witnessed spot."""
-    end=time.monotonic()+args['minutes']*60;proof=[];last_seen=time.time();first_witness=time.time()+8;last_point=None
-    while time.monotonic()<end:
+    A player out of sight (called from afar: «иди ко мне») is first approached by the witnessed
+    position, at most APPROACH_SECONDS; the minutes count from the meeting. Later short invisibility
+    (≤20 s) is tolerated by walking to the last witnessed spot."""
+    started=time.time();end=None;proof=[];last_seen=None;first_witness=started+8;last_point=None;steps=0
+    while end is None or time.monotonic()<end:
         if interrupted(task,'follow',d):return 'failed(CANCELLED)' if cancelled(task,d) else 'failed(CHAT_INTERRUPT)'
         s=request(sock,{'op':'status'});t=s.get('telemetry') or {}
         now=time.time()
         if s.get('age') is None or s['age']>4:return 'failed(STALE_BODY)'
         target=next((p for p in t.get('nearby_players',[]) if p['name']==args['player']),None)
-        if target:last_seen=now
+        if target:
+            last_seen=now
+            if end is None:
+                end=time.monotonic()+args['minutes']*60;task['met']=True
+                if now-started>2:task['met_after_s']=round(now-started)
+                persist_task(task,d)
+        elif last_seen is None:
+            if now-started>APPROACH_SECONDS:return 'failed(TARGET_NOT_REACHED)'
         elif now-last_seen>20:return 'failed(TARGET_NOT_VISIBLE)'
         if peer:target_status=request(str(STATE/peer['resident_id']/'actions.sock.control'),{'op':'status'})
         else:
@@ -378,8 +389,10 @@ def follow_player(args,c,sock,key,task,d,peer):
         goal=target['pos'] if target else {'x':last_point['x'],'y':last_point['y']}
         mine=t.get('pos') or {}
         if 'x' not in mine or t.get('map')!=target_point['map'] or max(abs(goal['x']-mine['x']),abs(goal['y']-mine['y']))>3:
-            result=run_native(sock,{'skill':'travel_to','params':dict(map=target_point['map'] if not target else t['map'],x=goal['x'],y=goal['y'],r=3),'timeout':15},key+'-'+str(len(proof)),task,d)
+            steps+=1;step=key+'-'+(str(len(proof)) if end is not None else 'approach-'+str(steps))
+            result=run_native(sock,{'skill':'travel_to','params':dict(map=target_point['map'] if not target else t['map'],x=goal['x'],y=goal['y'],r=3),'timeout':15 if end is not None else 30},step,task,d)
             if result not in ('done','timeout'):return result  # a moving target makes one step late, not a failure
+        if end is None:time.sleep(1);continue  # still on the way: the proof counts from the meeting
         s=request(sock,{'op':'status'})
         proof.append({'at':time.time(),'target_witness':p,'self_witness':s.get('projection',{}).get('server_pos'),'near':witness_at(s,target_point,time.time())});time.sleep(1)
     task['follow_samples']=proof;persist_task(task,d)

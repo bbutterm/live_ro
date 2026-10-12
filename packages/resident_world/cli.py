@@ -61,7 +61,10 @@ def main():
         window=sys.argv[sys.argv.index('--window')+1] if '--window' in sys.argv[:-1] else '6h'
         try:return print_accept(window)
         except ValueError as e:raise SystemExit(str(e))
-    if op!='status':raise SystemExit('Доступно: ro status, ro doctor [world], ro accept --window 6h|24h, ro stop, ro start, ro do.')
+    if op=='chat':
+        try:return print_chat(int(sys.argv[2]) if len(sys.argv)>2 else 20)
+        except ValueError:raise SystemExit('Формат: ro chat [число реплик]')
+    if op!='status':raise SystemExit('Доступно: ro status, ro chat [N], ro doctor [world], ro accept --window 6h|24h, ro stop, ro start, ro do.')
     print(version_line())
     print(chat_line())
     for r in config()['residents']:
@@ -103,6 +106,38 @@ def version_line():
     try:line+='; ОШИБКА world.local.json ('+(STATE/'world.local.error').read_text().strip()[:120]+') — действует последняя верная копия'
     except OSError:pass
     return line
+
+def chat_lines(limit=20):
+    """The last player lines to residents and what came back, from the chat inbox (read-only)."""
+    import sqlite3
+    c=config();ids={int(r['char_id']) for r in c['residents']};path=STATE/'chat.sqlite'
+    if not path.exists():return ['Реплик игроков ещё не было.']
+    with sqlite3.connect('file:'+str(path)+'?mode=ro',uri=True,timeout=2) as db:
+        rows=db.execute('SELECT payload,resident,status,result FROM inbox ORDER BY id DESC LIMIT ?',(limit*10,)).fetchall()
+    blocks=[]
+    for payload,resident,status,result in rows:
+        try:e=json.loads(payload);res=json.loads(result) if result else {}
+        except ValueError:continue
+        if e.get('char_id') in ids:continue
+        when=time.strftime('%H:%M:%S',time.localtime(float(e.get('ts') or 0)))
+        to=f"{e.get('to')} (шёпот)" if e.get('type')=='W' else (resident or 'вслух')+' (рядом)'
+        block=[f"{when}  {e.get('name')} → {to}: {e.get('text')}"]
+        d=res.get('decision') or {}
+        if res.get('outcome')=='done':
+            text=d.get('args',{}).get('text') or d.get('say') or ''
+            act='' if d.get('action') in ('say','whisper') else f" [{d.get('action')}]"
+            block.append(f"          {resident}, {float(res.get('ended',e['ts']))-float(e['ts']):.1f} с, {res.get('by','?')}: {text}{act}")
+        elif not resident:block.append('          никто не ответил: рядом нет жителя или имя в шёпоте не совпало (регистр важен)')
+        elif status=='expired':block.append(f'          {resident}: не успел ответить за 10 с')
+        elif status in ('queued','claimed'):block.append(f'          {resident}: отвечает…')
+        elif status=='ignored':block.append(f'          {resident}: реплика пришла с опозданием, пропущена')
+        else:block.append(f"          {resident}: молчание — {res.get('outcome')}")
+        blocks.append(block)
+        if len(blocks)>=limit:break
+    return [line for block in reversed(blocks) for line in block] or ['Реплик игроков ещё не было.']
+
+def print_chat(limit=20):
+    for line in chat_lines(limit):print(line)
 
 def chat_line():
     """Is the chat service alive (its listeners write chat-ready.json with their pid)."""

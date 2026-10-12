@@ -43,9 +43,9 @@ class ChatTests(unittest.TestCase):
         from packages.resident_world.chat import ChatStore
         with tempfile.TemporaryDirectory() as tmp:
             path=pathlib.Path(tmp)/'chat.sqlite';store=ChatStore(path)
-            for i in range(1,9):
-                store.enqueue({'id':i,'name':'Human','char_id':9,'text':'привет','ts':100},'Mira',False,100)
-            for i in range(6):self.assertIsNotNone(store.claim('Mira',101))
+            for i in range(1,15):
+                store.enqueue({'id':i if i<9 else 100+i,'name':'Human','char_id':9,'text':'привет','ts':100},'Mira',False,100)
+            for i in range(12):self.assertIsNotNone(store.claim('Mira',101))  # a player writing every 5 s is still answered
             self.assertIsNone(store.claim('Mira',101))
             self.assertIsNone(ChatStore(path).claim('Mira',101))
             # Residents talking to each other: at most 4 turns in a chain (distinct lines).
@@ -127,6 +127,22 @@ class ChatTests(unittest.TestCase):
         self.assertEqual(d['action'],'meet')
         self.assertEqual(d['args'],{'resident':'ResidentA','place':'fountain'})
 
+    def test_come_to_me_from_afar_is_a_follow_that_starts_by_walking(self):
+        # «иди ко мне» whispered from another map: the resident comes, answers in a whisper, and never refuses for «not near».
+        from packages.resident_world.chat import fallback_reply,validate_reply
+        c={'places':{'fountain':{}},'residents':[{'name':'Mira'}]}
+        far={'telemetry':{'nearby_players':[]}}
+        for text in ('Мира, иди ко мне','приходи ко мне','подойди сюда','пойдём со мной','найди меня'):
+            with self.subTest(text=text):
+                event={'name':'Owner','text':text,'type':'W','to':'Mira'}
+                d=fallback_reply('Mira',event,far)
+                self.assertEqual((d['action'],d['args']['player'],d['say']),('follow','Owner','Иду к тебе.'))
+                validate_reply(d,event,c,far)
+        for text in ('не подходи ко мне','не надо идти за мной'):
+            with self.subTest(text=text):self.assertNotEqual(fallback_reply('Mira',{'name':'Owner','text':text,'type':'W'},far)['action'],'follow')
+        d=fallback_reply('Mira',{'name':'Owner','text':'иди ко мне','type':'W'},far);d['args']['player']='Stranger'
+        with self.assertRaises(ValueError):validate_reply(d,{'name':'Owner','text':'иди ко мне','type':'W'},c,far)  # only the one who asked
+
     def test_chat_fallback_binds_follow_and_fountain_to_real_action(self):
         from packages.resident_world.chat import fallback_reply,validate_reply
         c={'places':{'fountain':{}},'residents':[{'name':'Mira'}]}
@@ -203,18 +219,20 @@ class ChatTests(unittest.TestCase):
         from unittest.mock import patch
         from packages.resident_world import chat,supervisor
         with tempfile.TemporaryDirectory() as tmp:
-            state=pathlib.Path(tmp);(state/'STOP').touch();started=[]
+            state=pathlib.Path(tmp);(state/'STOP').touch();started=[];listeners=[]
             def listener(r):
                 started.append(r['name'])
-                th=threading.Thread(target=lambda:[time.sleep(.05) for _ in iter(lambda:(state/'STOP').exists(),True)],daemon=True);th.start();return th
+                th=threading.Thread(target=lambda:[time.sleep(.05) for _ in iter(lambda:(state/'STOP').exists(),True)],daemon=True);th.start();listeners.append(th);return th
             cfg={'residents':[{'name':'Mira','resident_id':'b','enabled':True}]}
             with patch.object(supervisor,'STATE',state),patch.object(supervisor,'config',return_value=cfg),patch.object(chat,'start_listener',side_effect=listener):
-                server=threading.Thread(target=chat.serve,daemon=True);server.start()
+                done=threading.Event();server=threading.Thread(target=chat.serve,args=(done,),daemon=True);server.start()
                 time.sleep(1.5);self.assertTrue(server.is_alive());self.assertEqual(started,[])   # STOP: paused, not exited
                 (state/'STOP').unlink();time.sleep(1.5);self.assertEqual(started,['Mira'])
                 (state/'STOP').touch();time.sleep(1.5);(state/'STOP').unlink();time.sleep(2.5)
                 self.assertTrue(server.is_alive());self.assertEqual(started,['Mira','Mira'])      # resumed after ro start
-                (state/'STOP').touch()
+                (state/'STOP').touch();done.set();server.join(5)
+                for th in listeners:th.join(5)
+                self.assertFalse(server.is_alive() or any(th.is_alive() for th in listeners))  # no stray thread sleeping inside later tests' patched clocks
 
     def test_a_question_mid_hunt_is_answered_without_stopping_the_hunt(self):
         from unittest.mock import Mock,patch
@@ -275,6 +293,17 @@ class ChatGoalLoopTests(unittest.TestCase):
         d,calls=self.run_brain(json.dumps(goal))
         self.assertEqual(len(calls),1);self.assertEqual(calls[0][3]['task_id'],'chat-7-goal')
         self.assertFalse((d/'chat-goal.json').exists())
+    def test_an_unreached_player_hears_why_instead_of_silence(self):
+        # «Иду к тебе» was said; if the resident never got there, it whispers so — but not after a real meeting or «стой».
+        import json
+        goal=json.dumps({'id':'chat-11','event_id':11,'decision':{'action':'follow','args':{'player':'Owner','minutes':3},'say':'Иду к тебе.'}})
+        for result,apology in [({'outcome':'failed(TARGET_NOT_REACHED)'},True),({'outcome':'failed(CANNOT_CALCULATE_ROUTE)'},True),
+                               ({'outcome':'failed(TARGET_NOT_VISIBLE)','met':True},False),({'outcome':'failed(CANCELLED)'},False),({'outcome':'done','met':True},False)]:
+            with self.subTest(result=result):
+                d,calls=self.run_brain(goal,execute=lambda:dict(result,id='chat-11-goal',action='follow'))
+                said=[c for c in calls if c[1]=='whisper']
+                self.assertEqual(len(said),1 if apology else 0)
+                if apology:self.assertEqual(said[0][2]['to'],'Owner')
     def test_a_crashing_goal_is_still_cleared(self):
         import json
         def boom():raise RuntimeError('BODY_GONE')
