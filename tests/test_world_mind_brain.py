@@ -295,6 +295,27 @@ class HonestRetryTests(unittest.TestCase):
                     finish_task(d,p['id'],'cancelled',now=time.time())
 
 
+class ConversationPauseTests(unittest.TestCase):
+    def test_only_an_answered_nearby_conversation_holds_new_decisions_briefly(self):
+        import sqlite3,contextlib,time
+        from unittest.mock import Mock,patch
+        from packages.resident_world import mind
+        with tempfile.TemporaryDirectory() as tmp,patch.object(mind,'STATE',pathlib.Path(tmp)),patch('packages.resident_world.memory.refresh'):
+            d=pathlib.Path(tmp)/'resident_b';d.mkdir();client=Mock();client.budget.return_value=(0,2,0)
+            m=mind.Mind({'name':'Mira','char_id':2,'resident_id':'resident_b','persona':'x'},d,C,client=client)
+            with contextlib.closing(sqlite3.connect(pathlib.Path(tmp)/'chat.sqlite')) as db:
+                db.execute('CREATE TABLE inbox(id INTEGER PRIMARY KEY,payload TEXT,resident TEXT,status TEXT,claimed REAL,result TEXT)')
+                db.execute('INSERT INTO inbox(payload,resident,status,result) VALUES(?,?,?,?)',(json.dumps({'name':'Far','type':'W','text':'эй','ts':time.time()-5}),'Mira','finished',json.dumps({'outcome':'failed(WRITER_BUSY)'})))
+                db.commit()
+            client.complete.side_effect=RuntimeError('called')
+            with self.assertRaises(RuntimeError):m.choose(HEALTHY)     # an unanswered whisper does not freeze the brain
+            with contextlib.closing(sqlite3.connect(pathlib.Path(tmp)/'chat.sqlite')) as db:
+                db.execute('INSERT INTO inbox(payload,resident,status,result) VALUES(?,?,?,?)',(json.dumps({'name':'Vanya','type':'O','text':'привет','ts':time.time()-5}),'Mira','finished',json.dumps({'outcome':'done','decision':{'action':'say','args':{'text':'Привет!'}}})))
+                db.commit()
+            m.next_call=0;self.assertIsNone(m.choose(HEALTHY))
+            self.assertLess(m.next_call-time.time(),45)                 # a short window, not two minutes
+
+
 class WorldConfigTests(unittest.TestCase):
     ROOT=pathlib.Path(__file__).resolve().parents[1]
     def config(self):return json.loads((self.ROOT/'config/world.yaml').read_text())

@@ -216,6 +216,30 @@ class ChatTests(unittest.TestCase):
                 self.assertTrue(server.is_alive());self.assertEqual(started,['Mira','Mira'])      # resumed after ro start
                 (state/'STOP').touch()
 
+    def test_a_question_mid_hunt_is_answered_without_stopping_the_hunt(self):
+        from unittest.mock import Mock,patch
+        from contextlib import contextmanager
+        from packages.resident_world import chat,supervisor,skills
+        with tempfile.TemporaryDirectory() as td:
+            state=pathlib.Path(td);d=state/'resident_b';d.mkdir()
+            r={'resident_id':'resident_b','char_id':150002,'name':'Mira'};c={'places':{'fountain':{}},'residents':[r]}
+            s={'telemetry':{'parallel_speech':True,'mode':'HUNT','map':'prt_fild08','nearby_players':[{'name':'Vanya'}]}}
+            store=Mock();store.suppress_repeat.side_effect=lambda e,x,*a:x;store.recent_replies.return_value=set()
+            seen=[]
+            def run(sock,plan,key,task,where):
+                seen.append((plan['skill'],where==d,(d/'CHAT_PENDING').exists()));return 'done'
+            @contextmanager
+            def writer(*a,**k):
+                seen.append(('motor',True,(d/'CHAT_PENDING').exists()));yield (d,'sock')
+            with patch.object(supervisor,'STATE',state),patch('packages.body_gateway.cli.request',return_value=s),patch('packages.resident_world.memory.day_decision',return_value=None),\
+                 patch.object(skills,'manual',writer),patch.object(skills,'run_native',side_effect=run),patch('packages.resident_world.mind.record'),patch('packages.resident_world.continuity.confirm_chat_reply'):
+                chat.handle({'id':1,'char_id':9,'name':'Vanya','type':'O','text':'как охота?','ts':time.time()},r,c,store,None)
+                self.assertEqual(seen,[('say',False,False)])           # own speech slot, no motor, no interruption marker
+                seen.clear()
+                chat.handle({'id':2,'char_id':9,'name':'Vanya','type':'O','text':'пойдём со мной','ts':time.time()},r,c,store,None)
+                self.assertEqual(seen,[('motor',True,True),('say',True,True)])  # movement needs the motor: the hunt yields
+            self.assertFalse((d/'CHAT_PENDING').exists())
+
 class ChatGoalLoopTests(unittest.TestCase):
     """The brain carries out what was agreed in a conversation exactly once."""
     def run_brain(self,goal_text,execute=None,mind_object=None):

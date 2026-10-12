@@ -449,10 +449,15 @@ class Mind:
         now=time.time()
         proposal=None;task={}
         residents={r['name'] for r in getattr(self,'c',{}).get('residents',[])}
-        player=[h for h in self.heard(now=now) if h['кто'] not in residents and now-h['ts']<120]
+        # A live conversation with a player who got an answer: don't switch activity for ~45 s.
+        # The body keeps doing its current goal (speech has its own slot) and habits still run;
+        # an unanswered whisper from far away freezes nobody.
+        talk=float(getattr(self,'c',{}).get('llm',{}).get('conversation_seconds',45))
+        player=[h for h in self.heard(now=now) if h['кто'] not in residents and now-h['ts']<talk and 'я ответил' in h]
         if player:
-            self.next_call=max(self.next_call,max(h['ts'] for h in player)+120)
+            self.next_call=max(self.next_call,max(h['ts'] for h in player)+talk)
             return None
+        if chat_pending(self.d) or (self.d/'chat-goal.json').exists():return None  # cheap checks before a paid call
         try:quiet=json.loads((self.d/'quiet.json').read_text())
         except (OSError,ValueError):quiet={}
         if quiet.get('until',0)>now and quiet.get('state')==self.situation(s):
@@ -475,7 +480,11 @@ class Mind:
             elif time.time()-proposal.get('at',0)>INTENT_MAX_AGE:
                 self.path.unlink(missing_ok=True);record('STALE_MODEL_INTENT',resident=self.r['name'],reason='AGE')
             else:
-                try:return dict(proposal,decision=validate_decision(proposal['decision'],self.c,dict(s,_me=self.r['name'])))
+                try:
+                    proposal=dict(proposal,decision=validate_decision(proposal['decision'],self.c,dict(s,_me=self.r['name'])))
+                    lifecycle=begin_task(self.d,proposal['id'],proposal['decision'],proposal['decision']['reason'],time.time(),plan=proposal.get('plan'))
+                    if lifecycle['id']!=proposal['id']:return None  # an agreed chat task runs first; the intent waits (≤ INTENT_MAX_AGE)
+                    return proposal
                 except ValueError:self.path.unlink();record('STALE_MODEL_INTENT',resident=self.r['name'])
         from .memory import refresh
         try:refresh(self.r,self.d)
@@ -518,10 +527,12 @@ class Mind:
             decision={'action':'idle','args':{'minutes':3},'reason':'Три попытки не вышли — займусь другим' if failures>=3 and not done_here else 'Не повторяю завершённое дело или прощание'}
             notes.update(plan='',remember='')
         self.next_call=now+self.gap(now,decision)
-        if chat_pending(self.d) or (self.d/'chat-goal.json').exists():
-            record('MODEL_DEFERRED',resident=self.r['name'],reason='PLAYER_INTERRUPTION')
-            return None
         proposal={'id':str(uuid.uuid4()),'at':now,'decision':decision,'thought':notes.get('thought',''),'plan':notes.get('plan',''),'state':self.situation(s)}
+        if chat_pending(self.d) or (self.d/'chat-goal.json').exists():
+            # A conversation started during the paid call: keep the decision, re-check it afterwards.
+            self.remember(notes,now);atomic(self.path,proposal)
+            record('MODEL_DEFERRED',resident=self.r['name'],reason='PLAYER_INTERRUPTION',decision_id=proposal['id'])
+            return None
         lifecycle=begin_task(self.d,proposal['id'],decision,decision['reason'],now,plan=notes.get('plan'))
         if lifecycle['id']!=proposal['id']:return None
         self.remember(notes,now)

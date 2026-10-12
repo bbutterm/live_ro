@@ -177,7 +177,9 @@ print JSON::PP::encode_json({frames=>\@frames,cleared=>\@AI::cleared,telemetry=>
         outcomes = {f[1]['action_id']: f[1]['code'] for f in result['frames'] if f[0]=='skill_result'}
         self.assertEqual(outcomes, {'pm':'CANCELLED','timeout':'TIMEOUT'})
 
-    def test_legacy_motor_keeps_global_busy_semantics(self):
+    def test_speech_has_its_own_slot_in_every_mode(self):
+        # Answering a player never stops the motor: the rest keeps running while the resident talks.
         result = self.scenario(enabled=False)
-        self.assertEqual(result['sent'], [])
+        self.assertEqual(result['sent'], ['c Hello', 'pm "Tester" Hello'])
         self.assertEqual(result['after_pm']['running']['action_id'], 'test')
+        self.assertTrue(result['after_pm']['parallel_speech'])

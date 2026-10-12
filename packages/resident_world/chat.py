@@ -218,10 +218,10 @@ def handle(event,r,c,store,model=None):
     from .skills import manual,run_native
     from .mind import record
     from packages.body_gateway.cli import request
-    peer=r.get('duo_partner')==event.get('name') and bool(r.get('duo_partner'))
     import os
-    pending={'id':event['id'],'pid':os.getpid(),'deadline':float(event.get('ts') or time.time())+15}  # stale-proof (supervisor.chat_pending)
-    d=STATE/r['resident_id'];marker=d/('PEER_CHAT_PENDING' if peer else 'CHAT_PENDING');atomic(marker,pending)
+    d=STATE/r['resident_id'];marker=None
+    # Stale-proof conversation marker (supervisor.chat_pending): only for replies that need the motor.
+    pending={'id':event['id'],'pid':os.getpid(),'deadline':float(event.get('ts') or time.time())+15}
     started=time.time();task={'id':'chat-'+str(event['id']),'resident':r['name'],'origin':'chat','action':'reply','started':started,'expires':event['ts']+10}
     try:
         s=request(str(d/'actions.sock.control'),{'op':'status'})
@@ -247,23 +247,24 @@ def handle(event,r,c,store,model=None):
             store.finish(event['id'],{'outcome':'silent('+silence+')'})
             record('CHAT_SILENT',resident=r['name'],event_id=event['id'],reason=silence)
             return
-        party=(s.get('telemetry') or {}).get('party') or {}
-        if peer and decision['action'] in ('say','whisper') and (s.get('telemetry') or {}).get('duo_speech') is True and party.get('share')==1 and event['name'] in {u.get('name') for u in party.get('members',[])}:
-            # Speech slot is independent; a tactical buddy reply must not cancel a hunt.
+        t=s.get('telemetry') or {}
+        if decision['action'] in ('say','whisper') and not stop_requested(event) and (t.get('parallel_speech') is True or t.get('duo_speech') is True):
+            # Words only: the body's speech slot answers while the hunt or walk goes on.
             with legacy_chat_gate(d) as lease:
                 if lease:store.finish(event['id'],queue_behavior_chat(d,event,r,c,s,lease));return
                 from .continuity import confirm_chat_reply
                 skill='whisper' if decision['action']=='whisper' else 'say'
                 params={'to_name':event['name'],'text':decision['args']['text']} if skill=='whisper' else {'text':decision['args']['text']}
                 task['decision']=decision
-                speech_dir=d/'peer-speech';speech_dir.mkdir(mode=0o700,exist_ok=True)
+                speech_dir=d/'chat-speech';speech_dir.mkdir(mode=0o700,exist_ok=True)  # never the motor's manual_task.json
                 try:result=run_native(str(d/'actions.sock.control'),{'skill':skill,'params':params,'timeout':5},task['id']+'-reply',task,speech_dir)
                 except (OSError,RuntimeError,ValueError) as error:result='failed('+(str(error) or type(error).__name__)[:40]+')'
                 confirm_chat_reply(d,event,decision,result)
                 task.update(outcome=result,ended=time.time());store.finish(event['id'],task)
-                record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,channel='duo_speech',seconds=time.time()-event['ts'])
+                record('CHAT_REPLY',resident=r['name'],input=event,decision=decision,outcome=result,channel='parallel_speech',seconds=time.time()-event['ts'])
                 return
-        if peer:atomic(d/'CHAT_PENDING',pending) # explicit movement commitments still interrupt
+        # Movement (follow/walk_to/meet), «стой», or a body without a speech slot: the motor is needed.
+        marker=d/'CHAT_PENDING';atomic(marker,pending)
         # The same resident writer owns speech and its persisted movement commitment.
         while time.time()<event['ts']+8:
             try:
@@ -293,11 +294,9 @@ def handle(event,r,c,store,model=None):
             except BlockingIOError:time.sleep(.1)
         store.finish(event['id'],{'outcome':'failed(WRITER_BUSY)'})
     finally:
-        marker.unlink(missing_ok=True)
-        if peer:
-            p=d/'CHAT_PENDING'
+        if marker is not None:
             try:
-                if json.loads(p.read_text()).get('id')==event['id']:p.unlink(missing_ok=True)
+                if json.loads(marker.read_text()).get('id')==event['id']:marker.unlink(missing_ok=True)
             except (OSError,ValueError):pass
 
 
