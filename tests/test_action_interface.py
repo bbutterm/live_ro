@@ -259,6 +259,20 @@ class ActionInterfaceTests(unittest.TestCase):
             with patch.object(skills,'request',side_effect=[initial,joined]),patch.object(skills,'run_native',return_value='done'),patch.object(skills.time,'monotonic',side_effect=[0,0]):
                 self.assertEqual(skills.execute_native_menu('find_party',{'minutes':1},c,'sock','key',{},d),'failed(STALE_WITNESS)')
 
+    def test_find_party_rejects_invalid_poll_age_before_membership_confirmation(self):
+        import time
+        c={**C,'residents':[{'resident_id':'resident_b','name':'Mira','party_search_consent':['Tester']}]}
+        initial={**HEALTHY,'age':0}
+        joined={**initial,'projection':{'server_map':{'value':initial['telemetry']['map']},'server_pos':{'value':initial['telemetry']['pos'],'ts':time.time()}},'telemetry':{**initial['telemetry'],'party':{'source':'native_client','share':1,'members':[{'name':'Tester','online':True}]}}}
+        for age in (None,True,'0',-1,float('nan'),float('inf'),4.01):
+            with self.subTest(age=age),tempfile.TemporaryDirectory() as tmp:
+                d=pathlib.Path(tmp)/'resident_b';d.mkdir()
+                with patch.object(skills,'request',side_effect=[initial,{**joined,'age':age}]),patch.object(skills,'run_native',return_value='done') as run,patch.object(skills.time,'monotonic',side_effect=[0,0]):
+                    task={}
+                    self.assertEqual(skills.execute_native_menu('find_party',{'minutes':1},c,'sock','key',task,d),'failed(STALE_BODY)')
+                    self.assertNotIn('native_party_confirmation',task)
+                    self.assertEqual(run.call_count,1)
+
     def test_party_hunt_never_silently_changes_a_support_profile_partner(self):
         from packages.resident_world import actions
         c={**C,'residents':[{'resident_id':'resident_b','name':'Mira','support_target':'Borin'}]}

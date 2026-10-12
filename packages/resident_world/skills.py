@@ -201,7 +201,8 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         while time.monotonic()<end:
             if interrupted(task,action,d):return 'failed(CANCELLED)' if cancelled(task,d) else 'failed(CHAT_INTERRUPT)'
             observed=request(sock,{'op':'status'})
-            if observed.get('age') is None or observed['age']>4:return 'failed(STALE_BODY)'
+            age=observed.get('age')
+            if type(age) not in (int,float) or not 0<=age<=4:return 'failed(STALE_BODY)'
             if party_member(observed.get('telemetry') or {},target):
                 telemetry=observed['telemetry'];pos=telemetry.get('pos') or {}
                 if not {'x','y'}<=set(pos) or not witness_at(observed,{'map':telemetry.get('map'),**pos},time.time()):return 'failed(STALE_WITNESS)'
