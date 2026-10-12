@@ -294,6 +294,28 @@ class ActionInterfaceTests(unittest.TestCase):
         self.assertEqual(actions.party_candidates(C,s),[])
         self.assertIn('NO_NATIVE_PARTY_INVITE',actions.unavailable('party_invite',{'player':'Tester'},C,s))
 
+    def test_party_search_never_confirms_membership_after_task_deadline(self):
+        c={**C,'residents':[{'resident_id':'resident_b','name':'Mira','party_search_consent':['Tester']}]}
+        initial={**HEALTHY,'age':0}
+        joined={**initial,'projection':{'server_map':{'value':initial['telemetry']['map']},'server_pos':{'value':initial['telemetry']['pos'],'ts':1000}},'telemetry':{**initial['telemetry'],'party':{'source':'native_client','share':1,'members':[{'name':'Tester','online':True}]}}}
+        for stage in ('offer','poll','within_deadline'):
+            with self.subTest(stage=stage),tempfile.TemporaryDirectory() as tmp:
+                d=pathlib.Path(tmp)/'resident_b';d.mkdir()
+                clock=[1000]
+                def status(sock,payload):
+                    if rpc.call_count==1:return initial
+                    if stage=='poll':clock[0]=1001
+                    return joined
+                def offer(*args):
+                    if stage=='offer':clock[0]=1001
+                    return 'done'
+                task={'id':'party-deadline','expires':1001}
+                with patch.object(skills,'request',side_effect=status) as rpc,patch.object(skills,'run_native',side_effect=offer) as run,patch.object(skills.time,'time',side_effect=lambda:clock[0]),patch.object(skills.time,'monotonic',side_effect=[0,0,61]),patch.object(skills.time,'sleep'):
+                    self.assertEqual(skills.execute_native_menu('find_party',{'minutes':1},c,'sock','key',task,d),'done' if stage=='within_deadline' else 'timeout')
+                    self.assertEqual(rpc.call_count,1 if stage=='offer' else 2)
+                    self.assertEqual(run.call_count,1)
+                    self.assertEqual('native_party_confirmation' in task,stage=='within_deadline')
+
     def test_status_cancel_and_invoke_replay_are_task_id_scoped(self):
         self.assertTrue(hasattr(skills,'action_status'),'callable task status missing')
         import json

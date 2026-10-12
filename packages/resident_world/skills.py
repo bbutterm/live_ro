@@ -217,17 +217,22 @@ def execute_native_menu(action,args,c,sock,key,task,d):
         result=run_native(sock,{'skill':'whisper','params':{'to_name':target,'text':'Я ИИ-житель. Хочешь охотиться вместе? Пригласи меня в группу.'},'timeout':15},key+'-offer',task,d)
         if result!='done':return result
         end=time.monotonic()+args['minutes']*60
+        deadline=task.get('expires',float('inf'))
         while time.monotonic()<end:
             if interrupted(task,action,d):return 'failed(CANCELLED)' if cancelled(task,d) else 'failed(CHAT_INTERRUPT)'
+            if time.time()>=deadline:return 'timeout'
             observed=request(sock,{'op':'status'})
+            # A status RPC may finish after the caller's task lease; late party
+            # membership is not completion within that bounded execution window.
+            if time.time()>=deadline:return 'timeout'
             age=observed.get('age')
             if type(age) not in (int,float) or not 0<=age<=4:return 'failed(STALE_BODY)'
             if party_member(observed.get('telemetry') or {},target):
                 telemetry=observed['telemetry'];pos=telemetry.get('pos') or {}
                 if not {'x','y'}<=set(pos) or not witness_at(observed,{'map':telemetry.get('map'),**pos},time.time()):return 'failed(STALE_WITNESS)'
                 task['native_party_confirmation']=observed['telemetry']['party'];persist_task(task,d);return 'done'
-            time.sleep(.5)
-        return 'failed(PARTY_NOT_CONFIRMED)'
+            time.sleep(min(.5,max(0,deadline-time.time())))
+        return 'timeout' if time.time()>=deadline else 'failed(PARTY_NOT_CONFIRMED)'
     if action in ('support','hunt_party'):
         plan=native_plan('hunt',args,c)
         support=next((r.get('support_target') for r in c.get('residents',[]) if r.get('resident_id')==d.name),None)
