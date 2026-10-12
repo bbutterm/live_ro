@@ -1,5 +1,5 @@
 """ro accept / ro doctor world: verdicts from witness, chat inbox, decisions and spend."""
-import json,pathlib,sqlite3,tempfile,time,unittest
+import json,os,pathlib,sqlite3,tempfile,time,unittest
 from unittest.mock import patch
 
 C={'daily_llm_usd':2,'residents':[{'name':n,'resident_id':'r'+str(i),'char_id':150001+i,'enabled':True} for i,n in enumerate(('ResidentA','Mira','Borin'))]}
@@ -58,3 +58,27 @@ class AcceptTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class BackupTests(unittest.TestCase):
+    def test_daily_archive_holds_db_and_memory_and_keeps_7_daily_plus_4_weekly(self):
+        import tarfile,datetime
+        from packages.resident_world import backup
+        with tempfile.TemporaryDirectory() as tmp:
+            state=pathlib.Path(tmp)/'state';(state/'resident_a').mkdir(parents=True);out=pathlib.Path(tmp)/'b'
+            (state/'resident_a'/'diary.json').write_text('[{"text":"встретила Тестера"}]');(state/'resident_a'/'journal.sqlite').write_text('big')
+            (state/'world.local.json').write_text('{}')
+            start=datetime.datetime(2026,9,1,3,0,tzinfo=datetime.timezone.utc).timestamp()
+            for day in range(40):
+                p=backup.make(state,out,now=start+day*86400,dump=lambda:b'-- dump')
+                os.utime(p,(start+day*86400,start+day*86400))
+            names=sorted(p.name for p in out.glob('*.tar.gz'))
+            self.assertEqual(len([n for n in names if n>='ro-world-20261004']),7)       # 7 newest days
+            sundays=[n for n in names if datetime.date(int(n[9:13]),int(n[13:15]),int(n[15:17])).weekday()==6]
+            self.assertTrue(4<=len(sundays)<=5)
+            with tarfile.open(out/names[-1]) as tar:
+                members=set(tar.getnames())
+                self.assertEqual(tar.extractfile('dump.sql').read(),b'-- dump')
+            self.assertIn('state/resident_a/diary.json',members);self.assertIn('state/world.local.json',members)
+            self.assertNotIn('state/resident_a/journal.sqlite',members)
+            self.assertFalse(backup.due(out,now=start+39*86400+3600));self.assertTrue(backup.due(out,now=start+40*86400+1))

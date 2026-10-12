@@ -104,6 +104,19 @@ def apply_overlay(base,overlay):
         c['daily_llm_usd']=v
     return c
 
+_backup_thread=None
+def start_backup_if_due(log):
+    """Daily archive in a background thread; a failed backup is logged, never fatal."""
+    import threading
+    global _backup_thread
+    from packages.resident_world import backup
+    directory=config().get('backup_dir','/var/backups/ro-world')
+    if (_backup_thread and _backup_thread.is_alive()) or not backup.due(directory):return
+    def run():
+        try:log.info('backup %s',backup.make(STATE,directory).name)
+        except Exception as error:log.warning('backup failed: %s',type(error).__name__)
+    _backup_thread=threading.Thread(target=run,name='backup',daemon=True);_backup_thread.start()
+
 def rotate_logs(paths,limit=50*2**20):
     """copytruncate: children keep appending (O_APPEND) to the same file; one old copy is kept."""
     import shutil
@@ -297,7 +310,9 @@ def supervise():
                     except OSError as error:  # EAGAIN/ENOMEM/ENOSPC for one child must not take the others down
                         policy.failed(now);log.warning('%s failed to start: %s; independent backoff',name,type(error).__name__);continue
                     policy.started=now;log.info('%s started',name)
-            if now-last_rotate>=60:last_rotate=now;rotate_logs([STATE/(n+'.log') for n in rows])
+            if now-last_rotate>=60:
+                last_rotate=now;rotate_logs([STATE/(n+'.log') for n in rows])
+                start_backup_if_due(log)
             atomic(STATE/'identity.json',{'at':time.time(),'pid':os.getpid(),'version':version,'children':{n:{'pid':x['proc'].pid if x['proc'] else None,'restarts':x['policy'].attempts} for n,x in rows.items()}})
             time.sleep(.2)
     finally:
