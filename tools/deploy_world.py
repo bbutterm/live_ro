@@ -9,6 +9,7 @@
 
     --only ФАЗА / --from ФАЗА   выполнить одну фазу / начиная с фазы
     --dev                       без systemd (контейнер разработчика): службы запускаются процессами
+    --inspect                   только посмотреть, что уже есть (ничего не меняет)
 """
 import argparse,datetime,json,os,pathlib,re,shutil,subprocess,sys,time
 
@@ -128,8 +129,9 @@ def phase_database():
     """MariaDB в UTC, схемы rAthena, свидетель, читатель и узкий пользователь регистрации гостей."""
     conf=pathlib.Path('/etc/mysql/mariadb.conf.d/60-ro-residents.cnf')
     text="[mysqld]\ndefault-time-zone='+00:00'\nmyisam_recover_options=BACKUP,FORCE\n"
+    global RATHENA_CHANGED
     changed=not conf.exists() or conf.read_text()!=text
-    if changed:conf.write_text(text)
+    if changed:conf.write_text(text);RATHENA_CHANGED=True  # a running rAthena reconnects after the restart below
     if DEV:run(['service','mariadb','restart' if changed else 'start'],check=False)
     else:
         run(['systemctl','enable','--now','mariadb'])
@@ -166,18 +168,27 @@ def write_secret(path,text):
     os.replace(tmp,path)
 
 
+RATHENA_CHANGED=False
+
+def _put(path,text):
+    """Write only when different; remember that a running rAthena must reload it."""
+    global RATHENA_CHANGED
+    path=pathlib.Path(path)
+    if path.exists() and path.read_text(errors='replace')==text:return
+    path.write_text(text);RATHENA_CHANGED=True
+
 def phase_rathena_config():
     """Без PIN, старт в Пронтере, журналы, NPC свидетеля, права для ro-residents."""
     char=RATHENA/'conf/import/char_conf.txt';text=char.read_text()
     for line in ('pincode_enabled: no','start_point: prontera,156,191'):
         if line not in text:text=text.rstrip('\n')+'\n'+line+'\n'
-    char.write_text(text)
-    shutil.copyfile(ROOT/'server/witness/log_conf.txt',RATHENA/'conf/import/log_conf.txt')
-    shutil.copyfile(ROOT/'server/witness/residents_witness.txt',RATHENA/'npc/custom/residents_witness.txt')
-    shutil.copyfile(ROOT/'server/witness/maps.txt',RATHENA/'npc/custom/residents_maps.txt')
+    _put(char,text)
+    _put(RATHENA/'conf/import/log_conf.txt',(ROOT/'server/witness/log_conf.txt').read_text())
+    _put(RATHENA/'npc/custom/residents_witness.txt',(ROOT/'server/witness/residents_witness.txt').read_text())
+    _put(RATHENA/'npc/custom/residents_maps.txt',(ROOT/'server/witness/maps.txt').read_text())
     custom=RATHENA/'npc/scripts_custom.conf'
     if 'npc/custom/residents_maps.txt' not in custom.read_text():
-        with custom.open('a') as f:f.write('\n// live_ro witness loadevent mapflags\nnpc: npc/custom/residents_maps.txt\n')
+        _put(custom,custom.read_text().rstrip('\n')+'\n\n// live_ro witness loadevent mapflags\nnpc: npc/custom/residents_maps.txt\n')
     run(['setfacl','-m','u:ro-residents:x','/root',str(BASE),str(BASE/'repos')])
     (RATHENA/'log').mkdir(exist_ok=True);shutil.chown(RATHENA/'log','ro-residents','ro-residents');(RATHENA/'log').chmod(0o750)
     for f in (RATHENA/'conf/import').glob('*.txt'):
@@ -200,7 +211,11 @@ def phase_rathena_services():
             shutil.copyfile(ROOT/'ops/units'/unit,'/etc/systemd/system/'+unit)
             drop=pathlib.Path(f'/etc/systemd/system/{unit}.d');drop.mkdir(exist_ok=True)
             (drop/'10-restart.conf').write_text('[Service]\nRestart=on-failure\nRestartSec=10\n')
-        run(['systemctl','daemon-reload']);run(['systemctl','start','ro-residents-login','ro-residents-char','ro-residents-map'])
+        run(['systemctl','daemon-reload'])
+        if RATHENA_CHANGED:
+            log('настройки rAthena изменились: перезапускаю серверы (жители переподключатся сами)')
+            run(['systemctl','restart','ro-residents-login','ro-residents-char','ro-residents-map'])
+        else:run(['systemctl','start','ro-residents-login','ro-residents-char','ro-residents-map'])
         pathlib.Path('/etc/logrotate.d/ro-residents').write_text(  # rAthena and OpenKore logs of a permanent world
             f'{LOGS}/*.log {LOGS}/*/*.txt {{\n daily\n rotate 7\n maxsize 100M\n compress\n missingok\n notifempty\n copytruncate\n}}\n')
     for port in (6900,6121,5121):
@@ -328,6 +343,14 @@ def phase_world():
     (drop/'10-rathena.conf').write_text('[Unit]\nWants=ro-residents-login.service ro-residents-char.service ro-residents-map.service ro-chat.service\n')
     run(['systemctl','daemon-reload'])
     run(['systemctl','enable','ro-residents-login','ro-residents-char','ro-residents-map'],check=False)  # no [Install]: started by ro-world's Wants
+    sys.path.insert(0,str(ROOT));from packages.resident_world.supervisor import code_version
+    try:running=json.loads((STATE/'identity.json').read_text()).get('version')
+    except (OSError,ValueError):running=None
+    active=run(['systemctl','is-active','ro-world.service'],check=False).stdout.strip()=='active'
+    if active and running!=code_version():
+        # An existing world runs older code: load the new one (bodies relog by themselves).
+        log(f'мир работает на коде {running}, в checkout {code_version()}: перезапускаю ro-world и ro-chat')
+        run(['systemctl','reset-failed','ro-chat.service'],check=False);run(['systemctl','restart','ro-world.service','ro-chat.service'])
     run(['systemctl','enable','--now','ro-world.service']);time.sleep(5)
     run(['systemctl','reset-failed','ro-chat.service'],check=False);run(['systemctl','enable','--now','ro-chat.service'])
 
@@ -345,6 +368,53 @@ def phase_check():
     if out.count(': онлайн')<3:raise Stop('за 5 минут онлайн не все трое: смотри /var/lib/ro-world/*-body.log и world.log')
 
 
+def inspect():
+    """Только чтение: что уже есть на сервере. Ничего не меняет и не печатает секреты."""
+    def line(ok,text):print(('OK    ' if ok is True else 'НЕТ   ' if ok is False else 'ВНИМ  ')+text,flush=True)
+    import platform
+    line(None,'ОС: '+platform.platform()+'; часовой пояс: '+str(pathlib.Path('/etc/localtime').resolve()).split('zoneinfo/')[-1])
+    for name,path in (('rathena',RATHENA),('openkore',OPENKORE)):
+        head=run(['git','-C',str(path),'rev-parse','HEAD'],check=False).stdout.strip() if path.exists() else ''
+        line(head==PINS[name][1] if head else False,f'{name}: {path} '+(f'коммит {head[:7]}'+('' if head==PINS[name][1] else f' (ожидается {PINS[name][1][:7]})') if head else 'нет'))
+    line(ROOT==BASE/'repos/live_ro',f'live_ro: {ROOT} коммит '+run(['git','-C',str(ROOT),'rev-parse','--short','HEAD'],check=False).stdout.strip())
+    line(all((RATHENA/b).exists() for b in ('login-server','char-server','map-server')),'rAthena собран (login/char/map-server)')
+    others=run(['bash','-c','find / -xdev \\( -path /proc -o -path /sys \\) -prune -o -name map-server -type f -print 2>/dev/null | head -5'],check=False).stdout.split()
+    stray=[p for p in others if not p.startswith(str(RATHENA))]
+    if stray:line(None,'другие map-server на диске: '+', '.join(stray))
+    listen=run(['ss','-ltnH'],check=False).stdout
+    for port in (6900,6121,5121,3306):
+        bound=[l.split()[3] for l in listen.splitlines() if l.split()[3].endswith(':'+str(port))] if listen else []
+        line(bool(bound) and all(b.startswith('127.0.0.1:') for b in bound) if port!=3306 else bool(bound),f'порт {port}: '+(', '.join(bound) or 'никто не слушает'))
+    if shutil.which('systemctl') and pathlib.Path('/run/systemd/system').is_dir():
+        for unit in ('mariadb','ro-residents-login','ro-residents-char','ro-residents-map','ro-world','ro-chat'):
+            state=run(['systemctl','is-active',unit+'.service'],check=False).stdout.strip()
+            line(state=='active',f'служба {unit}: {state}')
+    dbs=run(['mariadb','-NBe','SHOW DATABASES'],check=False).stdout.split()
+    line('ro_residents_main' in dbs and 'residents' in dbs,'БД: '+', '.join(d for d in dbs if d not in ('information_schema','mysql','performance_schema','sys')))
+    if 'ro_residents_main' in dbs:
+        tz=run(['mariadb','-NBe','SELECT @@global.time_zone,@@system_time_zone'],check=False).stdout.split()
+        line(None,'MariaDB time_zone: '+' / '.join(tz))
+        accounts=run(['mariadb','-NBe',"SELECT userid FROM ro_residents_main.login WHERE userid LIKE 'ro\\_%' ORDER BY account_id"],check=False).stdout.split()
+        line(len(accounts)>=4,'аккаунты жителей: '+(', '.join(accounts) or 'нет'))
+        chars=run(['mariadb','-NBe',"SELECT CONCAT(char_id,' ',name,' online=',online,' класс=',class,' ур=',base_level) FROM ro_residents_main.`char` ORDER BY char_id"],check=False).stdout.strip().splitlines()
+        line(len(chars)>=4,'персонажи: '+('; '.join(chars) or 'нет'))
+    if 'residents' in dbs:
+        reg=run(['mariadb','-NBe','SELECT CONCAT(char_id,"=",resident_id) FROM residents.registry'],check=False).stdout.split()
+        line(len(reg)>=4,'реестр свидетеля: '+(', '.join(reg) or 'пусто'))
+        last=run(['mariadb','-NBe','SELECT COALESCE(TIMESTAMPDIFF(SECOND,MAX(ts),NOW()),-1) FROM residents.resident_events'],check=False).stdout.strip()
+        line(last not in ('','-1') and int(last)<60,'свидетель: последнее событие '+(last+' с назад' if last not in ('','-1') else 'нет событий'))
+    for p in ('run/private/server.json','run/private/reader.cnf','run/private/registry.cnf','run/tester/credentials.json','run/resident/credentials.json',
+              'run/Demo/resident_a/control/config.txt','run/Demo/resident_b/credentials.json','run/Demo/resident_c/credentials.json','run/B/resident/fields/provenance.json'):
+        line((BASE/p).exists(),str(BASE/p))
+    witness=(RATHENA/'npc/scripts_custom.conf').exists() and 'residents_witness' in (RATHENA/'npc/scripts_custom.conf').read_text()
+    line(witness,'NPC свидетеля подключён в rAthena')
+    env=ROOT/'.env';has=env.exists() and bool(re.search(r'^\s*(export\s+)?RO_WORLD_LLM_API_KEY\s*=\s*["\']?[A-Za-z0-9]',env.read_text(errors='replace'),re.M))
+    line(has,'.env: '+('ключ LLM есть' if has else 'ключа LLM нет'))
+    line(STATE.exists(),f'{STATE}: '+(', '.join(sorted(p.name for p in STATE.iterdir()))[:200] if STATE.exists() else 'нет'))
+    print('Если раскладка совпадает (пути /root/ragnarok/repos/*, БД ro_residents_main), запускайте: python3 tools/deploy_world.py — готовое он пропустит.',flush=True)
+    return 0
+
+
 PHASES=[('system',phase_system),('sources',phase_sources),('rathena_build',phase_rathena_build),('database',phase_database),
         ('rathena_config',phase_rathena_config),('rathena_services',phase_rathena_services),('openkore',phase_openkore),
         ('profiles',phase_profiles),('characters',phase_characters),('world',phase_world),('check',phase_check)]
@@ -354,7 +424,9 @@ def main():
     global DEV
     a=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument('--only');a.add_argument('--from',dest='start');a.add_argument('--dev',action='store_true')
+    a.add_argument('--inspect',action='store_true',help='только показать, что уже есть на сервере')
     v=a.parse_args();DEV=v.dev;names=[n for n,_ in PHASES]
+    if v.inspect:return inspect()
     for n in (v.only,v.start):
         if n and n not in names:a.error('фазы: '+', '.join(names))
     todo=[p for p in PHASES if (not v.only or p[0]==v.only)]
