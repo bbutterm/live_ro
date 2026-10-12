@@ -52,6 +52,24 @@ class AcceptTests(unittest.TestCase):
         self.assertFalse(crit['occupations']['result'])                     # only 2 done occupations each
         self.assertEqual((crit['chat']['data']['late'],crit['chat']['data']['silent'],crit['chat']['data']['messages']),(1,1,2))  # resident lines excluded
         self.assertFalse(crit['spend']['result'])
+    def test_a_window_shorter_than_6h_does_not_fail_occupations(self):
+        self.decide('ResidentA','hunt',self.now-1500);self.decide('ResidentA','town_service',self.now-900)
+        for who in ('Mira','Borin'):
+            for k,action in enumerate(('hunt','town_service','walk_to')):self.decide(who,action,self.now-1500+k*300)
+        with patch.object(self.proof,'_query',side_effect=self.witness()):
+            _,report=self.proof.accept(1800,now=self.now)
+        occ=report['criteria']['occupations']
+        self.assertIsNone(occ['result']);self.assertIn('ResidentA 2',occ['text'])  # 2 occupations in 30 min is not a 6-hour verdict
+        for who in ('ResidentA',):self.decide(who,'rest',self.now-300)
+        with patch.object(self.proof,'_query',side_effect=self.witness()):
+            _,report=self.proof.accept(1800,now=self.now)
+        self.assertTrue(report['criteria']['occupations']['result'])        # 3 already reached: a short window may pass
+    def test_a_9h_window_is_one_segment_not_two_short_ones(self):
+        for who in ('ResidentA','Mira','Borin'):
+            for k,action in enumerate(('hunt','town_service','walk_to')):self.decide(who,action,self.now-8*3600+k*3*3600)
+        with patch.object(self.proof,'_query',side_effect=self.witness()):
+            _,report=self.proof.accept(9*3600,now=self.now)
+        self.assertTrue(report['criteria']['occupations']['result'],report['criteria']['occupations'])
     def test_window_parsing(self):
         self.assertEqual([self.proof.parse_window(x) for x in ('30m','6h','24h','1d','2')],[1800,21600,86400,86400,7200])
         with self.assertRaises(ValueError):self.proof.parse_window('вчера')

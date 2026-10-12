@@ -131,14 +131,19 @@ def accept(window_seconds,now=None):
     for e in _decisions(start,now):
         if e.get('kind')=='MODEL_DECISION':decided[e.get('decision_id')]=(e.get('resident'),(e.get('decision') or {}).get('action'),float(e['ts']))
         elif e.get('kind')=='GOAL_OUTCOME' and e.get('outcome')=='done':done[e.get('task_id')]=True
-    segments=max(1,int(round(window_seconds/(6*3600))));seg_len=window_seconds/segments;occupations={}
+    # TZ §1 counts occupations per 6 hours: every segment is at least 6 h long, never stricter than that.
+    full=int(window_seconds//(6*3600));segments=max(1,full);seg_len=window_seconds/segments;occupations={}
     for did,(who,action,ts) in decided.items():
         if did in done and action:
             seg=min(segments-1,int((ts-start)//seg_len))
             occupations.setdefault(who,[set() for _ in range(segments)])[seg].add(OCCUPATION.get(action,action))
     weak=[r['name'] for r in residents if any(len(s)<3 for s in occupations.get(r['name'],[set()]*segments))]
-    put('occupations',not weak,'в каждом 6-часовом окне ≥3 разных занятия по решению LLM, подтверждённых итогом done'+(': мало у '+', '.join(weak) if weak else ''),
-        {n:[sorted(s) for s in segs] for n,segs in occupations.items()})
+    counts=', '.join(f"{r['name']} {len(set().union(*occupations.get(r['name'],[set()])))}" for r in residents)
+    if not full and weak:
+        put('occupations',None,f'окно короче 6 ч — занятия судятся за 6 ч; пока разных занятий: {counts}',{n:[sorted(s) for s in segs] for n,segs in occupations.items()})
+    else:
+        put('occupations',not weak,'в каждом 6-часовом окне ≥3 разных занятия по решению LLM, подтверждённых итогом done'+(': мало у '+', '.join(weak) if weak else ''),
+            {n:[sorted(s) for s in segs] for n,segs in occupations.items()})
     chat=_chat(residents,start,now)
     put('chat',None if not chat['messages'] else chat['late']==0 and chat['silent']==0,
         'ответ игроку ≤10 с и без молчания'+(' — реплик игроков в окне не было' if not chat['messages'] else ''),chat)
