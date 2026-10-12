@@ -256,6 +256,11 @@ def execute_native_menu(action,args,c,sock,key,task,d):
             go=dict(skill='travel_to',params={'map':args['map'],'x':170,'y':240,'r':3},timeout=240 if task.get('origin')=='brain' else 55)
             result=run_native(sock,go,key+'-route',task,d)
             if result!='done':return result
+            if action=='hunt_solo':
+                # Admit combat from current facts, not the pre-travel snapshot.
+                arrived={**request(sock,{'op':'status'}),'_resident_id':d.name}
+                reason=unavailable(action,args,c,arrived)
+                if reason:return 'failed('+reason+')'
         plan=native_plan(action,args,c)
         support=next((r.get('support_target') for r in c.get('residents',[]) if r.get('resident_id')==d.name),None)
         if action=='hunt_solo':plan={**plan,'params':{**plan['params'],'solo':True}}

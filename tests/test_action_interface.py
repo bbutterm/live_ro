@@ -25,6 +25,32 @@ class ActionInterfaceTests(unittest.TestCase):
                 self.assertEqual(run.call_args.args[1]['params']['solo'],True)
                 self.assertNotIn('support_target',run.call_args.args[1]['params'])
 
+    def test_solo_hunt_rechecks_eligibility_after_confirmed_field_route(self):
+        args={'map':'prt_fild08','minutes':5}
+        c={**C,'residents':[{'resident_id':'resident_b','name':'Mira','support_target':'Borin'}]}
+        initial={**HEALTHY,'telemetry':{**HEALTHY['telemetry'],'map':'prontera'}}
+        arrived={**initial,'telemetry':{**initial['telemetry'],'map':'prt_fild08'}}
+        cases=[(arrived,'done'),
+               ({**arrived,'age':None},'failed(STALE_BODY)'),
+               ({**arrived,'telemetry':{**arrived['telemetry'],'dead':True}},'failed(DEAD)'),
+               ({**arrived,'telemetry':{**arrived['telemetry'],'weight':70,'weight_max':100}},'failed(OVERWEIGHT_HUNT)'),
+               ({**arrived,'telemetry':{**arrived['telemetry'],'hp':59,'hp_max':100}},'failed(INSUFFICIENT_HUNT_RESOURCES)')]
+        for final,expected in cases:
+            with self.subTest(expected=expected),tempfile.TemporaryDirectory() as tmp:
+                with patch.object(skills,'request',side_effect=[initial,initial,final]) as rpc,patch.object(skills,'run_native',return_value='done') as run:
+                    self.assertEqual(skills.execute_native_menu('hunt_solo',args,c,'sock','key',{},pathlib.Path(tmp)/'resident_b'),expected)
+                    self.assertEqual(rpc.call_count,3)
+                    self.assertEqual(run.call_count,2 if expected=='done' else 1)
+                    self.assertEqual(run.call_args_list[0].args[1]['skill'],'travel_to')
+                    if expected=='done':
+                        self.assertTrue(run.call_args.args[1]['params']['solo'])
+                        self.assertNotIn('support_target',run.call_args.args[1]['params'])
+        # Failed travel never starts combat or requests post-route telemetry.
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(skills,'request',return_value=initial) as rpc,patch.object(skills,'run_native',return_value='timeout') as run:
+                self.assertEqual(skills.execute_native_menu('hunt_solo',args,c,'sock','key',{},pathlib.Path(tmp)/'resident_b'),'timeout')
+                self.assertEqual(rpc.call_count,2);self.assertEqual(run.call_count,1)
+
     def test_new_actions_reject_unknown_or_invalid_body_age_before_dispatch(self):
         from packages.resident_world import actions
         args={'skill':'travel_to','params':{'map':'prontera','x':156,'y':191,'r':3}}
