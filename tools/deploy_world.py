@@ -10,6 +10,8 @@
     --only ФАЗА / --from ФАЗА   выполнить одну фазу / начиная с фазы
     --dev                       без systemd (контейнер разработчика): службы запускаются процессами
     --inspect                   только посмотреть, что уже есть (ничего не меняет)
+    --adopt                     мир уже работает: игровой сервер не трогать, проверить жителей,
+                                добавить реестр/пользователя follow и перезапустить мир на новом коде
 """
 import argparse,datetime,json,os,pathlib,re,shutil,subprocess,sys,time
 
@@ -368,6 +370,84 @@ def phase_check():
     if out.count(': онлайн')<3:raise Stop('за 5 минут онлайн не все трое: смотри /var/lib/ro-world/*-body.log и world.log')
 
 
+# ---------------------------------------------------------------- существующий мир
+def _unit_dir(unit):
+    """WorkingDirectory of an installed unit (resolved), or None."""
+    out=run(['systemctl','show','-p','WorkingDirectory','--value',unit],check=False).stdout.strip()
+    return pathlib.Path(out).resolve() if out and out!='[not set]' else None
+
+
+def adopt_check():
+    """Только проверка: службы запускают этот checkout, персонажи, аккаунты и профили жителей на месте."""
+    if os.geteuid()!=0:raise Stop('нужен root')
+    sys.path.insert(0,str(ROOT));from packages.resident_world.supervisor import config
+    c=config()
+    if not DEV:
+        for unit in ('ro-world.service','ro-chat.service'):
+            d=_unit_dir(unit)
+            if d is None:raise Stop(f'служба {unit} не установлена — это не существующий мир, нужен обычный запуск без --adopt')
+            if d!=ROOT.resolve():raise Stop(f'служба {unit} запускает код из {d}, а этот checkout — {ROOT.resolve()}. Обновите тот checkout (git pull) и запустите скрипт оттуда')
+        mapdir=_unit_dir('ro-residents-map.service')
+        if mapdir and 'residents_witness' not in (mapdir/'npc/scripts_custom.conf').read_text(errors='replace'):raise Stop(f'NPC свидетеля не подключён в {mapdir}')
+    if not pathlib.Path('/root/ragnarok/repos/openkore/openkore.pl').exists():raise Stop('нет /root/ragnarok/repos/openkore/openkore.pl — тела жителей запускаются оттуда')
+    dbs=sql('SHOW DATABASES').split()
+    for db in ('ro_residents_main','ro_residents_logs','residents'):
+        if db not in dbs:raise Stop(f'нет БД {db}')
+    if not (PRIVATE/'reader.cnf').exists():raise Stop(f'нет {PRIVATE}/reader.cnf — свидетель не читается')
+    for r in c['residents']:
+        name=sql(f"SELECT name FROM ro_residents_main.`char` WHERE char_id={int(r['char_id'])}")
+        if name!=r['name']:raise Stop(f"персонаж {r['char_id']}: в БД «{name or 'нет'}», а в config/world.yaml «{r['name']}»")
+        cfg=pathlib.Path(r['profile'])/'control/config.txt'
+        if not cfg.exists():raise Stop(f'нет профиля {cfg}')
+        text=cfg.read_text(errors='replace');user=re.search(r'^username\s+(\S+)',text,re.M)
+        if not user or not re.search(r'^password\s+\S+',text,re.M):raise Stop(f'в {cfg} нет username/password')
+        if sql(f"SELECT COUNT(*) FROM ro_residents_main.login WHERE userid='{user.group(1)}'")!='1':raise Stop(f"аккаунт профиля {r['name']} не найден в БД")
+        if not re.search(r'^char\s+\d+\s*$',text,re.M):raise Stop(f'в {cfg} не выбран слот персонажа (char)')
+        log(f"{r['name']}: персонаж {r['char_id']}, профиль и аккаунт на месте"+('' if r.get('enabled',True) else ' (выключен в config)'))
+    tz=sql('SELECT @@global.time_zone,@@system_time_zone').split()
+    if tz[:1]!=['+00:00'] and tz[-1:]!=['UTC']:log('ВНИМАНИЕ: MariaDB в местном времени ('+' / '.join(tz)+'): 25.10 с 01:00 до 02:00 UTC жители могут час жить на привычках. Это не исправляется на живом мире автоматически.')
+
+
+def adopt_witness():
+    """Реестр свидетеля для жителей и узкий пользователь регистрации гостя (follow)."""
+    sys.path.insert(0,str(ROOT));from packages.resident_world.supervisor import config
+    for r in config()['residents']:
+        sql(f"INSERT IGNORE INTO residents.registry(char_id,resident_id,enabled) VALUES ({int(r['char_id'])},'{r['resident_id']}',1)")
+    registry=PRIVATE/'registry.cnf'
+    if not registry.exists():
+        import secrets
+        pw=secrets.token_hex(20);u="'ro_residents_registry'@'127.0.0.1'"
+        sql(f"DROP USER IF EXISTS {u};CREATE USER {u} IDENTIFIED BY '{pw}';GRANT SELECT,INSERT,DELETE ON residents.registry TO {u};")
+        write_secret(registry,f'[client]\nhost=127.0.0.1\nuser=ro_residents_registry\npassword={pw}\n');log('пользователь регистрации гостя для follow (только residents.registry)')
+
+
+def adopt_units():
+    """Добавки к юнитам (сами юниты не перезаписываются): чат не сдаётся и следует за миром."""
+    if DEV:return
+    for unit,text in (('ro-chat.service','[Unit]\nPartOf=ro-world.service\nStartLimitIntervalSec=0\n'),('ro-world.service','[Unit]\nWants=ro-chat.service\n')):
+        d=pathlib.Path(f'/etc/systemd/system/{unit}.d');d.mkdir(exist_ok=True)
+        (d/'20-live-ro.conf').write_text(text)
+    run(['systemctl','daemon-reload'])
+
+
+def adopt_restart():
+    """Мир на старом коде — перезапуск ro-world и ro-chat на новый (тела переподключатся сами)."""
+    sys.path.insert(0,str(ROOT));from packages.resident_world.supervisor import code_version
+    try:running=json.loads((STATE/'identity.json').read_text()).get('version')
+    except (OSError,ValueError):running=None
+    if running==code_version():log(f'мир уже работает на коде {running}');return
+    log(f'мир работает на коде {running or "без версии"}, в checkout {code_version()}: перезапускаю ro-world и ro-chat')
+    if DEV:
+        (STATE/'STOP').touch()
+        for _ in range(30):
+            if run(['pgrep','-f','packages.resident_world.supervisor'],check=False).returncode:break
+            time.sleep(1)
+        phase_world();return
+    run(['systemctl','reset-failed','ro-chat.service'],check=False)
+    (STATE/'STOP').unlink(missing_ok=True)
+    run(['systemctl','restart','ro-world.service','ro-chat.service'])
+
+
 def inspect():
     """Только чтение: что уже есть на сервере. Ничего не меняет и не печатает секреты."""
     def line(ok,text):print(('OK    ' if ok is True else 'НЕТ   ' if ok is False else 'ВНИМ  ')+text,flush=True)
@@ -375,7 +455,7 @@ def inspect():
     line(None,'ОС: '+platform.platform()+'; часовой пояс: '+str(pathlib.Path('/etc/localtime').resolve()).split('zoneinfo/')[-1])
     for name,path in (('rathena',RATHENA),('openkore',OPENKORE)):
         head=run(['git','-C',str(path),'rev-parse','HEAD'],check=False).stdout.strip() if path.exists() else ''
-        line(head==PINS[name][1] if head else False,f'{name}: {path} '+(f'коммит {head[:7]}'+('' if head==PINS[name][1] else f' (ожидается {PINS[name][1][:7]})') if head else 'нет'))
+        line(head==PINS[name][1] if head else (None if path.exists() else False),f'{name}: {path} '+(f'коммит {head[:7]}'+('' if head==PINS[name][1] else f' (ожидается {PINS[name][1][:7]})') if head else 'есть, но не git-копия' if path.exists() else 'нет'))
     line(ROOT==BASE/'repos/live_ro',f'live_ro: {ROOT} коммит '+run(['git','-C',str(ROOT),'rev-parse','--short','HEAD'],check=False).stdout.strip())
     line(all((RATHENA/b).exists() for b in ('login-server','char-server','map-server')),'rAthena собран (login/char/map-server)')
     others=run(['bash','-c','find / -xdev \\( -path /proc -o -path /sys \\) -prune -o -name map-server -type f -print 2>/dev/null | head -5'],check=False).stdout.split()
@@ -411,7 +491,14 @@ def inspect():
     env=ROOT/'.env';has=env.exists() and bool(re.search(r'^\s*(export\s+)?RO_WORLD_LLM_API_KEY\s*=\s*["\']?[A-Za-z0-9]',env.read_text(errors='replace'),re.M))
     line(has,'.env: '+('ключ LLM есть' if has else 'ключа LLM нет'))
     line(STATE.exists(),f'{STATE}: '+(', '.join(sorted(p.name for p in STATE.iterdir()))[:200] if STATE.exists() else 'нет'))
-    print('Если раскладка совпадает (пути /root/ragnarok/repos/*, БД ro_residents_main), запускайте: python3 tools/deploy_world.py — готовое он пропустит.',flush=True)
+    if shutil.which('systemctl') and pathlib.Path('/run/systemd/system').is_dir():
+        for unit in ('ro-residents-map.service','ro-world.service','ro-chat.service'):
+            d=_unit_dir(unit)
+            if d:line(unit!='ro-residents-map.service' and d!=ROOT.resolve() and None or True,f'{unit} запускается из {d}')
+        if run(['systemctl','is-active','ro-world.service'],check=False).stdout.strip()=='active':
+            print('Мир уже работает: python3 tools/deploy_world.py --adopt — игровой сервер не трогается, жители проверяются и мир перезапускается на новом коде.',flush=True)
+            return 0
+    print('Чистый сервер: python3 tools/deploy_world.py — готовое он пропустит.',flush=True)
     return 0
 
 
@@ -420,23 +507,28 @@ PHASES=[('system',phase_system),('sources',phase_sources),('rathena_build',phase
         ('profiles',phase_profiles),('characters',phase_characters),('world',phase_world),('check',phase_check)]
 
 
+ADOPT=[('adopt_check',adopt_check),('adopt_witness',adopt_witness),('adopt_units',adopt_units),('adopt_restart',adopt_restart),('check',phase_check)]
+
+
 def main():
     global DEV
     a=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument('--only');a.add_argument('--from',dest='start');a.add_argument('--dev',action='store_true')
     a.add_argument('--inspect',action='store_true',help='только показать, что уже есть на сервере')
-    v=a.parse_args();DEV=v.dev;names=[n for n,_ in PHASES]
+    a.add_argument('--adopt',action='store_true',help='мир уже работает: не трогать игровой сервер, только жители и перезапуск на новом коде')
+    v=a.parse_args();DEV=v.dev
     if v.inspect:return inspect()
+    phases=ADOPT if v.adopt else PHASES;names=[n for n,_ in phases]
     for n in (v.only,v.start):
         if n and n not in names:a.error('фазы: '+', '.join(names))
-    todo=[p for p in PHASES if (not v.only or p[0]==v.only)]
+    todo=[p for p in phases if (not v.only or p[0]==v.only)]
     if v.start:todo=todo[names.index(v.start):]
     started=time.time()
     for name,fn in todo:
         log(f'== {name}: {fn.__doc__.strip().splitlines()[0]}')
         try:fn()
         except Stop as e:
-            log(f'СТОП на фазе {name}: {e}');log(f'исправьте и запустите снова: sudo python3 {ROOT}/tools/deploy_world.py --from {name}');return 2
+            log(f'СТОП на фазе {name}: {e}');log(f'исправьте и запустите снова: sudo python3 {ROOT}/tools/deploy_world.py'+(' --adopt' if v.adopt else '')+f' --from {name}');return 2
         except subprocess.TimeoutExpired as e:
             log(f'СТОП на фазе {name}: слишком долго ({e.cmd})');return 2
     log('готово за %d мин'%((time.time()-started)//60));return 0

@@ -1,3 +1,4 @@
 #!/bin/sh
-cd /root/ragnarok/repos/live_ro || exit 1
+# Runs from the checkout this script lives in (works for any deploy path or symlink).
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
 exec /usr/bin/python3 -m packages.resident_world.cli "$@"
