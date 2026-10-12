@@ -70,6 +70,7 @@ class ReplacementTests(unittest.TestCase):
             p.write_text(json.dumps(dict(pending=None,blocked=None,version=1,resident='resident_a',hunt_seconds=60,cycles=17,phase='buy')))
             self.assertEqual(mod.check_state(p)['cycles'],17)
 
+    @unittest.skipUnless(pathlib.Path('/root/ragnarok/repos/live_ro/packages/resident_demo/replacement.py').is_file(),'нужен checkout на VPS: /root/ragnarok/repos/live_ro')
     def test_launch_records_provenance_before_supervision_and_preserves_state(self):
         from packages.resident_demo import replacement as mod
         self.assertTrue(hasattr(mod, 'launch'), 'supervised launch missing')

@@ -65,6 +65,11 @@ class ChatStore:
             self.db.execute("UPDATE inbox SET status='claimed',claimed=? WHERE id=?",(now,row[0]));return json.loads(row[1])
     def finish(self,event_id,result):
         with self.db:self.db.execute("UPDATE inbox SET status='finished',result=? WHERE id=?",(json.dumps(result,ensure_ascii=False),event_id))
+    def recent_replies(self,event,now,resident=None):
+        """Texts this resident already said to this sender in the last 2 minutes."""
+        rows=self.db.execute('SELECT json_extract(result,\'$.decision.args.text\') FROM inbox WHERE (? IS NULL OR resident=?) AND json_extract(payload,\'$.name\')=? AND json_extract(payload,\'$.ts\')>? AND json_extract(result,\'$.outcome\')=\'done\'',
+                             (resident,resident,event['name'],now-120)).fetchall()
+        return {r[0] for r in rows if r[0]}
     def suppress_repeat(self,event,decision,now,resident=None):
         if decision is None or decision['action'] not in ('say','whisper') or stop_requested(event):return decision
         row=self.db.execute('SELECT 1 FROM inbox WHERE (? IS NULL OR resident=?) AND json_extract(payload,\'$.name\')=? AND json_extract(payload,\'$.ts\')>? AND json_extract(result,\'$.outcome\')=\'done\' AND json_extract(result,\'$.decision.args.text\')=? LIMIT 1',
@@ -72,7 +77,27 @@ class ChatStore:
         return None if row else decision
 
 
-def fallback_reply(name,event,state):
+def activity_phrase(state):
+    """What the resident is visibly doing, from its own body telemetry (no promises)."""
+    t=(state or {}).get('telemetry') or {}
+    skill=str((t.get('running') or {}).get('skill') or '')
+    if t.get('dead'):return 'прихожу в себя после боя'
+    if skill=='hunt' or t.get('mode')=='HUNT':return 'охочусь на поле' if t.get('map')=='prt_fild08' else 'охочусь'
+    if skill in ('travel_to','follow'):return 'в дороге'
+    if skill=='rest':return 'отдыхаю'
+    if skill in ('sell_loot','buy_potions'):return 'у торговца'
+    return {'prt_fild08':'на поле','prontera':'в городе','prt_in':'в торговой лавке'}.get(t.get('map'),'здесь')
+
+def human_templates(name,text,state):
+    """Honest short answers for a human when the model is not used: never silence."""
+    a=activity_phrase(state)
+    if re.search(r'кто ты|ты кто',text):return ['Я '+name+', ИИ-персонаж этого мира.','Я '+name+'. Сейчас '+a+'.']
+    if re.search(r'привет|здравств|добр(ый|ое|ого)|хай|салют',text):return ['Привет!','Привет! Сейчас '+a+'.','Здравствуй! Я '+a+'.']
+    return ['Слышу тебя. Сейчас '+a+'.','Я тут, '+a+'. Спроси чуть позже, сейчас не до разговора.','Слышу. Пока '+a+'.']
+
+def fallback_reply(name,event,state,human=True,avoid=()):
+    """Quick reply without the model. A human player always gets an answer;
+    for another resident's line there is no model-free chatter (None)."""
     text=event['text'].lower();base={'reason':'Ответ на услышанную реплику'}
     if stop_requested(event):
         return dict(base,action='whisper' if event.get('type')=='W' else 'say',args=({'to':event['name'],'text':'Остановлюсь.'} if event.get('type')=='W' else {'text':'Остановлюсь.'}))
@@ -84,8 +109,12 @@ def fallback_reply(name,event,state):
             if peer!=name and any(re.search(r'(?<!\w)'+re.escape(a)+r'(?!\w)',text) for a in aliases):
                 return dict(base,action='meet',args={'resident':peer,'place':'fountain'},say='Встретимся у фонтана.')
         return dict(base,action='walk_to',args={'place':'fountain'},say='Иду к фонтану.')
-    phrase='Привет!' if 'привет' in text else 'Я '+name+', ИИ-персонаж этого мира.' if 'кто ты' in text else None
-    if phrase is None:return None
+    if not human:
+        phrase='Привет!' if 'привет' in text else 'Я '+name+', ИИ-персонаж этого мира.' if 'кто ты' in text else None
+        if phrase is None:return None
+    else:
+        options=human_templates(name,text,state)
+        phrase=next((o for o in options if o not in avoid),options[0])
     if event.get('type')=='W':return dict(base,action='whisper',args={'to':event['name'],'text':phrase})
     return dict(base,action='say',args={'text':phrase})
 
@@ -146,7 +175,7 @@ def queue_behavior_chat(d,event,r,c,s,lease):
     import hashlib
     from packages.resident_behavior.chat_intents import enqueue
     from packages.resident_behavior.config import load_behavior
-    decision=fallback_reply(r['name'],event,s) or {'action':'unsupported','args':{}}
+    decision=fallback_reply(r['name'],event,s,human=False) or {'action':'unsupported','args':{}}  # V1 keeps its own narrow intents
     if decision.get('action') in ('walk_to','meet'):
         requested=decision['args'].get('place')
         point=c.get('places',{}).get(requested)
@@ -201,12 +230,17 @@ def handle(event,r,c,store,model=None):
             return
         from .memory import day_decision
         daily=day_decision(r,event,d)
-        decision=daily or fallback_reply(r['name'],event,s)
+        human=event.get('char_id') not in {x.get('char_id') for x in c.get('residents',[])}
+        decision=daily or fallback_reply(r['name'],event,s,human=human)
         if decision is not None:decision=validate_reply(decision,event,c,s)
         if model is not None and daily is None and not stop_requested(event):
             decision=model(event,s,decision)
         silence='NO_REPLY' if decision is None else 'REPEATED_REPLY'
-        decision=store.suppress_repeat(event,decision,time.time(),r['name'])
+        if human:
+            # A player is never left in silence: a repeated line becomes another honest phrase.
+            if decision is None or store.suppress_repeat(event,decision,time.time(),r['name']) is None:
+                decision=validate_reply(fallback_reply(r['name'],event,s,human=True,avoid=store.recent_replies(event,time.time(),r['name'])),event,c,s)
+        else:decision=store.suppress_repeat(event,decision,time.time(),r['name'])
         if decision is None:
             store.finish(event['id'],{'outcome':'silent('+silence+')'})
             record('CHAT_SILENT',resident=r['name'],event_id=event['id'],reason=silence)

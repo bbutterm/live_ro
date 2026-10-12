@@ -11,7 +11,7 @@ from logging.handlers import RotatingFileHandler
 from packages.resident_world.skills import validate,MENU,PROMISE,has_sellable,place_phrase
 from packages.resident_world.supervisor import ROOT,STATE,atomic,regeneration_blocked
 from packages.resident_world.llm import Client,LLMUnavailable,BadModelOutput,parse_json_object
-from .continuity import task_state,begin_task,finish_task,past_tasks
+from .continuity import task_state,begin_task,finish_task,past_tasks,intent
 
 MOVING={'follow','walk_to','meet','hunt','town_service','travel_to','hunt_solo','hunt_party','support','sell_loot','sell_equipment','buy_potions'}
 CHAT_ACTIONS=('say','whisper','follow','walk_to','meet')
@@ -344,8 +344,7 @@ class Mind:
         try:return json.loads((self.d/'diary.json').read_text())
         except (OSError,ValueError):return []
     def plan(self):
-        task=task_state(self.d)
-        return task.get('label','') if task.get('status') in ('planned','active') else ''
+        return intent(self.d)[0]
     def remember(self,notes,now):
         if notes.get('remember'):
             entries=self.diary()
@@ -412,7 +411,7 @@ class Mind:
         except Exception:pass
         return {'сейчас':local.strftime('%H:%M')+' ('+('ночь' if local.hour<6 else 'утро' if local.hour<12 else 'день' if local.hour<18 else 'вечер')+')',
                 'я':me,'рядом':around,'факты_с_сервера':facts,'сегодня':today,'услышал':dialogue,
-                'мой_план':self.plan(),'task':task_state(self.d,now),'past_tasks':past_tasks(self.d),'мой_дневник':[x['text'] for x in self.diary()[-10:]],
+                'мой_план':self.plan(),'план_минут_назад':int(max(0,now-intent(self.d)[1])//60) if self.plan() else None,'task':task_state(self.d,now),'past_tasks':past_tasks(self.d),'мой_дневник':[x['text'] for x in self.diary()[-10:]],
                 'последние_дела':[{'дело':h['action'],'итог':outcome_ru(h['outcome']),'когда':ago(now-h.get('at',now)),**({'зачем':h['reason']} if h.get('reason') else {})} for h in self.history[-8:]],
                 'can_now':availability(self.c,dict(s,_me=self.r['name']),self.known())}
     def system_prompt(self):
@@ -512,7 +511,7 @@ class Mind:
             record('MODEL_DEFERRED',resident=self.r['name'],reason='PLAYER_INTERRUPTION')
             return None
         proposal={'id':str(uuid.uuid4()),'at':now,'decision':decision,'thought':notes.get('thought',''),'plan':notes.get('plan',''),'state':self.situation(s)}
-        lifecycle=begin_task(self.d,proposal['id'],decision,notes.get('plan') or decision['reason'],now)
+        lifecycle=begin_task(self.d,proposal['id'],decision,decision['reason'],now,plan=notes.get('plan'))
         if lifecycle['id']!=proposal['id']:return None
         self.remember(notes,now)
         atomic(self.path,proposal)

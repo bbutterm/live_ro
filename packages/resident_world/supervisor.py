@@ -47,9 +47,69 @@ def fallback(t):
     return choose('hunt',t,300)
 
 def atomic(path,value):
-    tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(value,ensure_ascii=False));os.replace(tmp,path)
+    # Unique temp name: brain, chat and gateway threads/processes may write the same file.
+    import threading
+    tmp=path.with_name(f'{path.name}.{os.getpid()}.{threading.get_ident()}.tmp')
+    tmp.write_text(json.dumps(value,ensure_ascii=False));os.replace(tmp,path)
 
-def config():return json.loads((ROOT/'config/world.yaml').read_text())
+# Host state of one concrete world (who is enabled, duo roles, operator personas) lives on
+# that host in STATE/world.local.json, never in git: config/world.yaml is the shared base.
+OVERLAY_RESIDENT_KEYS={'enabled':bool,'persona':str,'support_target':str,'duo_partner':str,'party_search_consent':list}
+OVERLAY_LLM_KEYS={'enabled':bool,'max_hunt_minutes':int,'min_decision_seconds':(int,float),'min_speech_seconds':(int,float),
+                  'short_pause_seconds':(int,float),'chat_calls_per_sender_2min':int,'timeout_seconds':(int,float),'temperature':(int,float)}
+
+def apply_overlay(base,overlay):
+    """Merge a host overlay into the base config by an explicit whitelist; ValueError explains a bad overlay."""
+    import copy,re
+    if not isinstance(overlay,dict) or set(overlay)-{'residents','llm','daily_llm_usd','note'}:raise ValueError('OVERLAY_KEYS')
+    c=copy.deepcopy(base);by_id={r['resident_id']:r for r in c['residents']};names={r['name'] for r in c['residents']}
+    for rid,fields in (overlay.get('residents') or {}).items():
+        if rid not in by_id or not isinstance(fields,dict):raise ValueError('OVERLAY_RESIDENT:'+str(rid)[:40])
+        for k,v in fields.items():
+            if k not in OVERLAY_RESIDENT_KEYS or type(v) is not OVERLAY_RESIDENT_KEYS[k]:raise ValueError('OVERLAY_FIELD:'+rid+'.'+str(k)[:40])
+            if k=='persona' and not 1<=len(v)<=1500:raise ValueError('OVERLAY_PERSONA:'+rid)
+            if k in ('support_target','duo_partner') and (v not in names or v==by_id[rid]['name']):raise ValueError('OVERLAY_PARTNER:'+rid)
+            if k=='party_search_consent' and (len(v)>8 or not all(isinstance(n,str) and re.fullmatch(r'[\w -]{1,24}',n) for n in v)):raise ValueError('OVERLAY_CONSENT:'+rid)
+            by_id[rid][k]=v
+    for k,v in (overlay.get('llm') or {}).items():
+        if k not in OVERLAY_LLM_KEYS or isinstance(v,bool)!=(OVERLAY_LLM_KEYS[k] is bool) or not isinstance(v,OVERLAY_LLM_KEYS[k]):raise ValueError('OVERLAY_LLM:'+str(k)[:40])
+        c.setdefault('llm',{})[k]=v
+    if 'daily_llm_usd' in overlay:
+        v=overlay['daily_llm_usd']
+        if isinstance(v,bool) or not isinstance(v,(int,float)) or not 0<=v<=50:raise ValueError('OVERLAY_DAILY_USD')
+        c['daily_llm_usd']=v
+    return c
+
+def code_version(root=None):
+    """Which code is this: short commit plus '+правки' for local edits (or VERSION of a release dir)."""
+    root=pathlib.Path(root or ROOT)
+    try:
+        sha=subprocess.run(['git','-C',str(root),'rev-parse','--short','HEAD'],capture_output=True,text=True,timeout=5,check=True).stdout.strip()
+        dirty=subprocess.run(['git','-C',str(root),'status','--porcelain','--untracked-files=no'],capture_output=True,text=True,timeout=5,check=True).stdout.strip()
+        return sha+('+правки' if dirty else '')
+    except (OSError,subprocess.SubprocessError):
+        try:return (root/'VERSION').read_text().strip()[:40] or 'неизвестно'
+        except OSError:return 'неизвестно'
+
+def config():
+    """Base config from git plus this host's validated overlay. A broken overlay never stops
+    the world: the last valid copy is used and the reason is shown by `ro status`."""
+    base=json.loads((ROOT/'config/world.yaml').read_text())
+    path=STATE/'world.local.json';good=STATE/'world.local.last-good.json';error=STATE/'world.local.error'
+    try:raw=path.read_text()
+    except OSError:return base
+    try:
+        merged=apply_overlay(base,json.loads(raw))
+        try:
+            if not good.exists() or good.read_text()!=raw:good.write_text(raw)
+            error.unlink(missing_ok=True)
+        except OSError:pass
+        return merged
+    except ValueError as e:  # includes JSON errors
+        try:error.write_text(str(e)[:200])
+        except OSError:pass
+        try:return apply_overlay(base,json.loads(good.read_text()))
+        except (OSError,ValueError):return base
 
 def clear_chat_goal(d,task_id):
     with (d/'manual.lock').open('a') as lock:
@@ -185,6 +245,7 @@ def supervise():
     for r in config()['residents']:
         if r.get('enabled',True):
             for name,argv,cwd,env in commands(r):rows[name]=dict(argv=argv,cwd=cwd,env=env,policy=RestartPolicy(),proc=None)
+    version=code_version();log.info('code version %s',version)
     try:
         while not stopping and not (STATE/'STOP').exists():
             now=time.monotonic()
@@ -201,7 +262,7 @@ def supervise():
                     with (STATE/(name+'.log')).open('ab',buffering=0) as output:
                         x['proc']=subprocess.Popen(x['argv'],cwd=x['cwd'],env=dict(os.environ,**x['env']),stdin=subprocess.DEVNULL,stdout=output,stderr=output,start_new_session=True)
                     policy.started=now;log.info('%s started',name)
-            atomic(STATE/'identity.json',{'at':time.time(),'pid':os.getpid(),'children':{n:{'pid':x['proc'].pid if x['proc'] else None,'restarts':x['policy'].attempts} for n,x in rows.items()}})
+            atomic(STATE/'identity.json',{'at':time.time(),'pid':os.getpid(),'version':version,'children':{n:{'pid':x['proc'].pid if x['proc'] else None,'restarts':x['policy'].attempts} for n,x in rows.items()}})
             time.sleep(.2)
     finally:
         for x in rows.values():

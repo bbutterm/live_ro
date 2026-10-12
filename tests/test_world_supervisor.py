@@ -23,6 +23,46 @@ class WorldSupervisorTests(unittest.TestCase):
             supervisor.main()
         execute.assert_not_called();brain.assert_called_once_with({'resident_id':'resident_a'})
 
+    def test_host_overlay_is_validated_and_a_broken_one_never_stops_the_world(self):
+        import json,tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from packages.resident_world import supervisor
+        with tempfile.TemporaryDirectory() as tmp,patch.object(supervisor,'STATE',Path(tmp)):
+            base=supervisor.config()
+            # The shared base in git is the new world: three residents, no host roles or operator personas.
+            self.assertEqual([r['enabled'] for r in base['residents']],[True,True,True])
+            self.assertFalse(any(k in r for r in base['residents'] for k in ('persona','support_target','duo_partner')))
+            good={'residents':{'resident_a':{'enabled':False},'resident_b':{'support_target':'Borin','duo_partner':'Borin'}},'llm':{'max_hunt_minutes':10},'daily_llm_usd':3}
+            (Path(tmp)/'world.local.json').write_text(json.dumps(good))
+            c=supervisor.config()
+            self.assertFalse(c['residents'][0]['enabled']);self.assertEqual(c['residents'][1]['support_target'],'Borin')
+            self.assertEqual((c['llm']['max_hunt_minutes'],c['daily_llm_usd']),(10,3));self.assertFalse((Path(tmp)/'world.local.error').exists())
+            for bad in ('{not json',json.dumps({'residents':{'nobody':{'enabled':False}}}),json.dumps({'residents':{'resident_a':{'profile':'/tmp/x'}}}),
+                        json.dumps({'residents':{'resident_b':{'support_target':'Mira'}}}),json.dumps({'llm':{'max_hunt_minutes':True}}),json.dumps({'places':{}})):
+                with self.subTest(bad=bad[:40]):
+                    (Path(tmp)/'world.local.json').write_text(bad)
+                    c=supervisor.config()  # last valid overlay, never a crash
+                    self.assertFalse(c['residents'][0]['enabled']);self.assertTrue((Path(tmp)/'world.local.error').read_text())
+            (Path(tmp)/'world.local.json').unlink()
+            self.assertTrue(all(r['enabled'] for r in supervisor.config()['residents']))
+
+    def test_status_names_the_running_code_and_a_stale_checkout(self):
+        import json,tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from packages.resident_world import supervisor,cli
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp)/'VERSION').write_text('v1-test\n')
+            self.assertEqual(supervisor.code_version(tmp),'v1-test')  # a release dir without .git
+            with patch.object(cli,'STATE',Path(tmp)),patch.object(supervisor,'code_version',return_value='abc1234'):
+                (Path(tmp)/'identity.json').write_text(json.dumps({'version':'abc1234'}))
+                self.assertEqual(cli.version_line(),'Код: abc1234')
+                (Path(tmp)/'identity.json').write_text(json.dumps({'version':'0ld0000'}))
+                self.assertIn('запущен 0ld0000, в checkout abc1234',cli.version_line())
+                (Path(tmp)/'world.local.error').write_text('OVERLAY_FIELD:resident_a.profile')
+                self.assertIn('ОШИБКА world.local.json (OVERLAY_FIELD',cli.version_line())
+
     def test_one_body_failure_does_not_change_other_restart_clocks(self):
         a,b=RestartPolicy(),RestartPolicy()
         self.assertEqual(a.failed(100),110)

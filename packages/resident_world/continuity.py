@@ -43,7 +43,14 @@ def past_tasks(d,sender=None):
     with state_file(d) as data:
         return [dict(t) for t in data.get('recent',[])[-12:] if sender is None or t.get('sender') in (None,sender)]
 
-def begin_task(d,task_id,decision,label,now=None,sender=None):
+def intent(d):
+    """The model's own longer intention ("мой план"). It is not the task lifecycle:
+    it survives the end of the current action and changes only when the model says so."""
+    with state_file(d) as data:
+        plan=data.get('plan','')
+        return (plan if isinstance(plan,str) else ''),float(data.get('plan_at',data.get('at',0)) or 0)
+
+def begin_task(d,task_id,decision,label,now=None,sender=None,plan=None):
     now=time.time() if now is None else now
     with state_file(d) as data:
         old=_task(data,now)
@@ -54,7 +61,8 @@ def begin_task(d,task_id,decision,label,now=None,sender=None):
         duration=min(1800,max(120,int(decision.get('args',{}).get('minutes',25))*60+90))
         task={'id':task_id,'label':label[:200],'created':now,'expires':now+duration,'status':'active',
               'action':decision['action'],'args':decision['args'],'sender':sender}
-        data.update(version=2,plan=label[:200],at=now,task=task)
+        data.update(version=2,at=now,task=task)
+        if plan:data.update(plan=plan[:200],plan_at=now)  # only the model's own words replace its plan
         return dict(task)
 
 def finish_task(d,task_id,outcome,now=None):

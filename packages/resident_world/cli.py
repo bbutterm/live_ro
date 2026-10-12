@@ -52,6 +52,7 @@ def main():
         print(json.dumps(result,ensure_ascii=False));return
     if op=='doctor':return doctor()
     if op!='status':raise SystemExit('Доступно: ro status, ro doctor, ro stop, ro start, ro do.')
+    print(version_line())
     for r in config()['residents']:
         d=STATE/r['resident_id'];name=r['name']
         try:
@@ -79,6 +80,18 @@ REASONS={'NO_TOKEN':'нет токена: впиши RO_WORLD_LLM_API_KEY=... в
          'DAILY_LIMIT':'дневной лимит daily_llm_usd исчерпан: продолжит после полуночи UTC',
          'OUTAGE':'провайдер недоступен или не ответил вовремя (проверь сеть, DNS, прокси, сертификаты): повтор автоматически',
          'BAD_REQUEST':'провайдер отклонил запрос (модель?): проверь RO_WORLD_LLM_MODEL'}
+
+def version_line():
+    """Which code runs and which is checked out; host overlay state."""
+    from .supervisor import code_version
+    here=code_version()
+    try:running=json.loads((STATE/'identity.json').read_text()).get('version')
+    except (OSError,ValueError):running=None
+    line='Код: '+here if running in (None,here) else f'Код: запущен {running}, в checkout {here} — перезапусти мир, чтобы применить'
+    if (STATE/'world.local.json').exists():line+='; настройки сервера: world.local.json'
+    try:line+='; ОШИБКА world.local.json ('+(STATE/'world.local.error').read_text().strip()[:120]+') — действует последняя верная копия'
+    except OSError:pass
+    return line
 
 def brain_line():
     from .llm import Client,LLMUnavailable,load_settings

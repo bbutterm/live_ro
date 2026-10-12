@@ -222,6 +222,23 @@ class ChooseTests(unittest.TestCase):
 
 
 
+class PlanContinuityTests(unittest.TestCase):
+    """«мой_план» is the model's intention, not the current task: it survives the task's end."""
+    def test_plan_survives_finished_and_chat_tasks_and_changes_only_by_the_model(self):
+        from packages.resident_world.continuity import begin_task,finish_task,intent,task_state
+        with tempfile.TemporaryDirectory() as tmp:
+            d=pathlib.Path(tmp)
+            begin_task(d,'a',{'action':'walk_to','args':{'place':'market'}},'Посмотреть цены',now=100,plan='Купить меч, потом на охоту')
+            finish_task(d,'a','done',now=200)
+            self.assertEqual(task_state(d,now=201)['status'],'done')
+            self.assertEqual(intent(d)[0],'Купить меч, потом на охоту')   # the first step is done, the plan is not
+            begin_task(d,'chat-7',{'action':'follow','args':{'player':'Vanya','minutes':3}},'Договорились в разговоре',now=300,sender='Vanya')
+            self.assertEqual(intent(d)[0],'Купить меч, потом на охоту')   # an agreement in chat is a task, not a new plan
+            finish_task(d,'chat-7','done',now=350)
+            begin_task(d,'b',{'action':'hunt','args':{'minutes':10}},'Охота',now=400,plan='Накопить на меч')
+            self.assertEqual(intent(d),('Накопить на меч',400.0))
+
+
 class WorldConfigTests(unittest.TestCase):
     ROOT=pathlib.Path(__file__).resolve().parents[1]
     def config(self):return json.loads((self.ROOT/'config/world.yaml').read_text())

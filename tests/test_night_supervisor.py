@@ -57,6 +57,7 @@ class SupervisorTests(unittest.TestCase):
                     try: os.kill(int(pidfile.read_text()), 9)
                     except ProcessLookupError: pass
 
+    @unittest.skipUnless(pathlib.Path('/root/ragnarok/run').is_dir(),'нужен стенд VPS: /root/ragnarok/run')
     def test_new_native_authorization_does_not_reopen_expired_night(self):
         from unittest.mock import patch
         import json,sys
@@ -68,6 +69,7 @@ class SupervisorTests(unittest.TestCase):
             mod.supervise(commands,d,time.time()+.3,authorized_native=True)
             self.assertEqual(json.loads((pathlib.Path(d)/'identity.json').read_text())['reason'],'DEADLINE')
 
+    @unittest.skipUnless(pathlib.Path('/root/ragnarok/repos/openkore/openkore.pl').is_file(),'нужен OpenKore на VPS: /root/ragnarok/repos/openkore')
     def test_native_factory_accepts_new_finite_native_window(self):
         import inspect
         from packages.resident_demo import supervisor as mod
